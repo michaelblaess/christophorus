@@ -140,12 +140,8 @@ class YearView(VerticalScroll):
         lease_km: int = 1500,
     ) -> None:
         """Baut die Jahresuebersicht fuer das gegebene Jahr."""
-        # Alte Inhalte entfernen
-        for widget in self.query("QuarterRow"):
-            widget.remove()
-        for widget in self.query("#year-title"):
-            widget.remove()
-        for widget in self.query("#year-summary"):
+        # Alle Kinder entfernen
+        for widget in list(self.children):
             widget.remove()
 
         self.mount(Static(f"Jahresuebersicht {year}", id="year-title"))
