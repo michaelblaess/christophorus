@@ -130,12 +130,20 @@ class TripScreen(ModalScreen[Trip | None]):
 
             with Horizontal(classes="form-row"):
                 yield Label("Ziel (Auswahl):")
-                yield Select(
-                    options=dest_options,
-                    value=Select.BLANK,
-                    id="select-destination",
-                    allow_blank=True,
-                )
+                if dest_options:
+                    yield Select[str](
+                        options=dest_options,
+                        value=Select.BLANK,
+                        id="select-destination",
+                        allow_blank=True,
+                    )
+                else:
+                    yield Select[str](
+                        options=[("(keine Adressen konfiguriert)", "__none__")],
+                        value=Select.BLANK,
+                        id="select-destination",
+                        allow_blank=True,
+                    )
 
             with Horizontal(classes="form-row"):
                 yield Label("Ziel (Adresse):")
