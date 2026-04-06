@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
+    Checkbox,
     Input,
     Label,
     Select,
@@ -17,6 +18,16 @@ from textual.widgets import (
 from fahrtenbuch_app.models.settings import AddressEntry
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
+
+_COLOR_OPTIONS: list[tuple[str, str]] = [
+    ("Gruen", "green"),
+    ("Blau", "blue"),
+    ("Gelb", "yellow"),
+    ("Magenta", "magenta"),
+    ("Rot", "red"),
+    ("Cyan", "cyan"),
+    ("Weiss", "white"),
+]
 
 _STATE_OPTIONS: list[tuple[str, str]] = [
     ("Baden-Wuerttemberg", "BW"),
@@ -80,6 +91,21 @@ class SettingsScreen(ModalScreen[bool | None]):
     SettingsScreen .addr-block Input {
         width: 1fr;
     }
+    SettingsScreen .cat-block {
+        height: auto;
+        margin-bottom: 1;
+        padding: 0 1;
+        border: solid $surface-lighten-1;
+    }
+    SettingsScreen .cat-block Label {
+        width: 22;
+    }
+    SettingsScreen .cat-block Input {
+        width: 1fr;
+    }
+    SettingsScreen .cat-block Select {
+        width: 1fr;
+    }
     SettingsScreen .button-row {
         height: auto;
         margin-top: 1;
@@ -103,6 +129,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._federal_state = database.get_setting("federal_state", "BB")
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
+        self._categories: list[dict[str, object]] = database.get_categories()
 
     def _load_addresses(self) -> None:
         """Laedt alle Adressen aus der Datenbank gruppiert nach Kategorie."""
@@ -173,6 +200,10 @@ class SettingsScreen(ModalScreen[bool | None]):
                         yield from self._address_list_fields(
                             self._addresses.get("other", []), "other"
                         )
+
+                with TabPane("Kategorien", id="tab-categories"):
+                    with VerticalScroll():
+                        yield from self._category_fields()
 
             with Horizontal(classes="button-row"):
                 yield Button(
@@ -281,6 +312,50 @@ class SettingsScreen(ModalScreen[bool | None]):
                     id="st-km",
                 )
 
+    def _category_fields(self) -> ComposeResult:
+        """Felder fuer das Kategorien-Tab."""
+        for i, cat in enumerate(self._categories):
+            cat_id = int(cat.get("id", 0))
+            name = str(cat.get("name", ""))
+            display_name = str(cat.get("display_name", ""))
+            counts_biz = bool(cat.get("counts_as_business", 1))
+            color = str(cat.get("color", "green"))
+
+            with Vertical(classes="cat-block"):
+                with Horizontal(classes="form-row"):
+                    yield Label("Schluessel (intern):")
+                    yield Input(value=name, id=f"cat-name-{i}")
+                with Horizontal(classes="form-row"):
+                    yield Label("Anzeigename:")
+                    yield Input(value=display_name, id=f"cat-display-{i}")
+                with Horizontal(classes="form-row"):
+                    yield Label("Farbe:")
+                    yield Select(
+                        options=_COLOR_OPTIONS,
+                        value=color,
+                        id=f"cat-color-{i}",
+                    )
+                with Horizontal(classes="form-row"):
+                    yield Label("")
+                    yield Checkbox(
+                        "Zaehlt als geschaeftlich",
+                        value=counts_biz,
+                        id=f"cat-biz-{i}",
+                    )
+                with Horizontal(classes="form-row"):
+                    yield Label("")
+                    yield Button(
+                        "Loeschen",
+                        variant="error",
+                        id=f"btn-del-cat-{i}",
+                    )
+
+        yield Button(
+            "+ Kategorie hinzufuegen",
+            variant="success",
+            id="btn-add-cat",
+        )
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
         btn_id = event.button.id or ""
@@ -290,7 +365,12 @@ class SettingsScreen(ModalScreen[bool | None]):
             self.action_cancel()
         elif btn_id.startswith("btn-add-"):
             prefix = btn_id.replace("btn-add-", "")
-            self._add_address_entry(prefix)
+            if prefix == "cat":
+                self._add_category_entry()
+            else:
+                self._add_address_entry(prefix)
+        elif btn_id.startswith("btn-del-cat-"):
+            self._delete_category_entry(btn_id)
 
     def _add_address_entry(self, prefix: str) -> None:
         """Fuegt einen leeren Adresseintrag hinzu."""
@@ -308,6 +388,40 @@ class SettingsScreen(ModalScreen[bool | None]):
                 self._addresses[cat] = []
             self._addresses[cat].append(new_entry)
         self.notify("Eintrag hinzugefuegt — bitte Speichern und neu oeffnen")
+
+    def _add_category_entry(self) -> None:
+        """Fuegt eine neue leere Kategorie hinzu."""
+        new_cat: dict[str, object] = {
+            "id": 0,
+            "name": "",
+            "display_name": "",
+            "counts_as_business": 1,
+            "color": "green",
+        }
+        self._categories.append(new_cat)
+        self.notify("Kategorie hinzugefuegt — bitte Speichern und neu oeffnen")
+
+    def _delete_category_entry(self, btn_id: str) -> None:
+        """Loescht eine Kategorie anhand des Button-IDs."""
+        try:
+            idx = int(btn_id.replace("btn-del-cat-", ""))
+        except ValueError:
+            return
+
+        if idx < 0 or idx >= len(self._categories):
+            return
+
+        cat = self._categories[idx]
+        cat_id = int(cat.get("id", 0))
+        cat_name = str(cat.get("name", ""))
+
+        if cat_id > 0:
+            self._database.delete_category(cat_id)
+
+        self._categories.pop(idx)
+        self.notify(
+            f"Kategorie '{cat_name}' geloescht — bitte Speichern und neu oeffnen"
+        )
 
     def action_save(self) -> None:
         """Speichert alle Settings in die SQLite-Datenbank."""
@@ -344,6 +458,9 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Steuerberaterin speichern
         self._save_steuerberaterin()
 
+        # Kategorien speichern
+        self._save_categories()
+
         self.dismiss(True)
 
     def _save_address_list(self, category: str, prefix: str) -> None:
@@ -374,6 +491,47 @@ class SettingsScreen(ModalScreen[bool | None]):
                 self._database.add_address(
                     "steuerberaterin", name, address, km
                 )
+
+    def _save_categories(self) -> None:
+        """Speichert alle Kategorien in die Datenbank."""
+        for i, cat in enumerate(self._categories):
+            cat_id = int(cat.get("id", 0))
+            name = self._get_input(f"cat-name-{i}")
+            display_name = self._get_input(f"cat-display-{i}")
+
+            color_select = self._query_select(f"cat-color-{i}")
+            color = color_select if color_select else "green"
+
+            counts_biz = self._get_checkbox(f"cat-biz-{i}")
+
+            if not name:
+                continue
+
+            if cat_id > 0:
+                self._database.update_category(
+                    cat_id, name, display_name, counts_biz, color
+                )
+            else:
+                self._database.add_category(
+                    name, display_name, counts_biz, color
+                )
+
+    def _query_select(self, select_id: str) -> str:
+        """Liest einen Select-Wert sicher aus."""
+        try:
+            select = self.query_one(f"#{select_id}", Select)
+            if select.value != Select.BLANK:
+                return str(select.value)
+        except Exception:
+            pass
+        return ""
+
+    def _get_checkbox(self, checkbox_id: str) -> bool:
+        """Liest einen Checkbox-Wert sicher aus."""
+        try:
+            return self.query_one(f"#{checkbox_id}", Checkbox).value
+        except Exception:
+            return False
 
     def _get_input(self, input_id: str) -> str:
         """Liest einen Input-Wert sicher aus."""

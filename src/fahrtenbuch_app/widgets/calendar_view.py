@@ -12,7 +12,7 @@ from fahrtenbuch_app.models.trip import MonthData, TripDay
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-_TYPE_STYLES: dict[str, str] = {
+_DEFAULT_TYPE_STYLES: dict[str, str] = {
     "business": "green",
     "fuel": "yellow",
     "service": "magenta",
@@ -64,6 +64,7 @@ class DayTile(Widget):
         trip_day: TripDay | None = None,
         is_outside: bool = False,
         holiday_name: str = "",
+        category_colors: dict[str, str] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
@@ -71,6 +72,7 @@ class DayTile(Widget):
         self._trip_day = trip_day
         self._is_outside = is_outside
         self._holiday_name = holiday_name
+        self._type_styles = category_colors if category_colors else _DEFAULT_TYPE_STYLES
 
     def on_mount(self) -> None:
         """Setzt CSS-Klassen basierend auf Tagtyp."""
@@ -128,7 +130,7 @@ class DayTile(Widget):
 
         if self._trip_day and self._trip_day.trips:
             td = self._trip_day
-            type_style = _TYPE_STYLES.get(td.primary_type, "dim")
+            type_style = self._type_styles.get(td.primary_type, "dim")
             text.append(f"{day_num} {weekday} ", style="bold")
             text.append(f"{td.km_total} km", style=f"bold {type_style}")
             text.append("\n")
@@ -174,8 +176,15 @@ class CalendarView(Vertical):
         self,
         month_data: MonthData,
         holidays: dict[date, str] | None = None,
+        category_colors: dict[str, str] | None = None,
     ) -> None:
-        """Baut den Kalender fuer den gegebenen Monat."""
+        """Baut den Kalender fuer den gegebenen Monat.
+
+        Args:
+            month_data: Monatsdaten mit Fahrten.
+            holidays: Feiertage im Monat.
+            category_colors: Mapping von Kategorie-Name zu Farbe aus der DB.
+        """
         for widget in self.query("WeekRow"):
             widget.remove()
 
@@ -200,5 +209,6 @@ class CalendarView(Vertical):
                     trip_day=td,
                     is_outside=is_outside,
                     holiday_name=holiday,
+                    category_colors=category_colors,
                 )
                 row.mount(tile)

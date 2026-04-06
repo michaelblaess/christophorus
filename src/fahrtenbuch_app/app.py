@@ -10,7 +10,7 @@ from textual.widgets import Footer, Header, RichLog
 from fahrtenbuch_app import __version__, __year__
 from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
 from fahrtenbuch_app.models.settings import GlobalConfig
-from fahrtenbuch_app.models.trip import Trip
+from fahrtenbuch_app.models.trip import Trip, set_business_categories
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
@@ -155,6 +155,9 @@ class FahrtenbuchApp(App):
                 if first:
                     self._year, self._month = first
 
+        # Business-Kategorien aus DB laden
+        set_business_categories(db.get_business_category_names())
+
         # HolidayService mit gespeichertem Bundesland
         federal_state = db.get_setting("federal_state", "BB")
         self._holiday_service = HolidayService(federal_state)
@@ -188,11 +191,13 @@ class FahrtenbuchApp(App):
             self._year, self._month
         )
 
+        category_colors = db.get_category_colors()
+
         table = self.query_one("#trip-table", TripTable)
-        table.load_data(month_data, holidays_map)
+        table.load_data(month_data, holidays_map, category_colors)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
-        calendar_view.load_data(month_data, holidays_map)
+        calendar_view.load_data(month_data, holidays_map, category_colors)
 
         summary = self.query_one("#summary-panel", SummaryPanel)
         summary.update_data(month_data, lease_km)
@@ -394,6 +399,9 @@ class FahrtenbuchApp(App):
         db = self._fahrtenbuch.database
         self._fahrtenbuch._vehicle = db.get_vehicle()
         vehicle = self._fahrtenbuch.vehicle
+
+        # Business-Kategorien aus DB neu laden
+        set_business_categories(db.get_business_category_names())
 
         federal_state = db.get_setting("federal_state", "BB")
         self._holiday_service = HolidayService(federal_state)

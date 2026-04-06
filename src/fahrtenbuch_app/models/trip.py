@@ -3,8 +3,23 @@
 from dataclasses import dataclass, field
 from datetime import date
 
-# Kategorien die als geschaeftliche Kilometer zaehlen
-BUSINESS_CATEGORIES = frozenset({"business", "fuel", "service"})
+# Konfigurierbare Kategorien die als geschaeftliche Kilometer zaehlen.
+# Wird beim Oeffnen eines Fahrtenbuchs aus der DB gesetzt.
+_business_categories: set[str] = {"business", "fuel", "service"}
+
+
+def set_business_categories(categories: set[str]) -> None:
+    """Setzt die Kategorien die als geschaeftlich zaehlen.
+
+    Wird beim Oeffnen eines Fahrtenbuchs aus der DB geladen.
+    """
+    global _business_categories
+    _business_categories = categories
+
+
+def get_business_categories() -> set[str]:
+    """Gibt die aktuell konfigurierten Business-Kategorien zurueck."""
+    return _business_categories
 
 
 @dataclass
@@ -32,9 +47,9 @@ class Trip:
     def is_business_km(self) -> bool:
         """Ob die km dieser Fahrt als geschaeftlich zaehlen.
 
-        business, fuel und service zaehlen als geschaeftliche Kilometer.
+        Prueft gegen die aus der DB konfigurierten Kategorien.
         """
-        return self.category in BUSINESS_CATEGORIES
+        return self.category in _business_categories
 
 
 @dataclass

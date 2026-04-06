@@ -88,7 +88,6 @@ class Database:
                 km_business INTEGER NOT NULL DEFAULT 0,
                 km_private INTEGER NOT NULL DEFAULT 0,
                 category TEXT NOT NULL DEFAULT 'business'
-                    CHECK (category IN ('business', 'private', 'fuel', 'service'))
             );
 
             CREATE INDEX IF NOT EXISTS idx_trips_date ON trips (date);
@@ -116,7 +115,162 @@ class Database:
                 reason TEXT NOT NULL DEFAULT '',
                 allow_private INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                display_name TEXT NOT NULL,
+                counts_as_business INTEGER NOT NULL DEFAULT 1,
+                color TEXT NOT NULL DEFAULT 'green'
+            );
         """)
+        conn.commit()
+        self._migrate_trips_check_constraint()
+        self._seed_default_categories()
+
+    def _migrate_trips_check_constraint(self) -> None:
+        """Entfernt die CHECK-Constraint auf trips.category falls vorhanden.
+
+        SQLite erlaubt kein ALTER TABLE DROP CONSTRAINT, daher wird die
+        Tabelle neu erstellt falls die alte Constraint noch existiert.
+        """
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'"
+        ).fetchone()
+        if row is None:
+            return
+
+        create_sql = row[0] or ""
+        if "CHECK" not in create_sql.upper():
+            return
+
+        conn.executescript("""
+            ALTER TABLE trips RENAME TO trips_old;
+
+            CREATE TABLE trips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                time_from TEXT NOT NULL DEFAULT '',
+                time_to TEXT NOT NULL DEFAULT '',
+                destination TEXT NOT NULL DEFAULT '',
+                purpose TEXT NOT NULL DEFAULT '',
+                km_start INTEGER NOT NULL DEFAULT 0,
+                km_end INTEGER NOT NULL DEFAULT 0,
+                km_business INTEGER NOT NULL DEFAULT 0,
+                km_private INTEGER NOT NULL DEFAULT 0,
+                category TEXT NOT NULL DEFAULT 'business'
+            );
+
+            INSERT INTO trips SELECT * FROM trips_old;
+            DROP TABLE trips_old;
+
+            CREATE INDEX IF NOT EXISTS idx_trips_date ON trips (date);
+        """)
+        conn.commit()
+
+    def _seed_default_categories(self) -> None:
+        """Fuegt die Standard-Kategorien ein, falls die Tabelle leer ist."""
+        conn = self._get_conn()
+        count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
+        if count > 0:
+            return
+
+        defaults = [
+            ("business", "Geschaeftlich", 1, "green"),
+            ("private", "Privat", 0, "blue"),
+            ("fuel", "Tanken", 1, "yellow"),
+            ("service", "Service (TUeV, Reifen, ...)", 1, "magenta"),
+        ]
+        conn.executemany(
+            """
+            INSERT INTO categories (name, display_name, counts_as_business, color)
+            VALUES (?, ?, ?, ?)
+            """,
+            defaults,
+        )
+        conn.commit()
+
+    # ------------------------------------------------------------------
+    # Categories
+    # ------------------------------------------------------------------
+
+    def get_categories(self) -> list[dict[str, object]]:
+        """Gibt alle Kategorien zurueck."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM categories ORDER BY id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_business_category_names(self) -> set[str]:
+        """Gibt die Namen aller Kategorien zurueck, die als geschaeftlich zaehlen."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT name FROM categories WHERE counts_as_business = 1"
+        ).fetchall()
+        return {row["name"] for row in rows}
+
+    def get_category_colors(self) -> dict[str, str]:
+        """Gibt ein Mapping von Kategorie-Name zu Farbe zurueck."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT name, color FROM categories ORDER BY id"
+        ).fetchall()
+        return {row["name"]: row["color"] for row in rows}
+
+    def get_category_options(self) -> list[tuple[str, str]]:
+        """Gibt Kategorien als (display_name, name)-Tupel fuer Select-Widgets zurueck."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT name, display_name FROM categories ORDER BY id"
+        ).fetchall()
+        return [(row["display_name"], row["name"]) for row in rows]
+
+    def add_category(
+        self,
+        name: str,
+        display_name: str,
+        counts_as_business: bool,
+        color: str,
+    ) -> int:
+        """Fuegt eine neue Kategorie hinzu und gibt die ID zurueck."""
+        conn = self._get_conn()
+        cursor = conn.execute(
+            """
+            INSERT INTO categories (name, display_name, counts_as_business, color)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, display_name, 1 if counts_as_business else 0, color),
+        )
+        conn.commit()
+        return cursor.lastrowid or 0
+
+    def update_category(
+        self,
+        category_id: int,
+        name: str,
+        display_name: str,
+        counts_as_business: bool,
+        color: str,
+    ) -> None:
+        """Aktualisiert eine bestehende Kategorie."""
+        conn = self._get_conn()
+        conn.execute(
+            """
+            UPDATE categories SET
+                name = ?, display_name = ?,
+                counts_as_business = ?, color = ?
+            WHERE id = ?
+            """,
+            (name, display_name, 1 if counts_as_business else 0, color, category_id),
+        )
+        conn.commit()
+
+    def delete_category(self, category_id: int) -> None:
+        """Loescht eine Kategorie anhand der ID."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
         conn.commit()
 
     # ------------------------------------------------------------------

@@ -7,7 +7,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from fahrtenbuch_app.models.settings import AddressEntry
-from fahrtenbuch_app.models.trip import Trip
+from fahrtenbuch_app.models.trip import Trip, get_business_categories
 from fahrtenbuch_app.services.database import Database
 
 
@@ -83,12 +83,14 @@ class TripScreen(ModalScreen[Trip | None]):
 
         self._load_addresses()
         dest_options = self._build_destination_options()
-        category_options = [
-            ("Geschaeftlich", "business"),
-            ("Privat", "private"),
-            ("Tanken", "fuel"),
-            ("Service (TUeV, Reifen, ...)", "service"),
-        ]
+        category_options = self._database.get_category_options()
+        if not category_options:
+            category_options = [
+                ("Geschaeftlich", "business"),
+                ("Privat", "private"),
+                ("Tanken", "fuel"),
+                ("Service (TUeV, Reifen, ...)", "service"),
+            ]
 
         default_date = trip.date if self._is_edit else self._default_date
         default_km_start = trip.km_start if self._is_edit else self._last_km_end
@@ -260,7 +262,7 @@ class TripScreen(ModalScreen[Trip | None]):
         priv_input = self.query_one("#input-km-private", Input)
         current_category = str(category_select.value)
 
-        if current_category in ("business", "fuel", "service"):
+        if current_category in get_business_categories():
             if km_start > 0 and entry.km > 0:
                 biz_input.value = str(int(entry.km))
                 priv_input.value = "0"

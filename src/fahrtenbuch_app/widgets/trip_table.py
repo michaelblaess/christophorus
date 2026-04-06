@@ -12,7 +12,7 @@ from fahrtenbuch_app.models.trip import MonthData, Trip
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-_CATEGORY_STYLES: dict[str, str] = {
+_DEFAULT_CATEGORY_STYLES: dict[str, str] = {
     "business": "green",
     "fuel": "yellow",
     "service": "magenta",
@@ -59,13 +59,22 @@ class TripTable(Vertical):
         self,
         month_data: MonthData,
         holidays_map: dict[date, str] | None = None,
+        category_colors: dict[str, str] | None = None,
     ) -> None:
-        """Laedt die Fahrten in die Tabelle."""
+        """Laedt die Fahrten in die Tabelle.
+
+        Args:
+            month_data: Monatsdaten mit Fahrten.
+            holidays_map: Feiertage im Monat.
+            category_colors: Mapping von Kategorie-Name zu Farbe aus der DB.
+        """
         table = self.query_one("#trip-data", DataTable)
         table.clear()
         self._row_trips.clear()
         if holidays_map is None:
             holidays_map = {}
+
+        styles = category_colors if category_colors else _DEFAULT_CATEGORY_STYLES
 
         row_idx = 0
         for idx, trip in enumerate(month_data.trips):
@@ -89,7 +98,7 @@ class TripTable(Vertical):
             if len(dest_short) > 40:
                 dest_short = f"{dest_short[:37]}..."
 
-            style = _CATEGORY_STYLES.get(trip.category, "")
+            style = styles.get(trip.category, "")
 
             # Warnung: geschaeftliche Fahrt an Feiertag oder Wochenende
             warning = ""
