@@ -1,0 +1,1 @@
+"""Datenmodelle fuer das Fahrtenbuch."""

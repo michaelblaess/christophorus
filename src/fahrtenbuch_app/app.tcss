@@ -1,0 +1,46 @@
+Screen {
+    layout: vertical;
+}
+
+ConfigPanel {
+    height: 3;
+    margin-bottom: 0;
+}
+
+TripTable {
+    height: 1fr;
+    min-height: 10;
+    border: solid $accent;
+}
+
+TripTable.hidden {
+    display: none;
+}
+
+CalendarView {
+    height: 1fr;
+    min-height: 10;
+    border: solid $accent;
+    display: none;
+}
+
+CalendarView.visible {
+    display: block;
+}
+
+SummaryPanel {
+    height: 3;
+    margin-top: 0;
+}
+
+#log-panel {
+    height: 10;
+    min-height: 5;
+    max-height: 15;
+    border-top: solid $accent;
+    display: block;
+}
+
+#log-panel.hidden {
+    display: none;
+}

@@ -1,0 +1,1 @@
+"""Widgets fuer das Fahrtenbuch."""
