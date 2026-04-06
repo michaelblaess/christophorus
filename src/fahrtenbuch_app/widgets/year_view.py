@@ -117,12 +117,12 @@ class YearView(VerticalScroll):
     YearView.visible {
         display: block;
     }
-    YearView #year-title {
+    YearView .year-title {
         text-align: center;
         text-style: bold;
         margin-bottom: 1;
     }
-    YearView #year-summary {
+    YearView .year-summary {
         height: auto;
         padding: 1;
         margin-top: 1;
@@ -132,6 +132,19 @@ class YearView(VerticalScroll):
 
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)
+        self._title_widget = Static("", classes="year-title")
+        self._summary_widget = Static("", classes="year-summary")
+        self._loaded_year: int = 0
+
+    def compose(self) -> ComposeResult:
+        """Erstellt das statische Layout einmalig."""
+        yield self._title_widget
+        for q in range(4):
+            with QuarterRow():
+                yield Static(_QUARTER_NAMES[q], classes="quarter-label")
+                for m_offset in range(3):
+                    yield MonthTile(month=q * 3 + m_offset + 1)
+        yield self._summary_widget
 
     def load_data(
         self,
@@ -139,38 +152,31 @@ class YearView(VerticalScroll):
         month_data: dict[int, MonthData],
         lease_km: int = 1500,
     ) -> None:
-        """Baut die Jahresuebersicht fuer das gegebene Jahr."""
-        # Alle Kinder entfernen
-        for widget in list(self.children):
-            widget.remove()
+        """Aktualisiert die Jahresuebersicht mit neuen Daten."""
+        self._loaded_year = year
+        self._title_widget.update(f"Jahresuebersicht {year}")
 
-        self.mount(Static(f"Jahresuebersicht {year}", id="year-title"))
+        # MonthTiles aktualisieren
+        tiles = list(self.query(MonthTile))
+        for tile in tiles:
+            md = month_data.get(tile._month)
+            tile._km_total = md.km_total if md else 0
+            tile._km_business = md.km_business if md else 0
+            tile._km_private = md.km_private if md else 0
+            tile._lease_km = lease_km
+            tile._trip_count = len(md.trips) if md else 0
+            tile.refresh()
 
-        for q in range(4):
-            row = QuarterRow()
-            self.mount(row)
-            row.mount(Static(_QUARTER_NAMES[q], classes="quarter-label"))
-            for m_offset in range(3):
-                month = q * 3 + m_offset + 1
-                md = month_data.get(month)
-                row.mount(MonthTile(
-                    month=month,
-                    km_total=md.km_total if md else 0,
-                    km_business=md.km_business if md else 0,
-                    km_private=md.km_private if md else 0,
-                    lease_km=lease_km,
-                    trip_count=len(md.trips) if md else 0,
-                ))
+        # Summary aktualisieren
+        self._summary_widget.update(self._build_summary_text(month_data, lease_km, year))
 
-        self.mount(self._build_summary(month_data, lease_km, year))
-
-    def _build_summary(
+    def _build_summary_text(
         self,
         month_data: dict[int, MonthData],
         lease_km: int,
         year: int,
-    ) -> Static:
-        """Erstellt die Jahreszusammenfassung."""
+    ) -> Text:
+        """Erstellt den Zusammenfassungstext."""
         total_km = sum(md.km_total for md in month_data.values())
         total_biz = sum(md.km_business for md in month_data.values())
         total_priv = sum(md.km_private for md in month_data.values())
@@ -192,4 +198,4 @@ class YearView(VerticalScroll):
         text.append(f"geschaeftl.: {total_biz:,} km ({biz_pct:.1f}%)", style=biz_style)
         text.append(f"  |  privat: {total_priv:,} km ({100 - biz_pct:.1f}%)", style="bold blue")
 
-        return Static(text, id="year-summary")
+        return text
