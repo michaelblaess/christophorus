@@ -1,3 +1,10 @@
 *.jpg
 *.jpeg
 *.png
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+*.db
+*.db-shm
+*.db-wal
