@@ -55,11 +55,17 @@ class TripTable(Vertical):
             "km Anfang", "km Ende", "geschaeftl.", "privat",
         )
 
-    def load_data(self, month_data: MonthData) -> None:
+    def load_data(
+        self,
+        month_data: MonthData,
+        holidays_map: dict[date, str] | None = None,
+    ) -> None:
         """Laedt die Fahrten in die Tabelle."""
         table = self.query_one("#trip-data", DataTable)
         table.clear()
         self._row_trips.clear()
+        if holidays_map is None:
+            holidays_map = {}
 
         row_idx = 0
         for idx, trip in enumerate(month_data.trips):
@@ -71,6 +77,7 @@ class TripTable(Vertical):
             except (ValueError, IndexError):
                 date_str = trip.date
                 weekday = ""
+                d = None
 
             time_str = ""
             if trip.time_from and trip.time_to:
@@ -84,16 +91,31 @@ class TripTable(Vertical):
 
             style = _CATEGORY_STYLES.get(trip.category, "")
 
+            # Warnung: geschaeftliche Fahrt an Feiertag oder Wochenende
+            warning = ""
+            if d is not None and trip.is_business_km:
+                holiday_name = holidays_map.get(d, "")
+                if holiday_name:
+                    warning = f"FEIERTAG: {holiday_name}"
+                    style = "bold red"
+                elif d.weekday() >= 5:
+                    warning = "WOCHENENDE"
+                    style = "bold red"
+
+            purpose_text = trip.purpose
+            if warning:
+                purpose_text = f"{trip.purpose} [{warning}]"
+
             row_key = str(row_idx)
             table.add_row(
                 Text(date_str, style=style),
-                Text(weekday, style="dim"),
+                Text(weekday, style="dim" if not warning else "bold red"),
                 Text(time_str, style="dim"),
                 Text(dest_short),
-                Text(trip.purpose, style=style),
+                Text(purpose_text, style=style),
                 Text(str(trip.km_start), style="dim"),
                 Text(str(trip.km_end), style="dim"),
-                Text(str(trip.km_business) if trip.km_business > 0 else "", style="green"),
+                Text(str(trip.km_business) if trip.km_business > 0 else "", style="green" if not warning else "bold red"),
                 Text(str(trip.km_private) if trip.km_private > 0 else "", style="blue"),
                 key=row_key,
             )

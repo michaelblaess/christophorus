@@ -8,6 +8,7 @@ from textual.widgets import (
     Button,
     Input,
     Label,
+    Select,
     Static,
     TabbedContent,
     TabPane,
@@ -16,6 +17,25 @@ from textual.widgets import (
 from fahrtenbuch_app.models.settings import AddressEntry
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
+
+_STATE_OPTIONS: list[tuple[str, str]] = [
+    ("Baden-Wuerttemberg", "BW"),
+    ("Bayern", "BY"),
+    ("Berlin", "BE"),
+    ("Brandenburg", "BB"),
+    ("Bremen", "HB"),
+    ("Hamburg", "HH"),
+    ("Hessen", "HE"),
+    ("Mecklenburg-Vorpommern", "MV"),
+    ("Niedersachsen", "NI"),
+    ("Nordrhein-Westfalen", "NW"),
+    ("Rheinland-Pfalz", "RP"),
+    ("Saarland", "SL"),
+    ("Sachsen", "SN"),
+    ("Sachsen-Anhalt", "ST"),
+    ("Schleswig-Holstein", "SH"),
+    ("Thueringen", "TH"),
+]
 
 
 class SettingsScreen(ModalScreen[bool | None]):
@@ -80,6 +100,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         super().__init__(**kwargs)
         self._database = database
         self._vehicle = database.get_vehicle()
+        self._federal_state = database.get_setting("federal_state", "BB")
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
 
@@ -198,6 +219,13 @@ class SettingsScreen(ModalScreen[bool | None]):
         with Horizontal(classes="form-row"):
             yield Label("Leasingdauer (Monate):")
             yield Input(value=str(v.lease_months), id="v-lease-months")
+        with Horizontal(classes="form-row"):
+            yield Label("Bundesland:")
+            yield Select(
+                options=_STATE_OPTIONS,
+                value=self._federal_state,
+                id="select-federal-state",
+            )
 
     def _home_fields(self, home_address: str) -> ComposeResult:
         """Felder fuer die Wohnadresse."""
@@ -296,6 +324,11 @@ class SettingsScreen(ModalScreen[bool | None]):
             lease_months=self._parse_int("v-lease-months", 12),
         )
         self._database.save_vehicle(vehicle)
+
+        # Bundesland speichern
+        state_select = self.query_one("#select-federal-state", Select)
+        if state_select.value != Select.BLANK:
+            self._database.set_setting("federal_state", str(state_select.value))
 
         # Wohnadresse speichern
         self._database.set_setting(

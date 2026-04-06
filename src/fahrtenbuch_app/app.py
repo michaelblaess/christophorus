@@ -15,6 +15,7 @@ from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
+from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.trip_table import TripTable
 
 
@@ -58,6 +59,7 @@ class FahrtenbuchApp(App):
         self._calendar_active = False
         self._fahrtenbuch: Fahrtenbuch | None = None
         self._selected_trip_index: int = -1
+        self._holiday_service = HolidayService("BB")  # Brandenburg
 
     def compose(self) -> ComposeResult:
         """Erstellt das UI-Layout."""
@@ -153,6 +155,10 @@ class FahrtenbuchApp(App):
                 if first:
                     self._year, self._month = first
 
+        # HolidayService mit gespeichertem Bundesland
+        federal_state = db.get_setting("federal_state", "BB")
+        self._holiday_service = HolidayService(federal_state)
+
         # UI aktualisieren
         vehicle = self._fahrtenbuch.vehicle
         config_panel = self.query_one("#config-panel", ConfigPanel)
@@ -178,18 +184,48 @@ class FahrtenbuchApp(App):
         if vehicle:
             lease_km = vehicle.lease_km_per_month
 
+        holidays_map = self._holiday_service.get_holidays_in_month(
+            self._year, self._month
+        )
+
         table = self.query_one("#trip-table", TripTable)
-        table.load_data(month_data)
+        table.load_data(month_data, holidays_map)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
-        calendar_view.load_data(month_data)
+        calendar_view.load_data(month_data, holidays_map)
 
         summary = self.query_one("#summary-panel", SummaryPanel)
         summary.update_data(month_data, lease_km)
 
+        # Warnungen fuer geschaeftliche Fahrten an Feiertagen/Wochenenden
+        warnings = 0
+        for trip in month_data.trips:
+            if not trip.is_business_km:
+                continue
+            try:
+                parts = trip.date.split("-")
+                d = date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                continue
+            holiday_name = holidays_map.get(d, "")
+            if holiday_name:
+                self._write_log(
+                    f"[bold red]WARNUNG: Geschaeftliche Fahrt am Feiertag "
+                    f"{d.strftime('%d.%m.%Y')} ({holiday_name}): "
+                    f"{trip.purpose}[/bold red]"
+                )
+                warnings += 1
+            elif d.weekday() >= 5:
+                self._write_log(
+                    f"[bold red]WARNUNG: Geschaeftliche Fahrt am Wochenende "
+                    f"{d.strftime('%d.%m.%Y')}: {trip.purpose}[/bold red]"
+                )
+                warnings += 1
+
         self._write_log(
             f"Daten geladen: {len(month_data.trips)} Fahrten, "
             f"{month_data.km_total} km gesamt"
+            + (f", [bold red]{warnings} Warnungen[/bold red]" if warnings else "")
         )
 
     def _write_log(self, message: str) -> None:
@@ -354,9 +390,13 @@ class FahrtenbuchApp(App):
         if not changed or self._fahrtenbuch is None:
             return
 
-        # Fahrzeug-Daten aus DB neu laden
-        self._fahrtenbuch._vehicle = self._fahrtenbuch.database.get_vehicle()
+        # Fahrzeug-Daten und Bundesland aus DB neu laden
+        db = self._fahrtenbuch.database
+        self._fahrtenbuch._vehicle = db.get_vehicle()
         vehicle = self._fahrtenbuch.vehicle
+
+        federal_state = db.get_setting("federal_state", "BB")
+        self._holiday_service = HolidayService(federal_state)
 
         self._write_log("[green]Einstellungen gespeichert[/green]")
 

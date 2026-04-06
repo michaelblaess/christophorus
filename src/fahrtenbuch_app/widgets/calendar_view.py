@@ -31,10 +31,12 @@ class DayTile(Widget):
         border: solid $surface;
     }
     DayTile.weekend {
-        background: $surface-darken-1;
+        background: $surface-darken-2;
+        border: solid $surface-darken-1;
     }
     DayTile.holiday {
-        background: $surface-darken-1;
+        background: $surface-darken-2;
+        border: solid $warning;
     }
     DayTile.business {
         border: solid green;
@@ -94,9 +96,34 @@ class DayTile(Widget):
             text.append(f"{day_num} {weekday}", style="dim")
             return text
 
+        is_weekend = self._date.weekday() >= 5
+
+        if self._holiday_name and self._trip_day and self._trip_day.has_business:
+            # Warnung: geschaeftliche Fahrt an Feiertag
+            text.append(f"{day_num} {weekday} ", style="bold red")
+            text.append("WARNUNG", style="bold red")
+            text.append(f"\n{self._holiday_name[:18]}", style="red italic")
+            text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
+            return text
+
+        if is_weekend and self._trip_day and self._trip_day.has_business:
+            # Warnung: geschaeftliche Fahrt am Wochenende
+            text.append(f"{day_num} {weekday} ", style="bold red")
+            text.append("WARNUNG", style="bold red")
+            text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
+            return text
+
         if self._holiday_name:
             text.append(f"{day_num} {weekday}", style="dim")
             text.append(f"\n{self._holiday_name[:18]}", style="dim italic")
+            if self._trip_day and self._trip_day.trips:
+                text.append(f"\n{self._trip_day.km_total} km privat", style="blue")
+            return text
+
+        if is_weekend:
+            text.append(f"{day_num} {weekday}", style="dim")
+            if self._trip_day and self._trip_day.trips:
+                text.append(f"\n{self._trip_day.km_total} km privat", style="blue")
             return text
 
         if self._trip_day and self._trip_day.trips:
