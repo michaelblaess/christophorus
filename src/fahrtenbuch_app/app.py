@@ -17,6 +17,7 @@ from fahrtenbuch_app.widgets.config_panel import ConfigPanel
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
 from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.trip_table import TripTable
+from fahrtenbuch_app.widgets.year_view import YearView
 
 
 class FahrtenbuchApp(App):
@@ -56,7 +57,7 @@ class FahrtenbuchApp(App):
         self._year = year_override or date.today().year
         self._month = date.today().month
         self._year_override = year_override
-        self._calendar_active = False
+        self._current_view = "list"  # "list" | "calendar" | "year"
         self._fahrtenbuch: Fahrtenbuch | None = None
         self._selected_trip_index: int = -1
         self._holiday_service = HolidayService("BB")  # Brandenburg
@@ -73,6 +74,7 @@ class FahrtenbuchApp(App):
         )
         yield TripTable(id="trip-table")
         yield CalendarView(id="calendar-view")
+        yield YearView(id="year-view")
         yield SummaryPanel(id="summary-panel")
         yield RichLog(id="log-panel", highlight=True, markup=True)
         yield Footer()
@@ -321,17 +323,45 @@ class FahrtenbuchApp(App):
         config.next_month()
 
     def action_toggle_view(self) -> None:
-        """Wechselt zwischen Listen- und Kalenderansicht."""
-        self._calendar_active = not self._calendar_active
+        """Wechselt zwischen Liste -> Kalender -> Jahr."""
+        cycle = {"list": "calendar", "calendar": "year", "year": "list"}
+        self._current_view = cycle[self._current_view]
+        self._update_view_visibility()
+
+        if self._current_view == "year":
+            self._refresh_year_view()
+
+    def _update_view_visibility(self) -> None:
+        """Zeigt/versteckt Views basierend auf _current_view."""
         table = self.query_one("#trip-table", TripTable)
         calendar_view = self.query_one("#calendar-view", CalendarView)
+        year_view = self.query_one("#year-view", YearView)
 
-        if self._calendar_active:
-            table.add_class("hidden")
-            calendar_view.add_class("visible")
-        else:
+        if self._current_view == "list":
             table.remove_class("hidden")
             calendar_view.remove_class("visible")
+            year_view.remove_class("visible")
+        elif self._current_view == "calendar":
+            table.add_class("hidden")
+            calendar_view.add_class("visible")
+            year_view.remove_class("visible")
+        elif self._current_view == "year":
+            table.add_class("hidden")
+            calendar_view.remove_class("visible")
+            year_view.add_class("visible")
+
+    def _refresh_year_view(self) -> None:
+        """Laedt die Jahresdaten in die YearView."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        db = self._fahrtenbuch.database
+        month_data = db.get_all_month_data(self._year)
+        lease_km = 1500
+        vehicle = self._fahrtenbuch.vehicle
+        if vehicle:
+            lease_km = vehicle.lease_km_per_month
+        year_view = self.query_one("#year-view", YearView)
+        year_view.load_data(self._year, month_data, lease_km)
 
     def action_toggle_log(self) -> None:
         """Blendet das Log-Panel ein/aus."""
@@ -420,25 +450,10 @@ class FahrtenbuchApp(App):
         self._show_start_screen()
 
     def action_show_year(self) -> None:
-        """Oeffnet die Jahresuebersicht."""
-        from fahrtenbuch_app.screens.year_screen import YearScreen
-
-        if self._fahrtenbuch is None:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="error")
-            return
-
-        db = self._fahrtenbuch.database
-        month_data = db.get_all_month_data(self._year)
-        lease_km = 1500
-        vehicle = self._fahrtenbuch.vehicle
-        if vehicle:
-            lease_km = vehicle.lease_km_per_month
-
-        self.push_screen(YearScreen(
-            year=self._year,
-            month_data=month_data,
-            lease_km=lease_km,
-        ))
+        """Wechselt direkt zur Jahresuebersicht."""
+        self._current_view = "year"
+        self._update_view_visibility()
+        self._refresh_year_view()
 
     def action_check_plausibility(self) -> None:
         """Fuehrt die Plausibilitaetspruefung durch."""
