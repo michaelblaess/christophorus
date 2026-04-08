@@ -12,6 +12,7 @@ from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
 from fahrtenbuch_app.models.settings import GlobalConfig
 from fahrtenbuch_app.models.trip import Trip, set_business_categories
 from fahrtenbuch_app.models.vehicle import Vehicle
+from fahrtenbuch_app.widgets.blacklist_view import BlacklistView
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
@@ -35,6 +36,7 @@ class FahrtenbuchApp(App):
         Binding("j", "show_year", "Jahr"),
         Binding("o", "open_fahrtenbuch", "Oeffnen"),
         Binding("v", "toggle_view", "View"),
+        Binding("b", "toggle_blacklist", "Blacklist"),
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
@@ -57,7 +59,7 @@ class FahrtenbuchApp(App):
         self._year = year_override or date.today().year
         self._month = date.today().month
         self._year_override = year_override
-        self._current_view = "list"  # "list" | "calendar" | "year"
+        self._current_view = "list"  # "list" | "calendar" | "year" | "blacklist"
         self._fahrtenbuch: Fahrtenbuch | None = None
         self._selected_trip_index: int = -1
         self._holiday_service = HolidayService("BB")  # Brandenburg
@@ -76,12 +78,14 @@ class FahrtenbuchApp(App):
             Tab("Liste", id="tab-list"),
             Tab("Kalender", id="tab-calendar"),
             Tab("Jahr", id="tab-year"),
+            Tab("Blacklist", id="tab-blacklist"),
             id="view-tabs",
         )
         with ContentSwitcher(initial="trip-table", id="view-switcher"):
             yield TripTable(id="trip-table")
             yield CalendarView(id="calendar-view")
             yield YearView(id="year-view")
+            yield BlacklistView(id="blacklist-view")
         yield SummaryPanel(id="summary-panel")
         yield RichLog(id="log-panel", highlight=True, markup=True)
         yield Footer()
@@ -200,11 +204,25 @@ class FahrtenbuchApp(App):
 
         category_colors = db.get_category_colors()
 
+        # Blacklist laden (fuer Kalenderansicht und Blacklist-Tab)
+        blacklist_entries = db.get_blacklist()
+        blacklist_map: dict[date, str] = {}
+        for entry in blacklist_entries:
+            try:
+                parts = str(entry.get("date", "")).split("-")
+                d = date(int(parts[0]), int(parts[1]), int(parts[2]))
+                blacklist_map[d] = str(entry.get("reason", ""))
+            except (ValueError, IndexError):
+                pass
+
         table = self.query_one("#trip-table", TripTable)
         table.load_data(month_data, holidays_map, category_colors)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
-        calendar_view.load_data(month_data, holidays_map, category_colors)
+        calendar_view.load_data(month_data, holidays_map, category_colors, blacklist_map)
+
+        bl_view = self.query_one("#blacklist-view", BlacklistView)
+        bl_view.load_data(blacklist_entries)
 
         summary = self.query_one("#summary-panel", SummaryPanel)
         summary.update_data(month_data, lease_km)
@@ -333,6 +351,7 @@ class FahrtenbuchApp(App):
             "tab-list": "trip-table",
             "tab-calendar": "calendar-view",
             "tab-year": "year-view",
+            "tab-blacklist": "blacklist-view",
         }
         view_id = tab_map.get(event.tab.id or "", "trip-table")
         switcher = self.query_one("#view-switcher", ContentSwitcher)
@@ -346,6 +365,26 @@ class FahrtenbuchApp(App):
         """Wechselt zum naechsten Tab."""
         tabs = self.query_one("#view-tabs", Tabs)
         tabs.action_next_tab()
+
+    def action_toggle_blacklist(self) -> None:
+        """Schaltet Blacklist-Markierung im Kalender ein/aus und wechselt zur Kalenderansicht."""
+        if self._fahrtenbuch is None:
+            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            return
+
+        # Zur Kalenderansicht wechseln
+        tabs = self.query_one("#view-tabs", Tabs)
+        tabs.active = "tab-calendar"
+
+        calendar_view = self.query_one("#calendar-view", CalendarView)
+        is_on = calendar_view.toggle_blacklist()
+
+        status = "[bold red]EIN[/bold red]" if is_on else "[dim]AUS[/dim]"
+        self._write_log(f"Blacklist-Anzeige: {status}")
+        self.notify(
+            f"Blacklist {'aktiv' if is_on else 'deaktiviert'}",
+            severity="information" if is_on else "warning",
+        )
 
     def _refresh_year_view(self) -> None:
         """Laedt die Jahresdaten in die YearView."""

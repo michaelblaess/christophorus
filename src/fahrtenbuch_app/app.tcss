@@ -32,6 +32,12 @@ YearView {
     border: solid $accent;
 }
 
+BlacklistView {
+    height: 1fr;
+    min-height: 10;
+    border: solid $accent;
+}
+
 SummaryPanel {
     height: 3;
     margin-top: 0;
