@@ -3,7 +3,7 @@ Screen {
 }
 
 ConfigPanel {
-    height: 3;
+    height: 1;
     margin-bottom: 0;
 }
 

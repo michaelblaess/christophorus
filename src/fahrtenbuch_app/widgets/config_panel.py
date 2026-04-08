@@ -13,7 +13,7 @@ class ConfigPanel(Widget):
 
     DEFAULT_CSS = """
     ConfigPanel {
-        height: 3;
+        height: 1;
         padding: 0 1;
         background: $surface;
     }

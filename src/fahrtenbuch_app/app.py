@@ -34,7 +34,7 @@ class FahrtenbuchApp(App):
         Binding("s", "show_settings", "Settings"),
         Binding("j", "show_year", "Jahr"),
         Binding("o", "open_fahrtenbuch", "Oeffnen"),
-        Binding("v", "toggle_view", "View wechseln"),
+        Binding("tab", "toggle_view", "View", key_display="TAB"),
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
