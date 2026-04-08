@@ -8,7 +8,6 @@ ConfigPanel {
 }
 
 #view-tabs {
-    dock: top;
     height: 3;
 }
 
