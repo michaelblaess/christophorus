@@ -43,6 +43,11 @@ class TripTable(Vertical):
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._row_trips: dict[str, tuple[Trip | None, int]] = {}
+        self._last_month_data: MonthData | None = None
+        self._last_holidays_map: dict[date, str] = {}
+        self._last_category_colors: dict[str, str] | None = None
+        self._blacklist_map: dict[date, str] = {}
+        self._show_blacklist: bool = False
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
@@ -60,21 +65,39 @@ class TripTable(Vertical):
         month_data: MonthData,
         holidays_map: dict[date, str] | None = None,
         category_colors: dict[str, str] | None = None,
+        blacklist_map: dict[date, str] | None = None,
     ) -> None:
-        """Laedt die Fahrten in die Tabelle.
+        """Laedt die Fahrten in die Tabelle."""
+        self._last_month_data = month_data
+        self._last_holidays_map = holidays_map if holidays_map is not None else {}
+        self._last_category_colors = category_colors
+        if blacklist_map is not None:
+            self._blacklist_map = blacklist_map
+        self._build_rows()
 
-        Args:
-            month_data: Monatsdaten mit Fahrten.
-            holidays_map: Feiertage im Monat.
-            category_colors: Mapping von Kategorie-Name zu Farbe aus der DB.
-        """
+    def toggle_blacklist(self) -> bool:
+        """Schaltet Blacklist-Markierung ein/aus. Gibt neuen Status zurueck."""
+        self._show_blacklist = not self._show_blacklist
+        self._build_rows()
+        return self._show_blacklist
+
+    @property
+    def blacklist_visible(self) -> bool:
+        return self._show_blacklist
+
+    def _build_rows(self) -> None:
+        """Baut alle Tabellenzeilen neu auf."""
         table = self.query_one("#trip-data", DataTable)
         table.clear()
         self._row_trips.clear()
-        if holidays_map is None:
-            holidays_map = {}
 
-        styles = category_colors if category_colors else _DEFAULT_CATEGORY_STYLES
+        if self._last_month_data is None:
+            return
+
+        month_data = self._last_month_data
+        holidays_map = self._last_holidays_map
+        styles = self._last_category_colors if self._last_category_colors else _DEFAULT_CATEGORY_STYLES
+        active_blacklist = self._blacklist_map if self._show_blacklist else {}
 
         row_idx = 0
         for idx, trip in enumerate(month_data.trips):
@@ -99,10 +122,17 @@ class TripTable(Vertical):
                 dest_short = f"{dest_short[:37]}..."
 
             style = styles.get(trip.category, "")
-
-            # Warnung: geschaeftliche Fahrt an Feiertag oder Wochenende
             warning = ""
-            if d is not None and trip.is_business_km:
+
+            # Blacklist-Tag pruefen
+            if d is not None:
+                bl_reason = active_blacklist.get(d, "")
+                if bl_reason:
+                    warning = f"GESPERRT: {bl_reason}"
+                    style = "bold red"
+
+            # Feiertag / Wochenende nur wenn noch kein Blacklist-Eintrag
+            if not warning and d is not None and trip.is_business_km:
                 holiday_name = holidays_map.get(d, "")
                 if holiday_name:
                     warning = f"FEIERTAG: {holiday_name}"
@@ -111,9 +141,7 @@ class TripTable(Vertical):
                     warning = "WOCHENENDE"
                     style = "bold red"
 
-            purpose_text = trip.purpose
-            if warning:
-                purpose_text = f"{trip.purpose} [{warning}]"
+            purpose_text = f"{trip.purpose} [{warning}]" if warning else trip.purpose
 
             row_key = str(row_idx)
             table.add_row(

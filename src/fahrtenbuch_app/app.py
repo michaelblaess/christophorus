@@ -216,7 +216,7 @@ class FahrtenbuchApp(App):
                 pass
 
         table = self.query_one("#trip-table", TripTable)
-        table.load_data(month_data, holidays_map, category_colors)
+        table.load_data(month_data, holidays_map, category_colors, blacklist_map)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
         calendar_view.load_data(month_data, holidays_map, category_colors, blacklist_map)
@@ -367,17 +367,15 @@ class FahrtenbuchApp(App):
         tabs.action_next_tab()
 
     def action_toggle_blacklist(self) -> None:
-        """Schaltet Blacklist-Markierung im Kalender ein/aus und wechselt zur Kalenderansicht."""
+        """Schaltet Blacklist-Markierung in Liste und Kalender ein/aus."""
         if self._fahrtenbuch is None:
             self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
             return
 
-        # Zur Kalenderansicht wechseln
-        tabs = self.query_one("#view-tabs", Tabs)
-        tabs.active = "tab-calendar"
-
+        trip_table = self.query_one("#trip-table", TripTable)
         calendar_view = self.query_one("#calendar-view", CalendarView)
-        is_on = calendar_view.toggle_blacklist()
+        is_on = trip_table.toggle_blacklist()
+        calendar_view.toggle_blacklist()
 
         status = "[bold red]EIN[/bold red]" if is_on else "[dim]AUS[/dim]"
         self._write_log(f"Blacklist-Anzeige: {status}")
