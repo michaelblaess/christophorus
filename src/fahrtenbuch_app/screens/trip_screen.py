@@ -1,8 +1,11 @@
 """Fahrt anlegen oder bearbeiten."""
 
+import os
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
@@ -53,6 +56,28 @@ class TripScreen(ModalScreen[Trip | None]):
         text-style: bold;
         margin-bottom: 1;
     }
+    TripScreen #docs-title {
+        text-style: bold;
+        color: $accent;
+        margin-top: 1;
+        margin-bottom: 0;
+    }
+    TripScreen #docs-list {
+        height: auto;
+        margin-bottom: 1;
+    }
+    TripScreen .doc-row {
+        height: 1;
+        layout: horizontal;
+    }
+    TripScreen .doc-name {
+        width: 1fr;
+        color: $text-muted;
+    }
+    TripScreen .doc-del {
+        width: 5;
+        color: $error;
+    }
     """
 
     BINDINGS = [
@@ -73,7 +98,7 @@ class TripScreen(ModalScreen[Trip | None]):
         self._trip = trip
         self._last_km_end = last_km_end
         self._default_date = default_date
-        self._is_edit = trip is not None
+        self._is_edit = trip is not None and trip.id > 0
         self._addresses: list[AddressEntry] = []
 
     def compose(self) -> ComposeResult:
@@ -187,6 +212,18 @@ class TripScreen(ModalScreen[Trip | None]):
                     placeholder="0",
                     id="input-km-private",
                 )
+
+            # Belege-Sektion (nur im Bearbeitungsmodus)
+            if self._is_edit and self._trip is not None:
+                yield Static("Belege", id="docs-title")
+                yield Vertical(id="docs-list")
+                with Horizontal(classes="form-row"):
+                    yield Label("")
+                    yield Button(
+                        "+ Beleg hinzufuegen",
+                        variant="success",
+                        id="btn-add-doc",
+                    )
 
             with Horizontal(classes="button-row"):
                 yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
@@ -306,12 +343,74 @@ class TripScreen(ModalScreen[Trip | None]):
                 return addr
         return None
 
+    def on_mount(self) -> None:
+        """Laedt Belege nach dem Mounten."""
+        if self._is_edit and self._trip is not None:
+            self._refresh_docs()
+
+    def _refresh_docs(self) -> None:
+        """Aktualisiert die Belegliste."""
+        if self._trip is None:
+            return
+        docs_list = self.query_one("#docs-list", Vertical)
+        for child in list(docs_list.children):
+            child.remove()
+
+        docs = self._database.get_documents(trip_id=self._trip.id)
+        for doc in docs:
+            doc_id = int(doc.get("id", 0))
+            path = str(doc.get("path", ""))
+            name = Path(path).name or path
+            desc = str(doc.get("description", ""))
+            label_text = f"{name}  {desc}" if desc else name
+            row = Horizontal(classes="doc-row")
+            docs_list.mount(row)
+            row.mount(
+                Static(label_text, classes="doc-name"),
+                Button("\u00d7", classes="doc-del", id=f"btn-del-doc-{doc_id}"),
+            )
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
-        if event.button.id == "btn-save":
+        btn_id = event.button.id or ""
+        if btn_id == "btn-save":
             self.action_save()
-        elif event.button.id == "btn-cancel":
+        elif btn_id == "btn-cancel":
             self.action_cancel()
+        elif btn_id == "btn-add-doc":
+            self._open_file_picker()
+        elif btn_id.startswith("btn-del-doc-"):
+            self._delete_document(btn_id)
+
+    def _open_file_picker(self) -> None:
+        """Oeffnet den File-Picker-Screen."""
+        from fahrtenbuch_app.screens.file_picker_screen import FilePickerScreen
+
+        start = self._database.path
+        self.app.push_screen(
+            FilePickerScreen(start_path=start),
+            callback=self._on_file_selected,
+        )
+
+    def _on_file_selected(self, selected: Path | None) -> None:
+        """Callback nach Dateiauswahl — speichert Dokument in DB."""
+        if selected is None or self._trip is None:
+            return
+        try:
+            rel_path = os.path.relpath(str(selected), str(self._database.path))
+        except ValueError:
+            rel_path = str(selected)
+        self._database.add_document(rel_path, trip_id=self._trip.id)
+        self._refresh_docs()
+
+    def _delete_document(self, btn_id: str) -> None:
+        """Loescht ein Dokument anhand der Button-ID."""
+        try:
+            doc_id = int(btn_id.replace("btn-del-doc-", ""))
+        except ValueError:
+            return
+        self._database.delete_document(doc_id)
+        self._refresh_docs()
 
     def action_save(self) -> None:
         """Speichert die Fahrt."""

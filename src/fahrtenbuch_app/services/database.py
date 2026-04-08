@@ -115,6 +115,15 @@ class Database:
                 reason TEXT NOT NULL DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id INTEGER REFERENCES trips(id) ON DELETE CASCADE,
+                blacklist_id INTEGER REFERENCES blacklist(id) ON DELETE CASCADE,
+                path TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
@@ -126,6 +135,7 @@ class Database:
         conn.commit()
         self._migrate_trips_check_constraint()
         self._migrate_blacklist_remove_allow_private()
+        self._migrate_addresses_remove_category_check()
         self._seed_default_categories()
 
     def _migrate_trips_check_constraint(self) -> None:
@@ -569,4 +579,79 @@ class Database:
         """Loescht einen Blacklist-Eintrag."""
         conn = self._get_conn()
         conn.execute("DELETE FROM blacklist WHERE id = ?", (entry_id,))
+        conn.commit()
+
+    def _migrate_addresses_remove_category_check(self) -> None:
+        """Entfernt die CHECK-Constraint auf addresses.category (fehlte 'other')."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='addresses'"
+        ).fetchone()
+        if row is None:
+            return
+        create_sql = row[0] or ""
+        if "CHECK" not in create_sql.upper():
+            return
+        conn.executescript("""
+            ALTER TABLE addresses RENAME TO addresses_old;
+            CREATE TABLE addresses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL DEFAULT 'customer',
+                name TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                km REAL NOT NULL DEFAULT 0.0
+            );
+            INSERT INTO addresses SELECT * FROM addresses_old;
+            DROP TABLE addresses_old;
+        """)
+        conn.commit()
+
+    # ------------------------------------------------------------------
+    # Documents
+    # ------------------------------------------------------------------
+
+    def get_documents(
+        self,
+        trip_id: int | None = None,
+        blacklist_id: int | None = None,
+    ) -> list[dict[str, object]]:
+        """Gibt alle Dokumente fuer einen Trip oder Blacklist-Eintrag zurueck."""
+        conn = self._get_conn()
+        if trip_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE trip_id = ? ORDER BY created_at",
+                (trip_id,),
+            ).fetchall()
+        elif blacklist_id is not None:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE blacklist_id = ? ORDER BY created_at",
+                (blacklist_id,),
+            ).fetchall()
+        else:
+            rows = []
+        return [dict(row) for row in rows]
+
+    def add_document(
+        self,
+        path: str,
+        description: str = "",
+        trip_id: int | None = None,
+        blacklist_id: int | None = None,
+    ) -> int:
+        """Fuegt ein Dokument hinzu und gibt die ID zurueck."""
+        conn = self._get_conn()
+        cursor = conn.execute(
+            """
+            INSERT INTO documents (trip_id, blacklist_id, path, description)
+            VALUES (?, ?, ?, ?)
+            """,
+            (trip_id, blacklist_id, path, description),
+        )
+        conn.commit()
+        return cursor.lastrowid or 0
+
+    def delete_document(self, doc_id: int) -> None:
+        """Loescht ein Dokument."""
+        conn = self._get_conn()
+        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
         conn.commit()

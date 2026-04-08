@@ -331,10 +331,17 @@ class FahrtenbuchApp(App):
         self, entry_id: int, date_str: str, reason: str
     ) -> None:
         """Oeffnet den Blacklist-Detail-Screen."""
+        if self._fahrtenbuch is None:
+            return
         from fahrtenbuch_app.screens.blacklist_detail_screen import BlacklistDetailScreen
 
         self.push_screen(
-            BlacklistDetailScreen(entry_id, date_str, reason),
+            BlacklistDetailScreen(
+                database=self._fahrtenbuch.database,
+                entry_id=entry_id,
+                date_str=date_str,
+                reason=reason,
+            ),
             callback=self._on_blacklist_detail_closed,
         )
 
