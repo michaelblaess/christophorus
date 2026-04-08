@@ -373,7 +373,7 @@ class SettingsScreen(ModalScreen[bool | None]):
             self._delete_category_entry(btn_id)
 
     def _add_address_entry(self, prefix: str) -> None:
-        """Fuegt einen leeren Adresseintrag hinzu."""
+        """Fuegt einen leeren Adresseintrag hinzu und mountet neue Widgets sofort."""
         category_map = {
             "cust": "customer",
             "gas": "gas_station",
@@ -382,12 +382,38 @@ class SettingsScreen(ModalScreen[bool | None]):
             "other": "other",
         }
         cat = category_map.get(prefix)
-        if cat:
-            new_entry = AddressEntry(category=cat)
-            if cat not in self._addresses:
-                self._addresses[cat] = []
-            self._addresses[cat].append(new_entry)
-        self.notify("Eintrag hinzugefuegt — bitte Speichern und neu oeffnen")
+        if not cat:
+            return
+
+        if cat not in self._addresses:
+            self._addresses[cat] = []
+        self._addresses[cat].append(AddressEntry(category=cat))
+        i = len(self._addresses[cat]) - 1
+
+        # Neuen addr-Block direkt vor dem Hinzufuegen-Button einfuegen
+        btn = self.query_one(f"#btn-add-{prefix}", Button)
+        new_block = Vertical(
+            Horizontal(
+                Label("Name:"),
+                Input(id=f"{prefix}-name-{i}"),
+                classes="form-row",
+            ),
+            Horizontal(
+                Label("Adresse:"),
+                Input(id=f"{prefix}-addr-{i}"),
+                classes="form-row",
+            ),
+            Horizontal(
+                Label("Entfernung km:"),
+                Input(id=f"{prefix}-km-{i}"),
+                classes="form-row",
+            ),
+            classes="addr-block",
+        )
+        btn.parent.mount(new_block, before=btn)
+        # Zum neuen Block scrollen und Name-Feld fokussieren
+        new_block.scroll_visible()
+        self.set_focus(self.query_one(f"#{prefix}-name-{i}", Input))
 
     def _add_category_entry(self) -> None:
         """Fuegt eine neue leere Kategorie hinzu."""
@@ -454,6 +480,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._save_address_list("gas_station", "gas")
         self._save_address_list("shopping", "shop")
         self._save_address_list("restaurant", "rest")
+        self._save_address_list("other", "other")
 
         # Steuerberaterin speichern
         self._save_steuerberaterin()
