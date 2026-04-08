@@ -1,9 +1,13 @@
 """Konfigurationspanel mit Monatswahl und Fahrzeug-Info."""
 
+import os
+import subprocess
+import sys
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static
+from textual.widgets import Button, Static
 
 from fahrtenbuch_app.models.vehicle import Vehicle
 
@@ -14,7 +18,7 @@ _MONTH_NAMES = [
 
 
 class ConfigPanel(Vertical):
-    """Zeigt Fahrzeug-Info, Leasingdaten und Monat/Jahr-Navigation."""
+    """Zeigt Fahrzeug-Info, Leasingdaten, Monat/Jahr-Navigation und Verzeichnis."""
 
     DEFAULT_CSS = """
     ConfigPanel {
@@ -45,6 +49,21 @@ class ConfigPanel(Vertical):
     }
     ConfigPanel #month-display {
         color: $accent;
+    }
+    ConfigPanel #path-display {
+        width: 1fr;
+        color: $text-muted;
+    }
+    ConfigPanel #btn-open-dir {
+        height: 1;
+        min-width: 10;
+        border: none;
+        background: transparent;
+        color: $accent;
+        padding: 0 1;
+    }
+    ConfigPanel #btn-open-dir:hover {
+        background: $accent 20%;
     }
     """
 
@@ -79,7 +98,7 @@ class ConfigPanel(Vertical):
         return self._month
 
     def compose(self) -> ComposeResult:
-        """Erstellt das Layout mit Zeilen fuer Fahrzeug, Leasing und Zeitraum."""
+        """Erstellt das Layout mit Zeilen fuer Fahrzeug, Leasing, Zeitraum und Verzeichnis."""
         vehicle = self._vehicle
 
         # Zeile 1: Fahrzeug
@@ -106,8 +125,19 @@ class ConfigPanel(Vertical):
             yield Static(self._format_month(), id="month-display")
             yield Static("", classes="config-spacer")
             yield Static("   [<] Prev  [>] Next", classes="nav-hint")
-            if self._fb_path:
-                yield Static(f"   {self._fb_path}", classes="config-right", id="path-display")
+
+        # Zeile 4: Verzeichnis
+        with Horizontal(classes="config-row"):
+            yield Static("  Verzeichnis:", classes="config-label")
+            yield Static(self._fb_path or "", id="path-display")
+            yield Button("\u2197 Oeffnen", id="btn-open-dir", disabled=not bool(self._fb_path))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Oeffnet das Fahrtenbuch-Verzeichnis im Datei-Explorer."""
+        if event.button.id != "btn-open-dir" or not self._fb_path:
+            return
+        event.stop()
+        _open_directory(self._fb_path)
 
     def update_vehicle(self, vehicle: Vehicle | None, fb_path: str = "") -> None:
         """Aktualisiert die Fahrzeug-Anzeige."""
@@ -125,10 +155,9 @@ class ConfigPanel(Vertical):
             km_str = f"{vehicle.lease_km_per_month:,} km/Monat  |  {vehicle.lease_months} Monate".replace(",", ".") if vehicle else ""
             self.query_one("#lease-km-display", Static).update(km_str)
 
-            try:
-                self.query_one("#path-display", Static).update(f"   {fb_path}" if fb_path else "")
-            except Exception:
-                pass
+            self.query_one("#path-display", Static).update(fb_path or "")
+            btn = self.query_one("#btn-open-dir", Button)
+            btn.disabled = not bool(fb_path)
         except Exception:
             self.refresh()
 
@@ -194,3 +223,16 @@ class ConfigPanel(Vertical):
         except Exception:
             pass
         return date_str
+
+
+def _open_directory(path: str) -> None:
+    """Oeffnet ein Verzeichnis im nativen Datei-Explorer."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception:
+        pass
