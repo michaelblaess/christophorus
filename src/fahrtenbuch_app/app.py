@@ -5,7 +5,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Rule, Tab, Tabs
+from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
 
 from fahrtenbuch_app import __version__, __year__
 from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
@@ -72,7 +72,6 @@ class FahrtenbuchApp(App):
             fb_path="",
             id="config-panel",
         )
-        yield Rule()
         yield Tabs(
             Tab("Liste", id="tab-list"),
             Tab("Kalender", id="tab-calendar"),
@@ -176,9 +175,7 @@ class FahrtenbuchApp(App):
         vehicle = self._fahrtenbuch.vehicle
         config_panel = self.query_one("#config-panel", ConfigPanel)
         config_panel.update_vehicle(vehicle, path_str)
-        config_panel._year = self._year
-        config_panel._month = self._month
-        config_panel.refresh()
+        config_panel.update_month(self._year, self._month)
 
         if vehicle and vehicle.name:
             self._write_log(f"Fahrzeug: {vehicle.name} ({vehicle.plate})")
