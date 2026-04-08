@@ -5,7 +5,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
+from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Rule, Tab, Tabs
 
 from fahrtenbuch_app import __version__, __year__
 from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
@@ -34,7 +34,7 @@ class FahrtenbuchApp(App):
         Binding("s", "show_settings", "Settings"),
         Binding("j", "show_year", "Jahr"),
         Binding("o", "open_fahrtenbuch", "Oeffnen"),
-        Binding("tab", "toggle_view", "View", key_display="TAB"),
+        Binding("v", "toggle_view", "View"),
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
@@ -72,6 +72,7 @@ class FahrtenbuchApp(App):
             fb_path="",
             id="config-panel",
         )
+        yield Rule()
         yield Tabs(
             Tab("Liste", id="tab-list"),
             Tab("Kalender", id="tab-calendar"),
