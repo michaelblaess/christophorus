@@ -216,7 +216,7 @@ class FahrtenbuchApp(App):
                 pass
 
         table = self.query_one("#trip-table", TripTable)
-        table.load_data(month_data, holidays_map, category_colors, blacklist_map)
+        table.load_data(month_data, holidays_map, category_colors, blacklist_map, blacklist_entries)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
         calendar_view.load_data(month_data, holidays_map, category_colors, blacklist_map)
@@ -313,6 +313,38 @@ class FahrtenbuchApp(App):
         self._write_log(
             f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]"
         )
+        self._refresh_data()
+
+    def on_blacklist_view_entry_selected(
+        self, event: "BlacklistView.EntrySelected"
+    ) -> None:
+        """Oeffnet Blacklist-Detail beim Auswaehlen eines Eintrags im Blacklist-Tab."""
+        self._show_blacklist_detail(event.entry_id, event.date_str, event.reason)
+
+    def on_trip_table_blacklist_entry_activated(
+        self, event: "TripTable.BlacklistEntryActivated"
+    ) -> None:
+        """Oeffnet Blacklist-Detail beim Auswaehlen einer Blacklist-Zeile in der Liste."""
+        self._show_blacklist_detail(event.entry_id, event.date_str, event.reason)
+
+    def _show_blacklist_detail(
+        self, entry_id: int, date_str: str, reason: str
+    ) -> None:
+        """Oeffnet den Blacklist-Detail-Screen."""
+        from fahrtenbuch_app.screens.blacklist_detail_screen import BlacklistDetailScreen
+
+        self.push_screen(
+            BlacklistDetailScreen(entry_id, date_str, reason),
+            callback=self._on_blacklist_detail_closed,
+        )
+
+    def _on_blacklist_detail_closed(self, entry_id_to_delete: int | None) -> None:
+        """Callback nach dem BlacklistDetailScreen — loescht Eintrag falls gewuenscht."""
+        if entry_id_to_delete is None or self._fahrtenbuch is None:
+            return
+        db = self._fahrtenbuch.database
+        db.delete_blacklist_entry(entry_id_to_delete)
+        self._write_log(f"[red]Blacklist-Eintrag geloescht (ID {entry_id_to_delete})[/red]")
         self._refresh_data()
 
     def action_delete_trip(self) -> None:

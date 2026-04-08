@@ -26,7 +26,7 @@ class DayTile(Widget):
     DEFAULT_CSS = """
     DayTile {
         width: 1fr;
-        height: 5;
+        height: 7;
         padding: 0 1;
         border: solid $surface;
     }
@@ -165,7 +165,7 @@ class WeekRow(Horizontal):
 
     DEFAULT_CSS = """
     WeekRow {
-        height: 5;
+        height: 7;
         width: 1fr;
     }
     """
