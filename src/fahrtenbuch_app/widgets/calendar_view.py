@@ -110,8 +110,7 @@ class DayTile(Widget):
         if self._blacklist_reason:
             text.append(f"{day_num} {weekday} ", style="bold red")
             text.append("GESPERRT\n", style="bold red")
-            reason_short = self._blacklist_reason[:18]
-            text.append(reason_short, style="red italic")
+            text.append(self._blacklist_reason, style="red italic")
             if self._trip_day and self._trip_day.has_business:
                 text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
             elif self._trip_day and self._trip_day.trips:

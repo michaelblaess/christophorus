@@ -33,7 +33,7 @@ class BlacklistView(Vertical):
     def on_mount(self) -> None:
         """Spalten anlegen."""
         table = self.query_one("#blacklist-data", DataTable)
-        table.add_columns("#", "Datum", "Tag", "Grund / Anlass", "Privat ok")
+        table.add_columns("#", "Datum", "Tag", "Grund / Anlass")
 
     def load_data(self, entries: list[dict[str, object]]) -> None:
         """Laedt die Blacklist-Eintraege in die Tabelle."""
@@ -44,7 +44,6 @@ class BlacklistView(Vertical):
             entry_id = str(entry.get("id", ""))
             date_str = str(entry.get("date", ""))
             reason = str(entry.get("reason", ""))
-            allow_private = bool(entry.get("allow_private", 0))
 
             # Datum formatieren und Wochentag bestimmen
             date_de = date_str
@@ -60,12 +59,10 @@ class BlacklistView(Vertical):
                 pass
 
             date_style = "dim" if is_weekend else "bold red"
-            allow_text = Text("ja", style="yellow") if allow_private else Text("nein", style="dim")
 
             table.add_row(
                 Text(entry_id, style="dim"),
                 Text(date_de, style=date_style),
                 Text(weekday, style="dim"),
                 Text(reason, style="bold" if not is_weekend else "dim"),
-                allow_text,
             )

@@ -112,8 +112,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS blacklist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 date TEXT NOT NULL,
-                reason TEXT NOT NULL DEFAULT '',
-                allow_private INTEGER NOT NULL DEFAULT 0
+                reason TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS categories (
@@ -126,6 +125,7 @@ class Database:
         """)
         conn.commit()
         self._migrate_trips_check_constraint()
+        self._migrate_blacklist_remove_allow_private()
         self._seed_default_categories()
 
     def _migrate_trips_check_constraint(self) -> None:
@@ -166,6 +166,30 @@ class Database:
             DROP TABLE trips_old;
 
             CREATE INDEX IF NOT EXISTS idx_trips_date ON trips (date);
+        """)
+        conn.commit()
+
+    def _migrate_blacklist_remove_allow_private(self) -> None:
+        """Entfernt die allow_private-Spalte aus der blacklist-Tabelle falls vorhanden."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='blacklist'"
+        ).fetchone()
+        if row is None:
+            return
+        create_sql = row[0] or ""
+        if "allow_private" not in create_sql.lower():
+            return
+        conn.executescript("""
+            ALTER TABLE blacklist RENAME TO blacklist_old;
+            CREATE TABLE blacklist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT ''
+            );
+            INSERT INTO blacklist (id, date, reason)
+                SELECT id, date, reason FROM blacklist_old;
+            DROP TABLE blacklist_old;
         """)
         conn.commit()
 
@@ -531,17 +555,12 @@ class Database:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def add_blacklist_entry(
-        self, date: str, reason: str, allow_private: bool = False
-    ) -> int:
+    def add_blacklist_entry(self, date: str, reason: str) -> int:
         """Fuegt einen Blacklist-Eintrag hinzu und gibt die ID zurueck."""
         conn = self._get_conn()
         cursor = conn.execute(
-            """
-            INSERT INTO blacklist (date, reason, allow_private)
-            VALUES (?, ?, ?)
-            """,
-            (date, reason, 1 if allow_private else 0),
+            "INSERT INTO blacklist (date, reason) VALUES (?, ?)",
+            (date, reason),
         )
         conn.commit()
         return cursor.lastrowid or 0
