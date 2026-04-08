@@ -15,9 +15,11 @@ from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.widgets.blacklist_view import BlacklistView
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
+from fahrtenbuch_app.widgets.documents_view import DocumentsView
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
 from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.trip_table import TripTable
+from fahrtenbuch_app.widgets.worktimes_view import WorktimesView
 from fahrtenbuch_app.widgets.year_view import YearView
 
 
@@ -79,6 +81,8 @@ class FahrtenbuchApp(App):
             Tab("Kalender", id="tab-calendar"),
             Tab("Jahr", id="tab-year"),
             Tab("Blacklist", id="tab-blacklist"),
+            Tab("Belege", id="tab-documents"),
+            Tab("Arbeitszeit", id="tab-worktimes"),
             id="view-tabs",
         )
         with ContentSwitcher(initial="trip-table", id="view-switcher"):
@@ -86,6 +90,8 @@ class FahrtenbuchApp(App):
             yield CalendarView(id="calendar-view")
             yield YearView(id="year-view")
             yield BlacklistView(id="blacklist-view")
+            yield DocumentsView(id="documents-view")
+            yield WorktimesView(id="worktimes-view")
         yield SummaryPanel(id="summary-panel")
         yield RichLog(id="log-panel", highlight=True, markup=True)
         yield Footer()
@@ -391,6 +397,8 @@ class FahrtenbuchApp(App):
             "tab-calendar": "calendar-view",
             "tab-year": "year-view",
             "tab-blacklist": "blacklist-view",
+            "tab-documents": "documents-view",
+            "tab-worktimes": "worktimes-view",
         }
         view_id = tab_map.get(event.tab.id or "", "trip-table")
         switcher = self.query_one("#view-switcher", ContentSwitcher)
@@ -399,6 +407,10 @@ class FahrtenbuchApp(App):
 
         if view_id == "year-view":
             self._refresh_year_view()
+        elif view_id == "documents-view":
+            self._refresh_documents_view()
+        elif view_id == "worktimes-view":
+            self._refresh_worktimes_view()
 
     def action_toggle_view(self) -> None:
         """Wechselt zum naechsten Tab."""
@@ -435,6 +447,36 @@ class FahrtenbuchApp(App):
             lease_km = vehicle.lease_km_per_month
         year_view = self.query_one("#year-view", YearView)
         year_view.load_data(self._year, month_data, lease_km)
+
+    def _refresh_documents_view(self) -> None:
+        """Laedt alle Belege in die DocumentsView."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        docs = self._fahrtenbuch.database.get_all_documents()
+        docs_view = self.query_one("#documents-view", DocumentsView)
+        docs_view.load_data(docs)
+
+    def _refresh_worktimes_view(self) -> None:
+        """Laedt die Arbeitsstunden in die WorktimesView."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        worktimes = self._fahrtenbuch.database.get_worktimes(self._year)
+        wt_view = self.query_one("#worktimes-view", WorktimesView)
+        wt_view.load_data(self._year, worktimes)
+
+    def on_worktimes_view_worktime_changed(
+        self, event: "WorktimesView.WorktimeChanged"
+    ) -> None:
+        """Speichert geaenderte Arbeitsstunden in der DB."""
+        if self._fahrtenbuch is None:
+            return
+        self._fahrtenbuch.database.save_worktime(
+            event.year, event.month, event.hours,
+        )
+        self._write_log(
+            f"[green]Arbeitszeit gespeichert: "
+            f"{event.month:02d}/{event.year} — {event.hours:.1f} Std[/green]"
+        )
 
     def action_toggle_log(self) -> None:
         """Blendet das Log-Panel ein/aus."""

@@ -7,11 +7,33 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, Select, Static, TextArea
 
 from fahrtenbuch_app.models.settings import AddressEntry
 from fahrtenbuch_app.models.trip import Trip, get_business_categories
 from fahrtenbuch_app.services.database import Database
+
+
+def _iso_to_de(iso: str) -> str:
+    """Konvertiert ISO-Datum (YYYY-MM-DD) zu deutschem Format (DD.MM.YYYY)."""
+    try:
+        parts = iso.split("-")
+        if len(parts) == 3 and len(parts[2]) > 0:
+            return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    except (ValueError, IndexError):
+        pass
+    return iso
+
+
+def _de_to_iso(de: str) -> str:
+    """Konvertiert deutsches Datum (DD.MM.YYYY) zu ISO-Format (YYYY-MM-DD)."""
+    try:
+        parts = de.split(".")
+        if len(parts) == 3:
+            return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    except (ValueError, IndexError):
+        pass
+    return de
 
 
 class TripScreen(ModalScreen[Trip | None]):
@@ -24,7 +46,7 @@ class TripScreen(ModalScreen[Trip | None]):
     TripScreen > VerticalScroll {
         width: 80;
         height: auto;
-        max-height: 38;
+        max-height: 40;
         background: $surface;
         border: thick $accent;
         padding: 1 2;
@@ -42,6 +64,22 @@ class TripScreen(ModalScreen[Trip | None]):
     }
     TripScreen Select {
         width: 1fr;
+    }
+    TripScreen #input-destination {
+        width: 1fr;
+        height: 4;
+    }
+    TripScreen #btn-date-picker {
+        min-width: 5;
+        height: 1;
+        border: none;
+        background: transparent;
+        color: $accent;
+        margin-left: 1;
+        padding: 0 1;
+    }
+    TripScreen #btn-date-picker:hover {
+        background: $accent 30%;
     }
     TripScreen .button-row {
         height: auto;
@@ -100,6 +138,7 @@ class TripScreen(ModalScreen[Trip | None]):
         self._default_date = default_date
         self._is_edit = trip is not None and trip.id > 0
         self._addresses: list[AddressEntry] = []
+        self._selected_entry_km: float = 0.0
 
     def compose(self) -> ComposeResult:
         """Erstellt das Formular."""
@@ -117,7 +156,8 @@ class TripScreen(ModalScreen[Trip | None]):
                 ("Service (TUeV, Reifen, ...)", "service"),
             ]
 
-        default_date = trip.date if self._is_edit else self._default_date
+        default_date_iso = trip.date if self._is_edit else ""
+        default_date_de = _iso_to_de(default_date_iso) if default_date_iso else ""
         default_km_start = trip.km_start if self._is_edit else self._last_km_end
 
         with VerticalScroll():
@@ -126,10 +166,11 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="form-row"):
                 yield Label("Datum:")
                 yield Input(
-                    value=default_date,
-                    placeholder="YYYY-MM-DD",
+                    value=default_date_de,
+                    placeholder="TT.MM.JJJJ",
                     id="input-date",
                 )
+                yield Button("\u25a6", id="btn-date-picker")
 
             with Horizontal(classes="form-row"):
                 yield Label("Fahrzeit von:")
@@ -167,10 +208,20 @@ class TripScreen(ModalScreen[Trip | None]):
 
             with Horizontal(classes="form-row"):
                 yield Label("Ziel (Adresse):")
-                yield Input(
-                    value=trip.destination,
-                    placeholder="Strasse, PLZ Ort",
+                yield TextArea(
+                    trip.destination,
                     id="input-destination",
+                )
+
+            with Horizontal(classes="form-row"):
+                yield Label("Strecke:")
+                yield Select[str](
+                    options=[
+                        ("Einfach (nur Hinfahrt)", "oneway"),
+                        ("Hin- und Rueckfahrt", "roundtrip"),
+                    ],
+                    value="roundtrip" if (self._is_edit and trip.round_trip) else "oneway",
+                    id="select-round-trip",
                 )
 
             with Horizontal(classes="form-row"):
@@ -247,6 +298,9 @@ class TripScreen(ModalScreen[Trip | None]):
 
     def on_select_changed(self, event: Select.Changed) -> None:
         """Fuellt Adresse und km wenn ein Ziel ausgewaehlt wird."""
+        if event.select.id == "select-round-trip":
+            self._recalculate_km()
+            return
         if event.select.id != "select-destination":
             return
         if event.value == Select.BLANK:
@@ -257,20 +311,10 @@ class TripScreen(ModalScreen[Trip | None]):
         if entry is None:
             return
 
-        dest_input = self.query_one("#input-destination", Input)
-        dest_input.value = f"{entry.name}\n{entry.address}"
+        self._selected_entry_km = entry.km
 
-        km_start_input = self.query_one("#input-km-start", Input)
-        km_end_input = self.query_one("#input-km-end", Input)
-
-        try:
-            km_start = int(km_start_input.value.strip())
-        except ValueError:
-            km_start = 0
-
-        if km_start > 0 and entry.km > 0:
-            km_end = km_start + int(entry.km)
-            km_end_input.value = str(km_end)
+        dest_area = self.query_one("#input-destination", TextArea)
+        dest_area.load_text(f"{entry.name}\n{entry.address}")
 
         category_select = self.query_one("#select-category", Select)
 
@@ -295,18 +339,44 @@ class TripScreen(ModalScreen[Trip | None]):
             if not purpose_input.value:
                 purpose_input.value = "Geschaeftsessen"
 
+        self._recalculate_km()
+
+    def _is_round_trip(self) -> bool:
+        """Prueft ob Hin- und Rueckfahrt ausgewaehlt ist."""
+        rt_select = self.query_one("#select-round-trip", Select)
+        return str(rt_select.value) == "roundtrip"
+
+    def _recalculate_km(self) -> None:
+        """Berechnet km-Werte basierend auf Strecke und Adress-Entfernung."""
+        if self._selected_entry_km <= 0:
+            return
+
+        km_start_input = self.query_one("#input-km-start", Input)
+        km_end_input = self.query_one("#input-km-end", Input)
         biz_input = self.query_one("#input-km-business", Input)
         priv_input = self.query_one("#input-km-private", Input)
-        current_category = str(category_select.value)
+        category_select = self.query_one("#select-category", Select)
 
+        try:
+            km_start = int(km_start_input.value.strip())
+        except ValueError:
+            km_start = 0
+
+        multiplier = 2 if self._is_round_trip() else 1
+        driven_km = int(self._selected_entry_km) * multiplier
+
+        if km_start > 0:
+            km_end_input.value = str(km_start + driven_km)
+
+        current_category = str(category_select.value)
         if current_category in get_business_categories():
-            if km_start > 0 and entry.km > 0:
-                biz_input.value = str(int(entry.km))
+            if km_start > 0:
+                biz_input.value = str(driven_km)
                 priv_input.value = "0"
         elif current_category == "private":
-            if km_start > 0 and entry.km > 0:
+            if km_start > 0:
                 biz_input.value = "0"
-                priv_input.value = str(int(entry.km))
+                priv_input.value = str(driven_km)
 
     def _build_destination_options(self) -> list[tuple[str, str]]:
         """Baut die Auswahlliste fuer Ziele aus den DB-Adressen."""
@@ -377,10 +447,28 @@ class TripScreen(ModalScreen[Trip | None]):
             self.action_save()
         elif btn_id == "btn-cancel":
             self.action_cancel()
+        elif btn_id == "btn-date-picker":
+            self._open_date_picker()
         elif btn_id == "btn-add-doc":
             self._open_file_picker()
         elif btn_id.startswith("btn-del-doc-"):
             self._delete_document(btn_id)
+
+    def _open_date_picker(self) -> None:
+        """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
+        from fahrtenbuch_app.screens.date_picker_screen import DatePickerScreen
+
+        current_de = self.query_one("#input-date", Input).value.strip()
+        current_iso = _de_to_iso(current_de) if current_de else self._default_date
+        self.app.push_screen(
+            DatePickerScreen(initial_date=current_iso),
+            callback=self._on_date_selected,
+        )
+
+    def _on_date_selected(self, selected: str | None) -> None:
+        """Callback nach Datumsauswahl aus dem Kalender."""
+        if selected is not None:
+            self.query_one("#input-date", Input).value = _iso_to_de(selected)
 
     def _open_file_picker(self) -> None:
         """Oeffnet den File-Picker-Screen."""
@@ -414,10 +502,11 @@ class TripScreen(ModalScreen[Trip | None]):
 
     def action_save(self) -> None:
         """Speichert die Fahrt."""
-        trip_date = self.query_one("#input-date", Input).value.strip()
-        if not trip_date:
+        trip_date_input = self.query_one("#input-date", Input).value.strip()
+        if not trip_date_input:
             self.notify("Datum ist erforderlich", severity="error")
             return
+        trip_date = _de_to_iso(trip_date_input)
 
         category_select = self.query_one("#select-category", Select)
         category = str(category_select.value) if category_select.value != Select.BLANK else "business"
@@ -442,18 +531,21 @@ class TripScreen(ModalScreen[Trip | None]):
         except ValueError:
             km_private = 0
 
+        round_trip = self._is_round_trip()
+
         trip = Trip(
             id=self._trip.id if self._is_edit and self._trip else 0,
             date=trip_date,
             time_from=self.query_one("#input-time-from", Input).value.strip(),
             time_to=self.query_one("#input-time-to", Input).value.strip(),
-            destination=self.query_one("#input-destination", Input).value.strip(),
+            destination=self.query_one("#input-destination", TextArea).text.strip(),
             purpose=self.query_one("#input-purpose", Input).value.strip(),
             km_start=km_start,
             km_end=km_end,
             km_business=km_business,
             km_private=km_private,
             category=category,
+            round_trip=round_trip,
         )
         self.dismiss(trip)
 

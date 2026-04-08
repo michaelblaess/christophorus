@@ -37,6 +37,7 @@ class Trip:
     km_business: int = 0
     km_private: int = 0
     category: str = "business"
+    round_trip: bool = False
 
     @property
     def km_total(self) -> int:

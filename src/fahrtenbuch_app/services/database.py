@@ -87,7 +87,8 @@ class Database:
                 km_end INTEGER NOT NULL DEFAULT 0,
                 km_business INTEGER NOT NULL DEFAULT 0,
                 km_private INTEGER NOT NULL DEFAULT 0,
-                category TEXT NOT NULL DEFAULT 'business'
+                category TEXT NOT NULL DEFAULT 'business',
+                round_trip INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_trips_date ON trips (date);
@@ -124,6 +125,14 @@ class Database:
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
             );
 
+            CREATE TABLE IF NOT EXISTS worktimes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                hours REAL NOT NULL DEFAULT 0.0,
+                UNIQUE(year, month)
+            );
+
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
@@ -134,6 +143,7 @@ class Database:
         """)
         conn.commit()
         self._migrate_trips_check_constraint()
+        self._migrate_trips_add_round_trip()
         self._migrate_blacklist_remove_allow_private()
         self._migrate_addresses_remove_category_check()
         self._seed_default_categories()
@@ -177,6 +187,22 @@ class Database:
 
             CREATE INDEX IF NOT EXISTS idx_trips_date ON trips (date);
         """)
+        conn.commit()
+
+    def _migrate_trips_add_round_trip(self) -> None:
+        """Fuegt die round_trip-Spalte zur trips-Tabelle hinzu falls noch nicht vorhanden."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'"
+        ).fetchone()
+        if row is None:
+            return
+        create_sql = row[0] or ""
+        if "round_trip" in create_sql.lower():
+            return
+        conn.execute(
+            "ALTER TABLE trips ADD COLUMN round_trip INTEGER NOT NULL DEFAULT 0"
+        )
         conn.commit()
 
     def _migrate_blacklist_remove_allow_private(self) -> None:
@@ -367,14 +393,15 @@ class Database:
         cursor = conn.execute(
             """
             INSERT INTO trips (date, time_from, time_to, destination, purpose,
-                km_start, km_end, km_business, km_private, category)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                km_start, km_end, km_business, km_private, category, round_trip)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 trip.date, trip.time_from, trip.time_to,
                 trip.destination, trip.purpose,
                 trip.km_start, trip.km_end,
                 trip.km_business, trip.km_private, trip.category,
+                1 if trip.round_trip else 0,
             ),
         )
         conn.commit()
@@ -389,7 +416,8 @@ class Database:
                 date = ?, time_from = ?, time_to = ?,
                 destination = ?, purpose = ?,
                 km_start = ?, km_end = ?,
-                km_business = ?, km_private = ?, category = ?
+                km_business = ?, km_private = ?, category = ?,
+                round_trip = ?
             WHERE id = ?
             """,
             (
@@ -397,6 +425,7 @@ class Database:
                 trip.destination, trip.purpose,
                 trip.km_start, trip.km_end,
                 trip.km_business, trip.km_private, trip.category,
+                1 if trip.round_trip else 0,
                 trip_id,
             ),
         )
@@ -474,6 +503,7 @@ class Database:
             km_business=row["km_business"],
             km_private=row["km_private"],
             category=row["category"],
+            round_trip=bool(row["round_trip"]),
         )
 
     # ------------------------------------------------------------------
@@ -654,4 +684,54 @@ class Database:
         """Loescht ein Dokument."""
         conn = self._get_conn()
         conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        conn.commit()
+
+    def get_all_documents(self) -> list[dict[str, object]]:
+        """Gibt alle Dokumente zurueck, mit Trip/Blacklist-Referenz."""
+        conn = self._get_conn()
+        rows = conn.execute("""
+            SELECT d.id, d.trip_id, d.blacklist_id, d.path, d.description,
+                   d.created_at,
+                   t.date AS trip_date, t.purpose AS trip_purpose,
+                   b.date AS bl_date, b.reason AS bl_reason
+            FROM documents d
+            LEFT JOIN trips t ON d.trip_id = t.id
+            LEFT JOIN blacklist b ON d.blacklist_id = b.id
+            ORDER BY d.created_at DESC
+        """).fetchall()
+        return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------------
+    # Worktimes (Arbeitsstunden pro Monat)
+    # ------------------------------------------------------------------
+
+    def get_worktimes(self, year: int) -> list[dict[str, object]]:
+        """Gibt alle Arbeitsstunden eines Jahres zurueck."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM worktimes WHERE year = ? ORDER BY month",
+            (year,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def save_worktime(self, year: int, month: int, hours: float) -> None:
+        """Speichert Arbeitsstunden fuer einen Monat (upsert)."""
+        conn = self._get_conn()
+        conn.execute(
+            """
+            INSERT INTO worktimes (year, month, hours)
+            VALUES (?, ?, ?)
+            ON CONFLICT(year, month) DO UPDATE SET hours = excluded.hours
+            """,
+            (year, month, hours),
+        )
+        conn.commit()
+
+    def delete_worktime(self, year: int, month: int) -> None:
+        """Loescht Arbeitsstunden fuer einen Monat."""
+        conn = self._get_conn()
+        conn.execute(
+            "DELETE FROM worktimes WHERE year = ? AND month = ?",
+            (year, month),
+        )
         conn.commit()
