@@ -162,10 +162,6 @@ class CalendarView(Vertical):
         height: 1fr;
         min-height: 10;
         border: solid $accent;
-        display: none;
-    }
-    CalendarView.visible {
-        display: block;
     }
     """
 

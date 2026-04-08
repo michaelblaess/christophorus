@@ -7,25 +7,31 @@ ConfigPanel {
     margin-bottom: 0;
 }
 
+#view-tabs {
+    dock: top;
+    height: 3;
+}
+
+#view-switcher {
+    height: 1fr;
+}
+
 TripTable {
     height: 1fr;
     min-height: 10;
     border: solid $accent;
 }
 
-TripTable.hidden {
-    display: none;
-}
-
 CalendarView {
     height: 1fr;
     min-height: 10;
     border: solid $accent;
-    display: none;
 }
 
-CalendarView.visible {
-    display: block;
+YearView {
+    height: 1fr;
+    min-height: 10;
+    border: solid $accent;
 }
 
 SummaryPanel {

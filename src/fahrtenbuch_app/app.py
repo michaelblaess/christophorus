@@ -5,7 +5,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Header, RichLog
+from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
 
 from fahrtenbuch_app import __version__, __year__
 from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
@@ -72,9 +72,16 @@ class FahrtenbuchApp(App):
             fb_path="",
             id="config-panel",
         )
-        yield TripTable(id="trip-table")
-        yield CalendarView(id="calendar-view")
-        yield YearView(id="year-view")
+        yield Tabs(
+            Tab("Liste", id="tab-list"),
+            Tab("Kalender", id="tab-calendar"),
+            Tab("Jahr", id="tab-year"),
+            id="view-tabs",
+        )
+        with ContentSwitcher(initial="trip-table", id="view-switcher"):
+            yield TripTable(id="trip-table")
+            yield CalendarView(id="calendar-view")
+            yield YearView(id="year-view")
         yield SummaryPanel(id="summary-panel")
         yield RichLog(id="log-panel", highlight=True, markup=True)
         yield Footer()
@@ -322,33 +329,25 @@ class FahrtenbuchApp(App):
         config = self.query_one("#config-panel", ConfigPanel)
         config.next_month()
 
-    def action_toggle_view(self) -> None:
-        """Wechselt zwischen Liste -> Kalender -> Jahr."""
-        cycle = {"list": "calendar", "calendar": "year", "year": "list"}
-        self._current_view = cycle[self._current_view]
-        self._update_view_visibility()
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        """Reagiert auf Tab-Wechsel."""
+        tab_map = {
+            "tab-list": "trip-table",
+            "tab-calendar": "calendar-view",
+            "tab-year": "year-view",
+        }
+        view_id = tab_map.get(event.tab.id or "", "trip-table")
+        switcher = self.query_one("#view-switcher", ContentSwitcher)
+        switcher.current = view_id
+        self._current_view = event.tab.id or "tab-list"
 
-        if self._current_view == "year":
+        if view_id == "year-view":
             self._refresh_year_view()
 
-    def _update_view_visibility(self) -> None:
-        """Zeigt/versteckt Views basierend auf _current_view."""
-        table = self.query_one("#trip-table", TripTable)
-        calendar_view = self.query_one("#calendar-view", CalendarView)
-        year_view = self.query_one("#year-view", YearView)
-
-        if self._current_view == "list":
-            table.remove_class("hidden")
-            calendar_view.remove_class("visible")
-            year_view.remove_class("visible")
-        elif self._current_view == "calendar":
-            table.add_class("hidden")
-            calendar_view.add_class("visible")
-            year_view.remove_class("visible")
-        elif self._current_view == "year":
-            table.add_class("hidden")
-            calendar_view.remove_class("visible")
-            year_view.add_class("visible")
+    def action_toggle_view(self) -> None:
+        """Wechselt zum naechsten Tab."""
+        tabs = self.query_one("#view-tabs", Tabs)
+        tabs.action_next_tab()
 
     def _refresh_year_view(self) -> None:
         """Laedt die Jahresdaten in die YearView."""
@@ -451,9 +450,8 @@ class FahrtenbuchApp(App):
 
     def action_show_year(self) -> None:
         """Wechselt direkt zur Jahresuebersicht."""
-        self._current_view = "year"
-        self._update_view_visibility()
-        self._refresh_year_view()
+        tabs = self.query_one("#view-tabs", Tabs)
+        tabs.active = "tab-year"
 
     def action_check_plausibility(self) -> None:
         """Fuehrt die Plausibilitaetspruefung durch."""

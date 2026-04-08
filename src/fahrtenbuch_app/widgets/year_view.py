@@ -112,10 +112,6 @@ class YearView(VerticalScroll):
         height: 1fr;
         min-height: 10;
         border: solid $accent;
-        display: none;
-    }
-    YearView.visible {
-        display: block;
     }
     YearView .year-title {
         text-align: center;
