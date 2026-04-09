@@ -12,6 +12,7 @@ from textual.widgets import Button, Input, Label, Select, Static, TextArea
 from fahrtenbuch_app.models.settings import AddressEntry
 from fahrtenbuch_app.models.trip import Trip, get_business_categories
 from fahrtenbuch_app.services.database import Database
+from fahrtenbuch_app.services.formatting import format_km, parse_km
 
 
 def _iso_to_de(iso: str) -> str:
@@ -61,6 +62,13 @@ class TripScreen(ModalScreen[Trip | None]):
     }
     TripScreen Input {
         width: 1fr;
+        background: $surface;
+        color: $foreground;
+    }
+    TripScreen Input:focus {
+        background: $surface;
+        color: $foreground;
+        border: tall $accent;
     }
     TripScreen Select {
         width: 1fr;
@@ -150,7 +158,17 @@ class TripScreen(ModalScreen[Trip | None]):
 
         default_date_iso = trip.date if self._is_edit else ""
         default_date_de = _iso_to_de(default_date_iso) if default_date_iso else ""
-        default_km_start = trip.km_start if self._is_edit else self._last_km_end
+
+        # km_start IMMER aus dem chronologischen Vorgaenger bestimmen
+        # (statt wie frueher vom User eintragbar). Beim Edit den eigenen Trip
+        # ausschliessen, damit wir nicht auf uns selbst schauen.
+        if default_date_iso:
+            exclude_id = trip.id if self._is_edit else None
+            default_km_start = self._database.get_km_end_before(
+                default_date_iso, exclude_trip_id=exclude_id
+            )
+        else:
+            default_km_start = self._last_km_end
 
         with VerticalScroll():
             yield Static(title, id="title")
@@ -227,15 +245,16 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="form-row"):
                 yield Label("km Anfang:")
                 yield Input(
-                    value=str(default_km_start) if default_km_start > 0 else "",
+                    value=format_km(default_km_start) if default_km_start > 0 else "",
                     placeholder="Kilometerstand",
                     id="input-km-start",
+                    disabled=True,
                 )
 
             with Horizontal(classes="form-row"):
                 yield Label("km Ende:")
                 yield Input(
-                    value=str(trip.km_end) if self._is_edit and trip.km_end > 0 else "",
+                    value=format_km(trip.km_end) if self._is_edit and trip.km_end > 0 else "",
                     placeholder="Kilometerstand",
                     id="input-km-end",
                 )
@@ -243,7 +262,7 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="form-row"):
                 yield Label("km geschaeftl.:")
                 yield Input(
-                    value=str(trip.km_business) if self._is_edit and trip.km_business > 0 else "",
+                    value=format_km(trip.km_business) if self._is_edit and trip.km_business > 0 else "",
                     placeholder="0",
                     id="input-km-business",
                 )
@@ -251,7 +270,7 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="form-row"):
                 yield Label("km privat:")
                 yield Input(
-                    value=str(trip.km_private) if self._is_edit and trip.km_private > 0 else "",
+                    value=format_km(trip.km_private) if self._is_edit and trip.km_private > 0 else "",
                     placeholder="0",
                     id="input-km-private",
                 )
@@ -288,10 +307,51 @@ class TripScreen(ModalScreen[Trip | None]):
         except Exception:
             pass
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Berechnet km_start neu, wenn sich das Datum aendert.
+
+        Die Distanz (km_end - km_start) bleibt dabei erhalten, damit der
+        gespeicherte Wert bei reiner Datumsaenderung nicht explodiert.
+        """
+        if event.input.id != "input-date":
+            return
+        iso = _de_to_iso(event.value.strip())
+        if not iso:
+            return
+        exclude_id = self._trip.id if (self._is_edit and self._trip) else None
+        try:
+            predecessor_km = self._database.get_km_end_before(
+                iso, exclude_trip_id=exclude_id
+            )
+        except Exception:
+            return
+
+        km_start_input = self.query_one("#input-km-start", Input)
+        km_end_input = self.query_one("#input-km-end", Input)
+
+        # Distanz aus den aktuellen Feldwerten merken, damit sie nach dem
+        # Verschieben von km_start konstant bleibt.
+        old_km_start = parse_km(km_start_input.value)
+        old_km_end = parse_km(km_end_input.value)
+        old_distance = max(0, old_km_end - old_km_start)
+
+        km_start_input.value = format_km(predecessor_km) if predecessor_km > 0 else ""
+        if old_distance > 0 and predecessor_km >= 0:
+            km_end_input.value = format_km(predecessor_km + old_distance)
+
+        # Adress-basierte Neuberechnung nur, wenn ein Adress-Eintrag aktiv ist.
+        self._recalculate_km()
+
     def on_select_changed(self, event: Select.Changed) -> None:
         """Fuellt Adresse und km wenn ein Ziel ausgewaehlt wird."""
         if event.select.id == "select-round-trip":
             self._recalculate_km()
+            return
+        if event.select.id == "select-category":
+            # Kategorie-Wechsel: km zwischen business und private umbuchen,
+            # damit die Spalten direkt passen.
+            if event.value != Select.BLANK:
+                self._rebalance_km_for_category(str(event.value))
             return
         if event.select.id != "select-destination":
             return
@@ -349,26 +409,47 @@ class TripScreen(ModalScreen[Trip | None]):
         priv_input = self.query_one("#input-km-private", Input)
         category_select = self.query_one("#select-category", Select)
 
-        try:
-            km_start = int(km_start_input.value.strip())
-        except ValueError:
-            km_start = 0
+        km_start = parse_km(km_start_input.value)
 
         multiplier = 2 if self._is_round_trip() else 1
         driven_km = int(self._selected_entry_km) * multiplier
 
         if km_start > 0:
-            km_end_input.value = str(km_start + driven_km)
+            km_end_input.value = format_km(km_start + driven_km)
 
         current_category = str(category_select.value)
         if current_category in get_business_categories():
             if km_start > 0:
-                biz_input.value = str(driven_km)
+                biz_input.value = format_km(driven_km)
                 priv_input.value = "0"
         elif current_category == "private":
             if km_start > 0:
                 biz_input.value = "0"
-                priv_input.value = str(driven_km)
+                priv_input.value = format_km(driven_km)
+
+    def _rebalance_km_for_category(self, new_category: str) -> None:
+        """Verschiebt km zwischen business und private, wenn die Kategorie
+        gewechselt wird. Die Gesamt-km (km_business + km_private) bleiben
+        erhalten, nur die Zuordnung aendert sich.
+        """
+        try:
+            biz_input = self.query_one("#input-km-business", Input)
+            priv_input = self.query_one("#input-km-private", Input)
+        except Exception:
+            return
+
+        km_business = parse_km(biz_input.value)
+        km_private = parse_km(priv_input.value)
+        total = km_business + km_private
+        if total <= 0:
+            return
+
+        if new_category in get_business_categories():
+            biz_input.value = format_km(total)
+            priv_input.value = "0"
+        elif new_category == "private":
+            biz_input.value = "0"
+            priv_input.value = format_km(total)
 
     def _build_destination_options(self) -> list[tuple[str, str]]:
         """Baut die Auswahlliste fuer Ziele aus den DB-Adressen."""
@@ -519,25 +600,21 @@ class TripScreen(ModalScreen[Trip | None]):
         category_select = self.query_one("#select-category", Select)
         category = str(category_select.value) if category_select.value != Select.BLANK else "business"
 
-        try:
-            km_start = int(self.query_one("#input-km-start", Input).value.strip() or "0")
-        except ValueError:
-            km_start = 0
+        km_start = parse_km(self.query_one("#input-km-start", Input).value)
+        km_end = parse_km(self.query_one("#input-km-end", Input).value)
+        km_business = parse_km(self.query_one("#input-km-business", Input).value)
+        km_private = parse_km(self.query_one("#input-km-private", Input).value)
 
-        try:
-            km_end = int(self.query_one("#input-km-end", Input).value.strip() or "0")
-        except ValueError:
-            km_end = 0
-
-        try:
-            km_business = int(self.query_one("#input-km-business", Input).value.strip() or "0")
-        except ValueError:
-            km_business = 0
-
-        try:
-            km_private = int(self.query_one("#input-km-private", Input).value.strip() or "0")
-        except ValueError:
-            km_private = 0
+        # Safety net: Spalten-Zuordnung an die Kategorie angleichen, falls
+        # der User die Inputs nicht selbst aktualisiert hat.
+        total_km = km_business + km_private
+        if total_km > 0:
+            if category in get_business_categories():
+                km_business = total_km
+                km_private = 0
+            elif category == "private":
+                km_business = 0
+                km_private = total_km
 
         round_trip = self._is_round_trip()
 

@@ -9,15 +9,16 @@ from textual.message import Message
 from textual.widgets import DataTable
 
 from fahrtenbuch_app.models.trip import MonthData, Trip
+from fahrtenbuch_app.services.formatting import format_km
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-_DEFAULT_CATEGORY_STYLES: dict[str, str] = {
-    "business": "green",
-    "fuel": "yellow",
-    "service": "magenta",
-    "private": "blue",
-}
+# Reduziertes Farbschema: ausschliesslich Gruen (geschaeftlich) und Rot
+# (Blacklist / Feiertag / Wochenende). Alles andere bleibt neutral.
+_STYLE_BUSINESS = "green"
+_STYLE_ERROR = "bold red"
+_STYLE_MUTED = "dim"
+_STYLE_DEFAULT = ""
 
 
 class TripTable(Vertical):
@@ -65,12 +66,18 @@ class TripTable(Vertical):
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
-        """Tabellenspalten erstellen."""
+        """Tabellenspalten erstellen. Ziel-Spalte hat eine feste Breite, damit
+        lange Adressen sichtbar bleiben."""
         table = self.query_one("#trip-data", DataTable)
-        table.add_columns(
-            "Datum", "Tag", "Fahrzeit", "Ziel", "Reisezweck",
-            "km Anfang", "km Ende", "geschaeftl.", "privat",
-        )
+        table.add_column("Datum", key="date")
+        table.add_column("Tag", key="weekday")
+        table.add_column("Fahrzeit", key="time")
+        table.add_column("Ziel", key="destination", width=80)
+        table.add_column("Reisezweck", key="purpose")
+        table.add_column("km Anfang", key="km_start")
+        table.add_column("km Ende", key="km_end")
+        table.add_column("geschaeftl.", key="km_business")
+        table.add_column("privat", key="km_private")
 
     def load_data(
         self,
@@ -126,7 +133,6 @@ class TripTable(Vertical):
 
         month_data = self._last_month_data
         holidays_map = self._last_holidays_map
-        styles = self._last_category_colors if self._last_category_colors else _DEFAULT_CATEGORY_STYLES
         active_blacklist = self._blacklist_map if self._show_blacklist else {}
 
         # Sammle Trip-Daten mit Datum fuer spaeters Sortieren
@@ -169,19 +175,19 @@ class TripTable(Vertical):
             row_key = str(row_idx)
 
             if row_type == "blacklist" and entry is not None:
-                # Blacklist-Nur-Zeile: kein Trip, nur Grund
+                # Blacklist-Nur-Zeile: kein Trip, nur Grund — ausschliesslich rot
                 reason = str(entry.get("reason", ""))
                 entry_id = int(entry.get("id", 0))
                 table.add_row(
-                    Text(date_de, style="bold red"),
-                    Text(weekday, style="bold red"),
-                    Text("", style="dim"),
-                    Text("", style="dim"),
-                    Text(f"[GESPERRT: {reason}]", style="bold red"),
-                    Text("", style="dim"),
-                    Text("", style="dim"),
-                    Text("", style="dim"),
-                    Text("", style="dim"),
+                    Text(date_de, style=_STYLE_ERROR),
+                    Text(weekday, style=_STYLE_ERROR),
+                    Text("", style=_STYLE_MUTED),
+                    Text("", style=_STYLE_MUTED),
+                    Text(f"[GESPERRT: {reason}]", style=_STYLE_ERROR),
+                    Text("", style=_STYLE_MUTED),
+                    Text("", style=_STYLE_MUTED),
+                    Text("", style=_STYLE_MUTED),
+                    Text("", style=_STYLE_MUTED),
                     key=row_key,
                 )
                 self._bl_only_rows[row_key] = (entry_id, date_str, reason)
@@ -195,40 +201,61 @@ class TripTable(Vertical):
                     time_str = trip.time_from
 
                 dest_short = trip.destination.split("\n")[0] if trip.destination else ""
-                if len(dest_short) > 40:
-                    dest_short = f"{dest_short[:37]}..."
+                if len(dest_short) > 80:
+                    dest_short = f"{dest_short[:77]}..."
 
-                style = styles.get(trip.category, "")
                 warning = ""
 
                 # Blacklist-Tag pruefen
                 bl_reason = active_blacklist.get(d, "")
                 if bl_reason:
                     warning = f"GESPERRT: {bl_reason}"
-                    style = "bold red"
 
-                # Feiertag / Wochenende (nur wenn kein Blacklist-Eintrag)
-                if not warning and trip.is_business_km:
+                # Feiertag / Wochenende nur fuer reine business-Fahrten
+                # (Tanken und Service sind auch am Sonntag unkritisch).
+                if not warning and trip.category == "business":
                     holiday_name = holidays_map.get(d, "")
                     if holiday_name:
                         warning = f"FEIERTAG: {holiday_name}"
-                        style = "bold red"
                     elif d.weekday() >= 5:
                         warning = "WOCHENENDE"
-                        style = "bold red"
 
-                purpose_text = f"{trip.purpose} [{warning}]" if warning else trip.purpose
+                # WICHTIG: Reisezweck NIE modifizieren — der Wert wird exportiert.
+                purpose_text = trip.purpose
+
+                # Stil-Logik:
+                # - rot nur bei Warnung (Blacklist/Feiertag/Wochenende)
+                # - gruen fuer Datum, Ziel, Zweck und km-geschaeftlich,
+                #   wenn der Trip geschaeftlich ist
+                # - alles andere neutral / dim
+                is_business = trip.is_business_km
+                if warning:
+                    row_style = _STYLE_ERROR
+                elif is_business:
+                    row_style = _STYLE_BUSINESS
+                else:
+                    row_style = _STYLE_DEFAULT
+                purpose_style = row_style
+                km_business_style = (
+                    _STYLE_ERROR if warning else _STYLE_BUSINESS
+                )
 
                 table.add_row(
-                    Text(date_de, style=style),
-                    Text(weekday, style="dim" if not warning else "bold red"),
-                    Text(time_str, style="dim"),
-                    Text(dest_short),
-                    Text(purpose_text, style=style),
-                    Text(str(trip.km_start), style="dim"),
-                    Text(str(trip.km_end), style="dim"),
-                    Text(str(trip.km_business) if trip.km_business > 0 else "", style="green" if not warning else "bold red"),
-                    Text(str(trip.km_private) if trip.km_private > 0 else "", style="blue"),
+                    Text(date_de, style=row_style),
+                    Text(weekday, style=_STYLE_ERROR if warning else _STYLE_MUTED),
+                    Text(time_str, style=_STYLE_MUTED),
+                    Text(dest_short, style=row_style),
+                    Text(purpose_text, style=purpose_style),
+                    Text(format_km(trip.km_start), style=_STYLE_MUTED),
+                    Text(format_km(trip.km_end), style=_STYLE_MUTED),
+                    Text(
+                        format_km(trip.km_business) if trip.km_business > 0 else "",
+                        style=km_business_style,
+                    ),
+                    Text(
+                        format_km(trip.km_private) if trip.km_private > 0 else "",
+                        style=_STYLE_MUTED,
+                    ),
                     key=row_key,
                 )
                 self._row_trips[row_key] = (trip, orig_idx)

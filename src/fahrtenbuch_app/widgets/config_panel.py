@@ -10,6 +10,7 @@ from textual.message import Message
 from textual.widgets import Button, Static
 
 from fahrtenbuch_app.models.vehicle import Vehicle
+from fahrtenbuch_app.services.formatting import format_km
 
 _MONTH_NAMES = [
     "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
@@ -112,14 +113,23 @@ class ConfigPanel(Vertical):
 
         # Zeile 2: Leasing
         lease_dates = self._format_lease_dates(vehicle)
-        km_str = f"{vehicle.lease_km_per_month:,} km/Monat  |  {vehicle.lease_months} Monate".replace(",", ".") if vehicle else ""
+        km_str = f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
         with Horizontal(classes="config-row"):
             yield Static("  Leasing:    ", classes="config-label")
             yield Static(lease_dates, classes="config-value", id="lease-dates-display")
             yield Static("", classes="config-spacer")
             yield Static(km_str, classes="config-right", id="lease-km-display")
 
-        # Zeile 3: Zeitraum
+        # Zeile 3: Kilometerstand (vehicle.start_km -> vehicle.end_km)
+        km_range = self._format_km_range(vehicle)
+        km_total = self._format_km_total(vehicle)
+        with Horizontal(classes="config-row"):
+            yield Static("  km-Stand:   ", classes="config-label")
+            yield Static(km_range, classes="config-value", id="km-range-display")
+            yield Static("", classes="config-spacer")
+            yield Static(km_total, classes="config-right", id="km-total-display")
+
+        # Zeile 4: Zeitraum
         with Horizontal(classes="config-row"):
             yield Static("  Zeitraum:   ", classes="config-label")
             yield Static(self._format_month(), id="month-display")
@@ -152,8 +162,11 @@ class ConfigPanel(Vertical):
 
             self.query_one("#lease-dates-display", Static).update(self._format_lease_dates(vehicle))
 
-            km_str = f"{vehicle.lease_km_per_month:,} km/Monat  |  {vehicle.lease_months} Monate".replace(",", ".") if vehicle else ""
+            km_str = f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
             self.query_one("#lease-km-display", Static).update(km_str)
+
+            self.query_one("#km-range-display", Static).update(self._format_km_range(vehicle))
+            self.query_one("#km-total-display", Static).update(self._format_km_total(vehicle))
 
             self.query_one("#path-display", Static).update(fb_path or "")
             btn = self.query_one("#btn-open-dir", Button)
@@ -199,6 +212,18 @@ class ConfigPanel(Vertical):
     def _format_month(self) -> str:
         """Formatiert den aktuellen Monat fuer die Anzeige."""
         return f"< {_MONTH_NAMES[self._month - 1]} {self._year} >"
+
+    def _format_km_range(self, vehicle: Vehicle | None) -> str:
+        """Formatiert Anfangs- und Endkilometerstand des Fahrzeugs."""
+        if not vehicle:
+            return ""
+        return f"{format_km(vehicle.start_km)} km \u2014 {format_km(vehicle.end_km)} km"
+
+    def _format_km_total(self, vehicle: Vehicle | None) -> str:
+        """Formatiert die Gesamt-Laufleistung (end_km - start_km)."""
+        if not vehicle:
+            return ""
+        return f"{format_km(vehicle.total_driven_km)} km gesamt"
 
     def _format_lease_dates(self, vehicle: Vehicle | None) -> str:
         """Formatiert Leasingbeginn und -ende."""

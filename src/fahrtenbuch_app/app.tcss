@@ -43,6 +43,10 @@ SummaryPanel {
     margin-top: 0;
 }
 
+SummaryPanel.hidden {
+    display: none;
+}
+
 #log-panel {
     height: 10;
     min-height: 5;

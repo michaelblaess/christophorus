@@ -18,6 +18,7 @@ from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
 from fahrtenbuch_app.widgets.documents_view import DocumentsView
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
+from fahrtenbuch_app.services.formatting import format_km
 from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.trip_table import TripTable
 from fahrtenbuch_app.widgets.worktimes_view import WorktimesView
@@ -249,10 +250,11 @@ class FahrtenbuchApp(App):
         summary = self.query_one("#summary-panel", SummaryPanel)
         summary.update_data(month_data, lease_km)
 
-        # Warnungen fuer geschaeftliche Fahrten an Feiertagen/Wochenenden
+        # Warnungen nur fuer reine Business-Fahrten an Feiertagen/Wochenenden
+        # (Tanken/Service duerfen auch am Wochenende stattfinden).
         warnings = 0
         for trip in month_data.trips:
-            if not trip.is_business_km:
+            if trip.category != "business":
                 continue
             try:
                 parts = trip.date.split("-")
@@ -276,7 +278,7 @@ class FahrtenbuchApp(App):
 
         self._write_log(
             f"Daten geladen: {len(month_data.trips)} Fahrten, "
-            f"{month_data.km_total} km gesamt"
+            f"{format_km(month_data.km_total)} km gesamt"
             + (f", [bold red]{warnings} Warnungen[/bold red]" if warnings else "")
         )
 
@@ -367,7 +369,16 @@ class FahrtenbuchApp(App):
             return
         # Trip hat eine ID — direkt in der DB aktualisieren
         if trip.id > 0:
-            self._fahrtenbuch.database.update_trip(trip.id, trip)
+            try:
+                self._fahrtenbuch.database.update_trip(trip.id, trip)
+            except ValueError as exc:
+                self._write_log(f"[red]Aktualisierung abgelehnt: {exc}[/red]")
+                self.notify(f"Aktualisierung abgelehnt: {exc}", severity="error")
+                return
+            except Exception as exc:
+                self._write_log(f"[red]Fehler beim Aktualisieren: {exc}[/red]")
+                self.notify(f"Fehler: {exc}", severity="error")
+                return
         self._write_log(
             f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]"
         )
@@ -405,14 +416,18 @@ class FahrtenbuchApp(App):
             callback=self._on_blacklist_detail_closed,
         )
 
-    def _on_blacklist_detail_closed(self, entry_id_to_delete: int | None) -> None:
-        """Callback nach dem BlacklistDetailScreen — loescht Eintrag falls gewuenscht."""
-        if entry_id_to_delete is None or self._fahrtenbuch is None:
+    def _on_blacklist_detail_closed(self, changed: bool | None) -> None:
+        """Callback nach dem BlacklistDetailScreen.
+
+        Der Screen uebernimmt Speichern, Aktualisieren und Loeschen selbst per
+        DB-Aufruf. Hier reicht es, bei Aenderungen die Ansichten neu zu laden.
+        """
+        if not changed or self._fahrtenbuch is None:
             return
-        db = self._fahrtenbuch.database
-        db.delete_blacklist_entry(entry_id_to_delete)
-        self._write_log(f"[red]Blacklist-Eintrag geloescht (ID {entry_id_to_delete})[/red]")
+        self._write_log("[green]Blacklist aktualisiert[/green]")
         self._refresh_data()
+        if self._current_view == "tab-list-year":
+            self._refresh_year_trip_table()
 
     def action_delete_trip(self) -> None:
         """Loescht die ausgewaehlte Fahrt (funktioniert in Monats- und Jahresliste)."""
@@ -447,7 +462,9 @@ class FahrtenbuchApp(App):
         config.next_month()
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
-        """Reagiert auf Tab-Wechsel."""
+        """Reagiert auf Tab-Wechsel. Laedt immer die Daten des Ziel-Views neu,
+        damit keine View veraltete km-Staende nach einer Cascade-Aktualisierung
+        anzeigt."""
         tab_map = {
             "tab-list": "trip-table",
             "tab-list-year": "trip-table-year",
@@ -462,6 +479,19 @@ class FahrtenbuchApp(App):
         switcher.current = view_id
         self._current_view = event.tab.id or "tab-list"
 
+        # SummaryPanel nur dort anzeigen, wo sie zur jeweiligen Ansicht passt
+        # (Monats-/Jahres-Fahrtenliste, Kalender). Auf Jahr/Blacklist/Belege/
+        # Arbeitszeit wuerde sie nur veraltete Monatsdaten zeigen.
+        summary_panel = self.query_one("#summary-panel", SummaryPanel)
+        if view_id in ("trip-table", "trip-table-year", "calendar-view"):
+            summary_panel.remove_class("hidden")
+        else:
+            summary_panel.add_class("hidden")
+
+        # Immer Monats-Daten neu laden (refresht Liste, Kalender, Blacklist,
+        # Summary). Zusaetzlich die view-spezifischen Daten fuer Jahresliste,
+        # Jahresview, Belege und Arbeitszeit.
+        self._refresh_data()
         if view_id == "trip-table-year":
             self._refresh_year_trip_table()
         elif view_id == "year-view":
@@ -598,9 +628,17 @@ class FahrtenbuchApp(App):
         self._config.save()
 
     def action_new_trip(self) -> None:
-        """Oeffnet den Dialog fuer eine neue Fahrt."""
+        """Oeffnet den Dialog fuer eine neue Fahrt bzw. einen neuen Blacklist-Eintrag.
+
+        Kontextabhaengig: auf dem Blacklist-Tab wird statt des Trip-Dialogs
+        der Blacklist-Detail-Screen im Neu-Modus geoeffnet.
+        """
         if self._fahrtenbuch is None:
             self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            return
+
+        if self._current_view == "tab-blacklist":
+            self._open_new_blacklist_entry()
             return
 
         from fahrtenbuch_app.screens.trip_screen import TripScreen
@@ -619,15 +657,44 @@ class FahrtenbuchApp(App):
             callback=self._on_trip_created,
         )
 
+    def _open_new_blacklist_entry(self) -> None:
+        """Oeffnet den Blacklist-Detail-Screen im Neu-Modus."""
+        if self._fahrtenbuch is None:
+            return
+        from fahrtenbuch_app.screens.blacklist_detail_screen import BlacklistDetailScreen
+
+        # Voreinstellung: aktueller Monat, 1. Tag — hilft beim schnellen Eintragen
+        default_iso = f"{self._year}-{self._month:02d}-01"
+        self.push_screen(
+            BlacklistDetailScreen(
+                database=self._fahrtenbuch.database,
+                entry_id=0,
+                date_str=default_iso,
+                reason="",
+            ),
+            callback=self._on_blacklist_detail_closed,
+        )
+
     def _on_trip_created(self, trip: "Trip | None") -> None:
         """Callback nach dem TripScreen."""
         if trip is None or self._fahrtenbuch is None:
             return
-        self._fahrtenbuch.database.add_trip(trip)
+        try:
+            self._fahrtenbuch.database.add_trip(trip)
+        except ValueError as exc:
+            self._write_log(f"[red]Anlegen abgelehnt: {exc}[/red]")
+            self.notify(f"Anlegen abgelehnt: {exc}", severity="error")
+            return
+        except Exception as exc:
+            self._write_log(f"[red]Fehler beim Anlegen: {exc}[/red]")
+            self.notify(f"Fehler: {exc}", severity="error")
+            return
         self._write_log(
             f"[green]Fahrt angelegt: {trip.date} — {trip.purpose}[/green]"
         )
         self._refresh_data()
+        if self._current_view == "tab-list-year":
+            self._refresh_year_trip_table()
 
     def action_export_excel(self) -> None:
         """Exportiert die aktuelle Liste (Monat oder Jahr) als Excel-Datei."""
@@ -652,7 +719,7 @@ class FahrtenbuchApp(App):
             plate_part = ""
 
         lease_km = vehicle.lease_km_per_month if vehicle else 1500
-        lease_info = f"{lease_km:,} km / Monat Leasing".replace(",", ".")
+        lease_info = f"{format_km(lease_km)} km / Monat Leasing"
 
         # Aktuell aktiver Tab bestimmt den Export-Scope
         is_year_export = self._current_view == "tab-list-year"

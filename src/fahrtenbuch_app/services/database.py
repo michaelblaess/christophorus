@@ -147,6 +147,7 @@ class Database:
         self._migrate_blacklist_remove_allow_private()
         self._migrate_addresses_remove_category_check()
         self._seed_default_categories()
+        self._migrate_add_fuel_private_category()
 
     def _migrate_trips_check_constraint(self) -> None:
         """Entfernt die CHECK-Constraint auf trips.category falls vorhanden.
@@ -240,6 +241,7 @@ class Database:
             ("business", "Geschaeftlich", 1, "green"),
             ("private", "Privat", 0, "blue"),
             ("fuel", "Tanken", 1, "yellow"),
+            ("fuel_private", "Tanken nach Privatfahrt", 0, "cyan"),
             ("service", "Service (TUeV, Reifen, ...)", 1, "magenta"),
         ]
         conn.executemany(
@@ -248,6 +250,24 @@ class Database:
             VALUES (?, ?, ?, ?)
             """,
             defaults,
+        )
+        conn.commit()
+
+    def _migrate_add_fuel_private_category(self) -> None:
+        """Fuegt die Kategorie 'fuel_private' in bestehende DBs ein, falls fehlend."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM categories WHERE name = ?",
+            ("fuel_private",),
+        ).fetchone()
+        if row and row[0] > 0:
+            return
+        conn.execute(
+            """
+            INSERT INTO categories (name, display_name, counts_as_business, color)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("fuel_private", "Tanken nach Privatfahrt", 0, "cyan"),
         )
         conn.commit()
 
@@ -387,55 +407,260 @@ class Database:
     # Trips
     # ------------------------------------------------------------------
 
-    def add_trip(self, trip: Trip) -> int:
-        """Fuegt eine neue Fahrt hinzu und gibt die ID zurueck."""
+    def get_km_end_before(
+        self, date_iso: str, exclude_trip_id: int | None = None
+    ) -> int:
+        """Gibt km_end des chronologischen Vorgaengers zurueck.
+
+        Vorgaenger eines NEUEN Trips (exclude_trip_id is None): letzter Trip
+        mit date <= date_iso. Der neue Trip wird beim Insert die hoechste id
+        bekommen und damit innerhalb des Tages ans Ende sortiert — alle
+        bestehenden same-day-Trips sind also seine Vorgaenger.
+
+        Vorgaenger eines BESTEHENDEN Trips (exclude_trip_id gesetzt): letzter
+        Trip mit date < exclude_trip_date oder (date = exclude_trip_date und
+        id < exclude_trip_id). Sortierung in der Kette ist (date, id).
+
+        Fallback wenn nichts gefunden: vehicle.start_km.
+        """
         conn = self._get_conn()
-        cursor = conn.execute(
-            """
-            INSERT INTO trips (date, time_from, time_to, destination, purpose,
-                km_start, km_end, km_business, km_private, category, round_trip)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                trip.date, trip.time_from, trip.time_to,
-                trip.destination, trip.purpose,
-                trip.km_start, trip.km_end,
-                trip.km_business, trip.km_private, trip.category,
-                1 if trip.round_trip else 0,
-            ),
-        )
-        conn.commit()
-        return cursor.lastrowid or 0
+        if exclude_trip_id is not None:
+            row = conn.execute(
+                """
+                SELECT km_end FROM trips
+                WHERE (date < ?)
+                   OR (date = ? AND id < ?)
+                ORDER BY date DESC, id DESC
+                LIMIT 1
+                """,
+                (date_iso, date_iso, exclude_trip_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT km_end FROM trips
+                WHERE date <= ?
+                ORDER BY date DESC, id DESC
+                LIMIT 1
+                """,
+                (date_iso,),
+            ).fetchone()
+        if row is not None:
+            return int(row["km_end"])
+        vehicle = self.get_vehicle()
+        return vehicle.start_km
+
+    def _shift_trips_after(
+        self, date_iso: str, delta: int, exclude_trip_id: int | None = None
+    ) -> None:
+        """Verschiebt km_start/km_end aller Trips nach date_iso um delta.
+
+        Bei gleichem Datum werden nur Trips mit id > exclude_trip_id verschoben,
+        so dass der gerade eingefuegte Trip nicht sich selbst anfasst.
+        """
+        if delta == 0:
+            return
+        conn = self._get_conn()
+        if exclude_trip_id is not None:
+            conn.execute(
+                """
+                UPDATE trips
+                SET km_start = km_start + ?, km_end = km_end + ?
+                WHERE (date > ?)
+                   OR (date = ? AND id > ?)
+                """,
+                (delta, delta, date_iso, date_iso, exclude_trip_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE trips
+                SET km_start = km_start + ?, km_end = km_end + ?
+                WHERE date > ?
+                """,
+                (delta, delta, date_iso),
+            )
+
+    def add_trip(self, trip: Trip) -> int:
+        """Fuegt eine neue Fahrt hinzu und baut die km-Kette auf.
+
+        km_start wird aus dem chronologischen Vorgaenger bestimmt (ignoriert den
+        vom User eingetragenen Wert). km_end wird so gesetzt, dass die vom User
+        eingegebene Distanz (km_end - km_start) erhalten bleibt. Alle nachfolgenden
+        Trips werden um diese Distanz verschoben. Bei Ueberschreitung der
+        Fahrzeug-Endkilometer wird die Transaktion zurueckgerollt.
+        """
+        distance = max(0, trip.km_end - trip.km_start)
+        conn = self._get_conn()
+        try:
+            conn.execute("BEGIN")
+            predecessor_km = self.get_km_end_before(trip.date)
+            new_km_start = predecessor_km
+            new_km_end = new_km_start + distance
+
+            cursor = conn.execute(
+                """
+                INSERT INTO trips (date, time_from, time_to, destination, purpose,
+                    km_start, km_end, km_business, km_private, category, round_trip)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trip.date, trip.time_from, trip.time_to,
+                    trip.destination, trip.purpose,
+                    new_km_start, new_km_end,
+                    trip.km_business, trip.km_private, trip.category,
+                    1 if trip.round_trip else 0,
+                ),
+            )
+            new_id = cursor.lastrowid or 0
+            # Alle Nachfolger um die Distanz dieser Fahrt nach oben verschieben
+            self._shift_trips_after(trip.date, distance, exclude_trip_id=new_id)
+            conn.commit()
+            return new_id
+        except Exception:
+            conn.rollback()
+            raise
 
     def update_trip(self, trip_id: int, trip: Trip) -> None:
-        """Aktualisiert eine bestehende Fahrt."""
+        """Aktualisiert eine bestehende Fahrt und pflegt die km-Kette.
+
+        Bei Datumsaenderung werden die alten Nachfolger zurueckgerollt, der Trip
+        an neuer Position plaziert und die neuen Nachfolger um die Distanz
+        verschoben. Bei geaenderter Distanz werden die Nachfolger um das Delta
+        verschoben. Bei Ueberschreitung der Fahrzeug-Endkilometer erfolgt
+        Rollback.
+        """
         conn = self._get_conn()
-        conn.execute(
-            """
-            UPDATE trips SET
-                date = ?, time_from = ?, time_to = ?,
-                destination = ?, purpose = ?,
-                km_start = ?, km_end = ?,
-                km_business = ?, km_private = ?, category = ?,
-                round_trip = ?
-            WHERE id = ?
-            """,
-            (
-                trip.date, trip.time_from, trip.time_to,
-                trip.destination, trip.purpose,
-                trip.km_start, trip.km_end,
-                trip.km_business, trip.km_private, trip.category,
-                1 if trip.round_trip else 0,
-                trip_id,
-            ),
-        )
-        conn.commit()
+        old = self.get_trip_by_id(trip_id)
+        if old is None:
+            raise ValueError(f"Trip {trip_id} nicht gefunden")
+
+        old_distance = max(0, old.km_end - old.km_start)
+        new_distance = max(0, trip.km_end - trip.km_start)
+
+        try:
+            conn.execute("BEGIN")
+            if trip.date == old.date:
+                # Datum unveraendert: km_start bleibt wie gehabt,
+                # km_end nach neuer Distanz, Nachfolger um delta shiften.
+                delta = new_distance - old_distance
+                conn.execute(
+                    """
+                    UPDATE trips SET
+                        date = ?, time_from = ?, time_to = ?,
+                        destination = ?, purpose = ?,
+                        km_start = ?, km_end = ?,
+                        km_business = ?, km_private = ?, category = ?,
+                        round_trip = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        trip.date, trip.time_from, trip.time_to,
+                        trip.destination, trip.purpose,
+                        old.km_start, old.km_start + new_distance,
+                        trip.km_business, trip.km_private, trip.category,
+                        1 if trip.round_trip else 0,
+                        trip_id,
+                    ),
+                )
+                self._shift_trips_after(trip.date, delta, exclude_trip_id=trip_id)
+            else:
+                # Datum geaendert: zuerst alte Nachfolger rueckabwickeln
+                self._shift_trips_after(
+                    old.date, -old_distance, exclude_trip_id=trip_id
+                )
+                # Neue km_start aus neuem Vorgaenger
+                predecessor_km = self.get_km_end_before(
+                    trip.date, exclude_trip_id=trip_id
+                )
+                new_km_start = predecessor_km
+                new_km_end = new_km_start + new_distance
+                conn.execute(
+                    """
+                    UPDATE trips SET
+                        date = ?, time_from = ?, time_to = ?,
+                        destination = ?, purpose = ?,
+                        km_start = ?, km_end = ?,
+                        km_business = ?, km_private = ?, category = ?,
+                        round_trip = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        trip.date, trip.time_from, trip.time_to,
+                        trip.destination, trip.purpose,
+                        new_km_start, new_km_end,
+                        trip.km_business, trip.km_private, trip.category,
+                        1 if trip.round_trip else 0,
+                        trip_id,
+                    ),
+                )
+                self._shift_trips_after(
+                    trip.date, new_distance, exclude_trip_id=trip_id
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
     def delete_trip(self, trip_id: int) -> None:
-        """Loescht eine Fahrt anhand der ID."""
+        """Loescht eine Fahrt und rollt die Nachfolger zurueck."""
         conn = self._get_conn()
-        conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
-        conn.commit()
+        old = self.get_trip_by_id(trip_id)
+        if old is None:
+            return
+        old_distance = max(0, old.km_end - old.km_start)
+        try:
+            conn.execute("BEGIN")
+            conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+            self._shift_trips_after(old.date, -old_distance, exclude_trip_id=trip_id)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    def rebuild_all_km(self) -> tuple[int, int]:
+        """Baut die km-Kette aller Fahrten chronologisch neu auf.
+
+        Die Distanz jedes Trips (km_end - km_start) bleibt erhalten. km_start
+        wird auf den akkumulierten Stand gesetzt, beginnend mit vehicle.start_km.
+        Rueckgabe: (Anzahl veraenderte Trips, finaler km-Stand).
+        Wirft ValueError, wenn vehicle.end_km ueberschritten wuerde.
+        """
+        conn = self._get_conn()
+        vehicle = self.get_vehicle()
+        cursor_state = vehicle.start_km
+        rows = conn.execute(
+            "SELECT id, km_start, km_end FROM trips ORDER BY date, id"
+        ).fetchall()
+
+        changes: list[tuple[int, int, int]] = []  # (id, new_start, new_end)
+        for row in rows:
+            distance = max(0, int(row["km_end"]) - int(row["km_start"]))
+            new_start = cursor_state
+            new_end = new_start + distance
+            changes.append((int(row["id"]), new_start, new_end))
+            cursor_state = new_end
+
+        if vehicle.end_km > 0 and cursor_state > vehicle.end_km:
+            raise ValueError(
+                f"Rebuild wuerde Endkilometerstand ueberschreiten: "
+                f"{cursor_state} km > {vehicle.end_km} km"
+            )
+
+        changed_count = 0
+        try:
+            conn.execute("BEGIN")
+            for trip_id, new_start, new_end in changes:
+                conn.execute(
+                    "UPDATE trips SET km_start = ?, km_end = ? WHERE id = ?",
+                    (new_start, new_end, trip_id),
+                )
+                changed_count += 1
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return changed_count, cursor_state
 
     def get_trip_by_id(self, trip_id: int) -> Trip | None:
         """Gibt eine einzelne Fahrt anhand der ID zurueck."""
@@ -483,6 +708,18 @@ class Database:
         """Gibt MonthData mit allen Fahrten eines Jahres zurueck (month=0 als Marker)."""
         trips = self.get_trips_for_year(year)
         return MonthData(year=year, month=0, trips=trips)
+
+    def get_all_trips_ordered(self) -> list[Trip]:
+        """Gibt alle Trips der Datenbank zurueck, sortiert nach (date, id).
+
+        Diese Reihenfolge entspricht der kanonischen km-Kette und wird von
+        Plausibilitaets-Checks und Tests verwendet.
+        """
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM trips ORDER BY date, id"
+        ).fetchall()
+        return [self._row_to_trip(row) for row in rows]
 
     def get_first_trip_date(self) -> tuple[int, int] | None:
         """Gibt (year, month) des ersten Trips zurueck, oder None."""
@@ -632,6 +869,15 @@ class Database:
         )
         conn.commit()
         return cursor.lastrowid or 0
+
+    def update_blacklist_entry(self, entry_id: int, date: str, reason: str) -> None:
+        """Aktualisiert Datum und Grund eines Blacklist-Eintrags."""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE blacklist SET date = ?, reason = ? WHERE id = ?",
+            (date, reason, entry_id),
+        )
+        conn.commit()
 
     def delete_blacklist_entry(self, entry_id: int) -> None:
         """Loescht einen Blacklist-Eintrag."""

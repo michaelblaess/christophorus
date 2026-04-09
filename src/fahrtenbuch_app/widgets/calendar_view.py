@@ -9,15 +9,15 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 
 from fahrtenbuch_app.models.trip import MonthData, TripDay
+from fahrtenbuch_app.services.formatting import format_km
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
-_DEFAULT_TYPE_STYLES: dict[str, str] = {
-    "business": "green",
-    "fuel": "yellow",
-    "service": "magenta",
-    "private": "blue",
-}
+# Reduziertes Farbschema: gruen fuer geschaeftlich, rot fuer Blacklist /
+# Warnungen, alles andere neutral.
+_STYLE_BUSINESS = "green"
+_STYLE_ERROR = "bold red"
+_STYLE_MUTED = "dim"
 
 
 class DayTile(Widget):
@@ -40,15 +40,6 @@ class DayTile(Widget):
     }
     DayTile.business {
         border: solid green;
-    }
-    DayTile.private {
-        border: solid dodgerblue;
-    }
-    DayTile.fuel {
-        border: solid yellow;
-    }
-    DayTile.service {
-        border: solid magenta;
     }
     DayTile.outside {
         background: $surface-darken-2;
@@ -90,8 +81,10 @@ class DayTile(Widget):
             self.add_class("weekend")
         elif self._holiday_name:
             self.add_class("holiday")
-        elif self._trip_day and self._trip_day.trips:
-            self.add_class(self._trip_day.primary_type)
+        elif self._trip_day and self._trip_day.has_business:
+            # Nur geschaeftliche Tage bekommen den gruenen Rand — alle anderen
+            # bleiben neutral.
+            self.add_class("business")
 
         if self._date == date.today():
             self.add_class("today")
@@ -108,54 +101,55 @@ class DayTile(Widget):
 
         # Blacklist: rot mit Grund anzeigen
         if self._blacklist_reason:
-            text.append(f"{day_num} {weekday} ", style="bold red")
-            text.append("GESPERRT\n", style="bold red")
+            text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
+            text.append("GESPERRT\n", style=_STYLE_ERROR)
             text.append(self._blacklist_reason, style="red italic")
             if self._trip_day and self._trip_day.has_business:
-                text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
+                text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
             elif self._trip_day and self._trip_day.trips:
-                text.append(f"\n{self._trip_day.km_total} km", style="blue")
+                text.append(f"\n{format_km(self._trip_day.km_total)} km", style=_STYLE_MUTED)
             return text
 
         is_weekend = self._date.weekday() >= 5
 
         if self._holiday_name and self._trip_day and self._trip_day.has_business:
-            text.append(f"{day_num} {weekday} ", style="bold red")
-            text.append("WARNUNG", style="bold red")
+            text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
+            text.append("WARNUNG", style=_STYLE_ERROR)
             text.append(f"\n{self._holiday_name[:18]}", style="red italic")
-            text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
+            text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
             return text
 
         if is_weekend and self._trip_day and self._trip_day.has_business:
-            text.append(f"{day_num} {weekday} ", style="bold red")
-            text.append("WARNUNG", style="bold red")
-            text.append(f"\n{self._trip_day.km_total} km gesch.!", style="bold red")
+            text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
+            text.append("WARNUNG", style=_STYLE_ERROR)
+            text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
             return text
 
         if self._holiday_name:
-            text.append(f"{day_num} {weekday}", style="dim")
+            text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
             text.append(f"\n{self._holiday_name[:18]}", style="dim italic")
             if self._trip_day and self._trip_day.trips:
-                text.append(f"\n{self._trip_day.km_total} km privat", style="blue")
+                text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
             return text
 
         if is_weekend:
-            text.append(f"{day_num} {weekday}", style="dim")
+            text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
             if self._trip_day and self._trip_day.trips:
-                text.append(f"\n{self._trip_day.km_total} km privat", style="blue")
+                text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
             return text
 
         if self._trip_day and self._trip_day.trips:
             td = self._trip_day
-            type_style = self._type_styles.get(td.primary_type, "dim")
+            # Gruen nur bei geschaeftlich, sonst neutral
+            km_style = _STYLE_BUSINESS if td.has_business else _STYLE_MUTED
             text.append(f"{day_num} {weekday} ", style="bold")
-            text.append(f"{td.km_total} km", style=f"bold {type_style}")
+            text.append(f"{format_km(td.km_total)} km", style=f"bold {km_style}")
             text.append("\n")
             for trip in td.trips[:2]:
                 label = trip.purpose[:18] if trip.purpose else trip.category
-                text.append(f"{label}\n", style="dim")
+                text.append(f"{label}\n", style=_STYLE_MUTED)
         else:
-            text.append(f"{day_num} {weekday}", style="dim")
+            text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
 
         return text
 

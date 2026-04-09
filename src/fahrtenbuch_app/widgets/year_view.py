@@ -7,6 +7,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from fahrtenbuch_app.models.trip import MonthData
+from fahrtenbuch_app.services.formatting import format_km
 
 _MONTH_NAMES = [
     "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
@@ -21,8 +22,8 @@ class MonthTile(Widget):
     DEFAULT_CSS = """
     MonthTile {
         width: 1fr;
-        height: 7;
-        padding: 0 1;
+        height: 9;
+        padding: 1 2;
         border: solid $surface-lighten-1;
         margin: 0 1;
     }
@@ -59,14 +60,15 @@ class MonthTile(Widget):
         pct = min(self._km_total / self._lease_km * 100, 150) if self._lease_km > 0 else 0
         biz_pct = self._km_business / self._km_total * 100 if self._km_total > 0 else 0
 
+        # Reduziertes Farbschema: gruen wenn gut, rot wenn kritisch, sonst neutral
         if pct <= 100:
             bar_style = "green"
-        elif pct <= 110:
-            bar_style = "yellow"
-        else:
+        elif pct > 110:
             bar_style = "red"
+        else:
+            bar_style = ""
 
-        biz_style = "green" if biz_pct >= 70 else ("yellow" if biz_pct >= 50 else "red")
+        biz_style = "green" if biz_pct >= 70 else ("red" if biz_pct < 50 else "")
 
         text.append(f"{name}", style="bold")
         text.append(f"  {pct:.0f}%\n", style=f"bold {bar_style}")
@@ -77,8 +79,8 @@ class MonthTile(Widget):
         text.append("\u2591" * (bar_len - filled), style="dim")
         text.append("\n")
 
-        text.append(f"{self._km_total:,} km", style="bold")
-        text.append(f" / {self._lease_km:,}", style="dim")
+        text.append(f"{format_km(self._km_total)} km", style="bold")
+        text.append(f" / {format_km(self._lease_km)}", style="dim")
         text.append("\n")
 
         text.append(f"gesch.: {biz_pct:.0f}%", style=biz_style)
@@ -92,13 +94,13 @@ class QuarterRow(Horizontal):
 
     DEFAULT_CSS = """
     QuarterRow {
-        height: 8;
+        height: 11;
         width: 1fr;
         margin-bottom: 1;
     }
     QuarterRow .quarter-label {
         width: 4;
-        padding: 1 0;
+        padding: 2 0;
         text-style: bold;
     }
     """
@@ -181,17 +183,17 @@ class YearView(VerticalScroll):
 
         text = Text()
         text.append(f"Jahresgesamt {year}\n", style="bold")
-        text.append(f"km gesamt: {total_km:,}", style="bold")
-        text.append(f"  |  Leasing: {total_lease:,}", style="dim")
+        text.append(f"km gesamt: {format_km(total_km)}", style="bold")
+        text.append(f"  |  Leasing: {format_km(total_lease)}", style="dim")
 
         diff = total_km - total_lease
         diff_style = "bold red" if diff > 0 else "bold green"
         diff_sign = "+" if diff > 0 else ""
-        text.append(f"  |  Differenz: {diff_sign}{diff:,} km", style=diff_style)
+        text.append(f"  |  Differenz: {diff_sign}{format_km(abs(diff))} km", style=diff_style)
         text.append("\n")
 
-        biz_style = "bold green" if biz_pct >= 70 else ("bold yellow" if biz_pct >= 50 else "bold red")
-        text.append(f"geschaeftl.: {total_biz:,} km ({biz_pct:.1f}%)", style=biz_style)
-        text.append(f"  |  privat: {total_priv:,} km ({100 - biz_pct:.1f}%)", style="bold blue")
+        biz_style = "bold green" if biz_pct >= 70 else ("bold red" if biz_pct < 50 else "bold")
+        text.append(f"geschaeftl.: {format_km(total_biz)} km ({biz_pct:.1f}%)", style=biz_style)
+        text.append(f"  |  privat: {format_km(total_priv)} km ({100 - biz_pct:.1f}%)", style="bold")
 
         return text

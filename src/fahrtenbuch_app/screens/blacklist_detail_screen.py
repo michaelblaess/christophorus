@@ -1,4 +1,4 @@
-"""Detail-Ansicht fuer einen einzelnen Blacklist-Eintrag mit Loeschen-Button."""
+"""Detail-Ansicht fuer einen Blacklist-Eintrag: bearbeiten, neu anlegen, loeschen."""
 
 import os
 from pathlib import Path
@@ -7,22 +7,53 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Static
+from textual.widgets import Button, Input, Static
 
 from fahrtenbuch_app.services.database import Database
 
 
-class BlacklistDetailScreen(ModalScreen[int | None]):
-    """Zeigt Details eines Blacklist-Eintrags und erlaubt das Loeschen."""
+def _iso_to_de(iso: str) -> str:
+    """YYYY-MM-DD -> DD.MM.YYYY."""
+    if not iso:
+        return ""
+    parts = iso.split("-")
+    if len(parts) == 3:
+        return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    return iso
+
+
+def _de_to_iso(de: str) -> str:
+    """DD.MM.YYYY -> YYYY-MM-DD (leer bei ungueltigem Format)."""
+    if not de:
+        return ""
+    parts = de.strip().split(".")
+    if len(parts) != 3:
+        return ""
+    try:
+        day = int(parts[0])
+        month = int(parts[1])
+        year = int(parts[2])
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    except ValueError:
+        return ""
+
+
+class BlacklistDetailScreen(ModalScreen[bool | None]):
+    """Zeigt Details eines Blacklist-Eintrags zum Bearbeiten / Loeschen / Neuanlegen.
+
+    Dismiss-Wert:
+      * True  → Eintrag wurde hinzugefuegt, geaendert oder geloescht (App refresht)
+      * None  → Dialog abgebrochen, nichts aendern
+    """
 
     DEFAULT_CSS = """
     BlacklistDetailScreen {
         align: center middle;
     }
     BlacklistDetailScreen > Vertical {
-        width: 60;
+        width: 64;
         height: auto;
-        max-height: 30;
+        max-height: 32;
         border: double $accent;
         background: $surface;
         padding: 1 2;
@@ -36,11 +67,18 @@ class BlacklistDetailScreen(ModalScreen[int | None]):
         color: $text-muted;
         margin-top: 1;
     }
-    BlacklistDetailScreen .detail-value {
-        margin-bottom: 1;
+    BlacklistDetailScreen .date-row {
+        height: 3;
+        layout: horizontal;
     }
-    BlacklistDetailScreen .detail-reason {
-        color: $text;
+    BlacklistDetailScreen #input-date {
+        width: 1fr;
+    }
+    BlacklistDetailScreen #btn-date-picker {
+        width: 5;
+        min-width: 5;
+    }
+    BlacklistDetailScreen #input-reason {
         margin-bottom: 1;
     }
     BlacklistDetailScreen #docs-title {
@@ -82,9 +120,9 @@ class BlacklistDetailScreen(ModalScreen[int | None]):
     def __init__(
         self,
         database: Database,
-        entry_id: int,
-        date_str: str,
-        reason: str,
+        entry_id: int = 0,
+        date_str: str = "",
+        reason: str = "",
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
@@ -92,30 +130,65 @@ class BlacklistDetailScreen(ModalScreen[int | None]):
         self._entry_id = entry_id
         self._date_str = date_str
         self._reason = reason
+        self._is_new = entry_id <= 0
 
     def compose(self) -> ComposeResult:
-        date_de = self._format_date(self._date_str)
+        title = "Neuer Blacklist-Eintrag" if self._is_new else "Blacklist-Eintrag bearbeiten"
+        date_de = _iso_to_de(self._date_str)
         with Vertical():
-            yield Static("Blacklist-Eintrag", classes="detail-title")
-            yield Static("Datum:", classes="detail-label")
-            yield Static(f"  {date_de}", classes="detail-value")
+            yield Static(title, classes="detail-title")
+            yield Static("Datum (TT.MM.JJJJ):", classes="detail-label")
+            with Horizontal(classes="date-row"):
+                yield Input(
+                    value=date_de,
+                    placeholder="TT.MM.JJJJ",
+                    id="input-date",
+                )
+                yield Button("...", id="btn-date-picker")
             yield Static("Grund / Anlass:", classes="detail-label")
-            yield Static(f"  {self._reason}", classes="detail-reason")
+            yield Input(
+                value=self._reason,
+                placeholder="z.B. Urlaub, Krankheit, privater Ausflug",
+                id="input-reason",
+            )
             yield Static("Belege:", id="docs-title")
             yield Vertical(id="docs-list")
             with Horizontal(classes="button-row"):
                 yield Button("+ Beleg", variant="success", id="btn-add-doc")
-                yield Button("Schliessen", id="btn-close")
-                yield Button("Loeschen", variant="error", id="btn-delete")
+                yield Button("Speichern", variant="primary", id="btn-save")
+                if not self._is_new:
+                    yield Button("Loeschen", variant="error", id="btn-delete")
+                yield Button("Abbrechen", id="btn-cancel")
 
     def on_mount(self) -> None:
         self._refresh_docs()
+        # Wenn neuer Eintrag: Fokus aufs Datumsfeld
+        if self._is_new:
+            self.query_one("#input-date", Input).focus()
+        else:
+            self.query_one("#input-reason", Input).focus()
 
     def _refresh_docs(self) -> None:
-        """Aktualisiert die Belegliste."""
+        """Aktualisiert die Belegliste. Belege sind nur an bestehende Eintraege moeglich."""
         docs_list = self.query_one("#docs-list", Vertical)
         for child in list(docs_list.children):
             child.remove()
+
+        if self._is_new or self._entry_id <= 0:
+            docs_list.mount(
+                Static("  (erst nach Speichern moeglich)", classes="doc-name")
+            )
+            # Beleg-Button deaktivieren bis gespeichert
+            try:
+                self.query_one("#btn-add-doc", Button).disabled = True
+            except Exception:
+                pass
+            return
+
+        try:
+            self.query_one("#btn-add-doc", Button).disabled = False
+        except Exception:
+            pass
 
         docs = self._database.get_documents(blacklist_id=self._entry_id)
         for doc in docs:
@@ -136,17 +209,87 @@ class BlacklistDetailScreen(ModalScreen[int | None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id or ""
-        if btn_id == "btn-delete":
-            self.dismiss(self._entry_id)
-        elif btn_id == "btn-close":
+        if btn_id == "btn-save":
+            self._save()
+        elif btn_id == "btn-delete":
+            self._delete()
+        elif btn_id == "btn-cancel":
             self.dismiss(None)
+        elif btn_id == "btn-date-picker":
+            self._open_date_picker()
         elif btn_id == "btn-add-doc":
             self._open_file_picker()
         elif btn_id.startswith("btn-del-doc-"):
             self._delete_document(btn_id)
 
+    def _save(self) -> None:
+        """Speichert den Eintrag (neu oder Update)."""
+        date_de = self.query_one("#input-date", Input).value.strip()
+        reason = self.query_one("#input-reason", Input).value.strip()
+
+        iso = _de_to_iso(date_de)
+        if not iso:
+            self.app.notify(
+                "Ungueltiges Datum (Format: TT.MM.JJJJ)",
+                severity="error",
+            )
+            return
+        if not reason:
+            self.app.notify("Grund / Anlass darf nicht leer sein", severity="error")
+            return
+
+        try:
+            if self._is_new:
+                self._entry_id = self._database.add_blacklist_entry(iso, reason)
+                self._is_new = False
+                self._date_str = iso
+                self._reason = reason
+                self.app.notify("Blacklist-Eintrag angelegt", severity="information")
+                # Nach Speichern: Titel aktualisieren, Loeschen-Button nachmontieren,
+                # Belege freischalten. Einfacher: Dialog schliessen.
+                self.dismiss(True)
+            else:
+                self._database.update_blacklist_entry(self._entry_id, iso, reason)
+                self.app.notify("Blacklist-Eintrag aktualisiert", severity="information")
+                self.dismiss(True)
+        except Exception as exc:
+            self.app.notify(f"Fehler beim Speichern: {exc}", severity="error")
+
+    def _delete(self) -> None:
+        """Loescht den aktuellen Eintrag."""
+        if self._is_new or self._entry_id <= 0:
+            return
+        try:
+            self._database.delete_blacklist_entry(self._entry_id)
+            self.app.notify("Blacklist-Eintrag geloescht", severity="warning")
+            self.dismiss(True)
+        except Exception as exc:
+            self.app.notify(f"Fehler beim Loeschen: {exc}", severity="error")
+
+    def _open_date_picker(self) -> None:
+        """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
+        from fahrtenbuch_app.screens.date_picker_screen import DatePickerScreen
+
+        current_de = self.query_one("#input-date", Input).value.strip()
+        current_iso = _de_to_iso(current_de) if current_de else self._date_str
+        self.app.push_screen(
+            DatePickerScreen(initial_date=current_iso),
+            callback=self._on_date_selected,
+        )
+
+    def _on_date_selected(self, selected: str | None) -> None:
+        """Callback nach Datumsauswahl aus dem Kalender."""
+        if selected is not None:
+            self.query_one("#input-date", Input).value = _iso_to_de(selected)
+
     def _open_file_picker(self) -> None:
         """Oeffnet den File-Picker-Screen."""
+        if self._is_new or self._entry_id <= 0:
+            self.app.notify(
+                "Erst speichern, dann koennen Belege hinzugefuegt werden",
+                severity="warning",
+            )
+            return
         from fahrtenbuch_app.screens.file_picker_screen import FilePickerScreen
 
         self.app.push_screen(
@@ -176,15 +319,3 @@ class BlacklistDetailScreen(ModalScreen[int | None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
-
-    def _format_date(self, date_str: str) -> str:
-        try:
-            parts = date_str.split("-")
-            if len(parts) == 3:
-                from datetime import date
-                d = date(int(parts[0]), int(parts[1]), int(parts[2]))
-                weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-                return f"{weekdays[d.weekday()]}, {d.strftime('%d.%m.%Y')}"
-        except (ValueError, IndexError):
-            pass
-        return date_str

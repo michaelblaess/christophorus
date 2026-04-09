@@ -18,6 +18,7 @@ from textual.widgets import (
 from fahrtenbuch_app.models.settings import AddressEntry
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
+from fahrtenbuch_app.services.formatting import format_km, parse_km
 
 _COLOR_OPTIONS: list[tuple[str, str]] = [
     ("Gruen", "green"),
@@ -28,6 +29,20 @@ _COLOR_OPTIONS: list[tuple[str, str]] = [
     ("Cyan", "cyan"),
     ("Weiss", "white"),
 ]
+
+
+def _format_km(value: float) -> str:
+    """Formatiert einen km-Wert fuer die Anzeige mit deutschem Komma.
+
+    - leere / nicht positive Werte → ""
+    - ganze Zahlen ohne Nachkommastellen (z.B. 42)
+    - sonst mit deutschem Komma (z.B. "3,5")
+    """
+    if value is None or value <= 0:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 _STATE_OPTIONS: list[tuple[str, str]] = [
     ("Baden-Wuerttemberg", "BW"),
@@ -226,13 +241,13 @@ class SettingsScreen(ModalScreen[bool | None]):
             yield Input(value=v.contract_number, id="v-contract")
         with Horizontal(classes="form-row"):
             yield Label("km/Monat (Inklusiv):")
-            yield Input(value=str(v.lease_km_per_month), id="v-lease-km")
+            yield Input(value=format_km(v.lease_km_per_month), id="v-lease-km")
         with Horizontal(classes="form-row"):
             yield Label("Start-km:")
-            yield Input(value=str(v.start_km) if v.start_km > 0 else "", id="v-start-km")
+            yield Input(value=format_km(v.start_km) if v.start_km > 0 else "", id="v-start-km")
         with Horizontal(classes="form-row"):
             yield Label("End-km:")
-            yield Input(value=str(v.end_km) if v.end_km > 0 else "", id="v-end-km")
+            yield Input(value=format_km(v.end_km) if v.end_km > 0 else "", id="v-end-km")
         with Horizontal(classes="form-row"):
             yield Label("Leasingbeginn:")
             yield Input(
@@ -283,7 +298,7 @@ class SettingsScreen(ModalScreen[bool | None]):
                 with Horizontal(classes="form-row"):
                     yield Label("Entfernung km:")
                     yield Input(
-                        value=str(entry.km) if entry.km > 0 else "",
+                        value=_format_km(entry.km),
                         id=f"{prefix}-km-{i}",
                     )
 
@@ -308,7 +323,7 @@ class SettingsScreen(ModalScreen[bool | None]):
             with Horizontal(classes="form-row"):
                 yield Label("Entfernung km:")
                 yield Input(
-                    value=str(st.km) if st.km > 0 else "",
+                    value=_format_km(st.km),
                     id="st-km",
                 )
 
@@ -456,9 +471,9 @@ class SettingsScreen(ModalScreen[bool | None]):
             name=self._get_input("v-name"),
             plate=self._get_input("v-plate"),
             contract_number=self._get_input("v-contract"),
-            lease_km_per_month=self._parse_int("v-lease-km", 1500),
-            start_km=self._parse_int("v-start-km", 0),
-            end_km=self._parse_int("v-end-km", 0),
+            lease_km_per_month=parse_km(self._get_input("v-lease-km"), 1500),
+            start_km=parse_km(self._get_input("v-start-km"), 0),
+            end_km=parse_km(self._get_input("v-end-km"), 0),
             start_date=self._get_input("v-start-date"),
             end_date=self._get_input("v-end-date"),
             lease_months=self._parse_int("v-lease-months", 12),
@@ -575,9 +590,14 @@ class SettingsScreen(ModalScreen[bool | None]):
             return default
 
     def _parse_float(self, input_id: str) -> float:
-        """Liest einen Float-Wert sicher aus."""
+        """Liest einen Float-Wert sicher aus.
+
+        Akzeptiert sowohl deutsches Komma (3,5) als auch Punkt (3.5) als
+        Dezimaltrenner. Leere Eingabe ergibt 0.0.
+        """
+        raw = (self._get_input(input_id) or "0").strip().replace(",", ".")
         try:
-            return float(self._get_input(input_id) or "0")
+            return float(raw)
         except ValueError:
             return 0.0
 
