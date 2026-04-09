@@ -437,6 +437,15 @@ class Database:
         conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
         conn.commit()
 
+    def get_trip_by_id(self, trip_id: int) -> Trip | None:
+        """Gibt eine einzelne Fahrt anhand der ID zurueck."""
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT * FROM trips WHERE id = ?",
+            (trip_id,),
+        ).fetchone()
+        return self._row_to_trip(row) if row else None
+
     def get_trips_for_month(self, year: int, month: int) -> list[Trip]:
         """Gibt alle Fahrten eines Monats zurueck, sortiert nach Datum und km_start."""
         conn = self._get_conn()
@@ -455,6 +464,25 @@ class Database:
         """Gibt MonthData fuer einen Monat zurueck."""
         trips = self.get_trips_for_month(year, month)
         return MonthData(year=year, month=month, trips=trips)
+
+    def get_trips_for_year(self, year: int) -> list[Trip]:
+        """Gibt alle Fahrten eines Jahres zurueck, sortiert nach Datum und km_start."""
+        conn = self._get_conn()
+        year_prefix = f"{year}-"
+        rows = conn.execute(
+            """
+            SELECT * FROM trips
+            WHERE date LIKE ? || '%'
+            ORDER BY date, km_start
+            """,
+            (year_prefix,),
+        ).fetchall()
+        return [self._row_to_trip(row) for row in rows]
+
+    def get_year_data(self, year: int) -> MonthData:
+        """Gibt MonthData mit allen Fahrten eines Jahres zurueck (month=0 als Marker)."""
+        trips = self.get_trips_for_year(year)
+        return MonthData(year=year, month=0, trips=trips)
 
     def get_first_trip_date(self) -> tuple[int, int] | None:
         """Gibt (year, month) des ersten Trips zurueck, oder None."""

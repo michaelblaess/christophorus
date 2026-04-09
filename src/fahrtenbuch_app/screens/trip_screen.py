@@ -106,15 +106,7 @@ class TripScreen(ModalScreen[Trip | None]):
     }
     TripScreen .doc-row {
         height: 1;
-        layout: horizontal;
-    }
-    TripScreen .doc-name {
-        width: 1fr;
         color: $text-muted;
-    }
-    TripScreen .doc-del {
-        width: 5;
-        color: $error;
     }
     """
 
@@ -433,12 +425,13 @@ class TripScreen(ModalScreen[Trip | None]):
             name = Path(path).name or path
             desc = str(doc.get("description", ""))
             label_text = f"{name}  {desc}" if desc else name
-            row = Horizontal(classes="doc-row")
-            docs_list.mount(row)
-            row.mount(
-                Static(label_text, classes="doc-name"),
-                Button("\u00d7", classes="doc-del", id=f"btn-del-doc-{doc_id}"),
+            # Eckige Klammern im sichtbaren Text escapen, damit sie nicht als Markup interpretiert werden
+            safe_label = label_text.replace("[", r"\[")
+            markup = (
+                f"[@click=screen.open_doc({doc_id})]{safe_label}[/]  "
+                f"[@click=screen.delete_doc({doc_id})][red]x[/red][/]"
             )
+            docs_list.mount(Static(markup, classes="doc-row"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -451,8 +444,6 @@ class TripScreen(ModalScreen[Trip | None]):
             self._open_date_picker()
         elif btn_id == "btn-add-doc":
             self._open_file_picker()
-        elif btn_id.startswith("btn-del-doc-"):
-            self._delete_document(btn_id)
 
     def _open_date_picker(self) -> None:
         """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
@@ -491,12 +482,29 @@ class TripScreen(ModalScreen[Trip | None]):
         self._database.add_document(rel_path, trip_id=self._trip.id)
         self._refresh_docs()
 
-    def _delete_document(self, btn_id: str) -> None:
-        """Loescht ein Dokument anhand der Button-ID."""
-        try:
-            doc_id = int(btn_id.replace("btn-del-doc-", ""))
-        except ValueError:
+    def action_open_doc(self, doc_id: int) -> None:
+        """Oeffnet einen Beleg im Standard-Programm."""
+        if self._trip is None:
             return
+        docs = self._database.get_documents(trip_id=self._trip.id)
+        for doc in docs:
+            if int(doc.get("id", 0)) != doc_id:
+                continue
+            rel_or_abs = str(doc.get("path", ""))
+            file_path = Path(rel_or_abs)
+            if not file_path.is_absolute():
+                file_path = Path(self._database.path) / file_path
+            try:
+                from fahrtenbuch_app.services.os_utils import open_file_in_system
+                open_file_in_system(file_path)
+            except FileNotFoundError:
+                self.notify(f"Datei nicht gefunden: {file_path}", severity="error")
+            except Exception as exc:
+                self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
+            return
+
+    def action_delete_doc(self, doc_id: int) -> None:
+        """Loescht ein Dokument."""
         self._database.delete_document(doc_id)
         self._refresh_docs()
 

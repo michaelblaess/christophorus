@@ -1,5 +1,6 @@
 """Fahrtenbuch TUI — Hauptanwendung."""
 
+import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -23,6 +24,14 @@ from fahrtenbuch_app.widgets.worktimes_view import WorktimesView
 from fahrtenbuch_app.widgets.year_view import YearView
 
 
+_MARKUP_RE = re.compile(r"\[/?[^\]]*\]")
+
+
+def _strip_markup(text: str) -> str:
+    """Entfernt Rich/Textual-Markup-Tags fuer Plaintext-Ausgabe."""
+    return _MARKUP_RE.sub("", text)
+
+
 class FahrtenbuchApp(App):
     """Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher."""
 
@@ -43,6 +52,7 @@ class FahrtenbuchApp(App):
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
         Binding("l", "toggle_log", "Log"),
+        Binding("c", "copy_log", "Log kopieren"),
         Binding("i", "show_info", "Info"),
     ]
 
@@ -64,7 +74,11 @@ class FahrtenbuchApp(App):
         self._current_view = "list"  # "list" | "calendar" | "year" | "blacklist"
         self._fahrtenbuch: Fahrtenbuch | None = None
         self._selected_trip_index: int = -1
+        self._selected_trip_id: int = 0
         self._holiday_service = HolidayService("BB")  # Brandenburg
+        self._log_lines: list[str] = []
+        self._log_file_map: dict[int, Path] = {}
+        self._log_file_counter: int = 0
 
     def compose(self) -> ComposeResult:
         """Erstellt das UI-Layout."""
@@ -77,7 +91,8 @@ class FahrtenbuchApp(App):
             id="config-panel",
         )
         yield Tabs(
-            Tab("Liste", id="tab-list"),
+            Tab("Liste (Monat)", id="tab-list"),
+            Tab("Liste (Jahr)", id="tab-list-year"),
             Tab("Kalender", id="tab-calendar"),
             Tab("Jahr", id="tab-year"),
             Tab("Blacklist", id="tab-blacklist"),
@@ -87,6 +102,7 @@ class FahrtenbuchApp(App):
         )
         with ContentSwitcher(initial="trip-table", id="view-switcher"):
             yield TripTable(id="trip-table")
+            yield TripTable(id="trip-table-year")
             yield CalendarView(id="calendar-view")
             yield YearView(id="year-view")
             yield BlacklistView(id="blacklist-view")
@@ -269,6 +285,41 @@ class FahrtenbuchApp(App):
         timestamp = datetime.now().strftime("%H:%M:%S")
         log = self.query_one("#log-panel", RichLog)
         log.write(f"[dim]{timestamp}[/dim] {message}")
+        # Plain-Text-Fassung fuer "Log kopieren" mithalten
+        self._log_lines.append(f"{timestamp} {_strip_markup(message)}")
+
+    def action_copy_log(self) -> None:
+        """Kopiert den gesamten Log-Inhalt in die Zwischenablage."""
+        if not self._log_lines:
+            self.notify("Log ist leer", severity="warning")
+            return
+        text = "\n".join(self._log_lines)
+        self.copy_to_clipboard(text)
+        self.notify(
+            f"{len(self._log_lines)} Log-Zeilen kopiert",
+            severity="information",
+        )
+
+    def action_open_log_file(self, file_id: int) -> None:
+        """Oeffnet eine im Log registrierte Datei im Standard-Programm."""
+        path = self._log_file_map.get(file_id)
+        if path is None:
+            self.notify("Datei nicht mehr verfuegbar", severity="warning")
+            return
+        from fahrtenbuch_app.services.os_utils import open_file_in_system
+        try:
+            open_file_in_system(path)
+        except FileNotFoundError:
+            self.notify(f"Datei nicht gefunden: {path}", severity="error")
+        except Exception as exc:
+            self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
+
+    def _register_log_file(self, path: Path) -> int:
+        """Registriert eine Datei fuer klickbare Log-Links und gibt die ID zurueck."""
+        self._log_file_counter += 1
+        file_id = self._log_file_counter
+        self._log_file_map[file_id] = path
+        return file_id
 
     def action_quit(self) -> None:
         """Speichert den aktuellen Monat und beendet die App."""
@@ -298,6 +349,7 @@ class FahrtenbuchApp(App):
         if event.trip is None or self._fahrtenbuch is None:
             return
         self._selected_trip_index = event.index
+        self._selected_trip_id = event.trip.id
 
         from fahrtenbuch_app.screens.trip_screen import TripScreen
 
@@ -320,6 +372,8 @@ class FahrtenbuchApp(App):
             f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]"
         )
         self._refresh_data()
+        if self._current_view == "tab-list-year":
+            self._refresh_year_trip_table()
 
     def on_blacklist_view_entry_selected(
         self, event: "BlacklistView.EntrySelected"
@@ -361,24 +415,26 @@ class FahrtenbuchApp(App):
         self._refresh_data()
 
     def action_delete_trip(self) -> None:
-        """Loescht die ausgewaehlte Fahrt."""
-        if self._fahrtenbuch is None or self._selected_trip_index < 0:
+        """Loescht die ausgewaehlte Fahrt (funktioniert in Monats- und Jahresliste)."""
+        if self._fahrtenbuch is None or self._selected_trip_id <= 0:
             self.notify("Keine Fahrt ausgewaehlt", severity="warning")
             return
 
         db = self._fahrtenbuch.database
-        month_data = db.get_month_data(self._year, self._month)
-        if self._selected_trip_index >= len(month_data.trips):
+        # Trip anhand der ID finden (Monat oder Jahr — egal welche Liste aktiv ist)
+        trip = db.get_trip_by_id(self._selected_trip_id)
+        if trip is None:
+            self.notify("Fahrt nicht gefunden", severity="warning")
             return
 
-        trip = month_data.trips[self._selected_trip_index]
-        if trip.id > 0:
-            db.delete_trip(trip.id)
+        db.delete_trip(trip.id)
         self._write_log(
             f"[red]Fahrt geloescht: {trip.date} — {trip.purpose}[/red]"
         )
         self._selected_trip_index = -1
+        self._selected_trip_id = 0
         self._refresh_data()
+        self._refresh_year_trip_table()
 
     def action_prev_month(self) -> None:
         """Wechselt zum vorherigen Monat."""
@@ -394,6 +450,7 @@ class FahrtenbuchApp(App):
         """Reagiert auf Tab-Wechsel."""
         tab_map = {
             "tab-list": "trip-table",
+            "tab-list-year": "trip-table-year",
             "tab-calendar": "calendar-view",
             "tab-year": "year-view",
             "tab-blacklist": "blacklist-view",
@@ -405,7 +462,9 @@ class FahrtenbuchApp(App):
         switcher.current = view_id
         self._current_view = event.tab.id or "tab-list"
 
-        if view_id == "year-view":
+        if view_id == "trip-table-year":
+            self._refresh_year_trip_table()
+        elif view_id == "year-view":
             self._refresh_year_view()
         elif view_id == "documents-view":
             self._refresh_documents_view()
@@ -424,8 +483,10 @@ class FahrtenbuchApp(App):
             return
 
         trip_table = self.query_one("#trip-table", TripTable)
+        trip_table_year = self.query_one("#trip-table-year", TripTable)
         calendar_view = self.query_one("#calendar-view", CalendarView)
         is_on = trip_table.toggle_blacklist()
+        trip_table_year.toggle_blacklist()
         calendar_view.toggle_blacklist()
 
         status = "[bold red]EIN[/bold red]" if is_on else "[dim]AUS[/dim]"
@@ -448,13 +509,64 @@ class FahrtenbuchApp(App):
         year_view = self.query_one("#year-view", YearView)
         year_view.load_data(self._year, month_data, lease_km)
 
+    def _refresh_year_trip_table(self) -> None:
+        """Laedt alle Fahrten des Jahres in die Jahres-Liste."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        db = self._fahrtenbuch.database
+        year_data = db.get_year_data(self._year)
+
+        # Feiertage fuers ganze Jahr sammeln
+        holidays_map: dict[date, str] = {}
+        for month in range(1, 13):
+            holidays_map.update(
+                self._holiday_service.get_holidays_in_month(self._year, month)
+            )
+
+        category_colors = db.get_category_colors()
+
+        blacklist_entries = db.get_blacklist()
+        blacklist_map: dict[date, str] = {}
+        for entry in blacklist_entries:
+            try:
+                parts = str(entry.get("date", "")).split("-")
+                d = date(int(parts[0]), int(parts[1]), int(parts[2]))
+                blacklist_map[d] = str(entry.get("reason", ""))
+            except (ValueError, IndexError):
+                pass
+
+        year_table = self.query_one("#trip-table-year", TripTable)
+        year_table.load_data(
+            year_data,
+            holidays_map,
+            category_colors,
+            blacklist_map,
+            blacklist_entries,
+            year_mode=True,
+        )
+
     def _refresh_documents_view(self) -> None:
         """Laedt alle Belege in die DocumentsView."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             return
-        docs = self._fahrtenbuch.database.get_all_documents()
+        db = self._fahrtenbuch.database
+        docs = db.get_all_documents()
         docs_view = self.query_one("#documents-view", DocumentsView)
-        docs_view.load_data(docs)
+        docs_view.load_data(docs, Path(db.path))
+
+    def on_documents_view_document_opened(
+        self, event: "DocumentsView.DocumentOpened",
+    ) -> None:
+        """Oeffnet den angeklickten Beleg im Standard-Programm."""
+        from fahrtenbuch_app.services.os_utils import open_file_in_system
+        try:
+            open_file_in_system(event.path)
+        except FileNotFoundError:
+            self.notify(f"Datei nicht gefunden: {event.path}", severity="error")
+            self._write_log(f"[red]Datei nicht gefunden: {event.path}[/red]")
+        except Exception as exc:
+            self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
+            self._write_log(f"[red]Fehler beim Oeffnen: {exc}[/red]")
 
     def _refresh_worktimes_view(self) -> None:
         """Laedt die Arbeitsstunden in die WorktimesView."""
@@ -518,9 +630,72 @@ class FahrtenbuchApp(App):
         self._refresh_data()
 
     def action_export_excel(self) -> None:
-        """Exportiert das Fahrtenbuch als Excel-Datei."""
-        self._write_log("[dim]Excel-Export — noch nicht implementiert[/dim]")
-        self.notify("Excel-Export — noch nicht implementiert", severity="warning")
+        """Exportiert die aktuelle Liste (Monat oder Jahr) als Excel-Datei."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            return
+
+        db = self._fahrtenbuch.database
+        vehicle = self._fahrtenbuch.vehicle
+
+        from fahrtenbuch_app.services.excel_export import export_trips, month_name_de
+
+        # Fahrzeug-Info fuer Titel
+        if vehicle and vehicle.name and vehicle.plate:
+            title_line1 = f"Fahrtenbuch {vehicle.name} ({vehicle.plate})"
+            plate_part = f" ({vehicle.name} - {vehicle.plate})"
+        elif vehicle and vehicle.name:
+            title_line1 = f"Fahrtenbuch {vehicle.name}"
+            plate_part = f" ({vehicle.name})"
+        else:
+            title_line1 = "Fahrtenbuch"
+            plate_part = ""
+
+        lease_km = vehicle.lease_km_per_month if vehicle else 1500
+        lease_info = f"{lease_km:,} km / Monat Leasing".replace(",", ".")
+
+        # Aktuell aktiver Tab bestimmt den Export-Scope
+        is_year_export = self._current_view == "tab-list-year"
+
+        if is_year_export:
+            trips = db.get_trips_for_year(self._year)
+            subtitle = f"{self._year} — {lease_info}"
+            filename = f"Fahrtenbuch {self._year}{plate_part}.xlsx"
+            group_by_month = True
+        else:
+            trips = db.get_trips_for_month(self._year, self._month)
+            month_label = f"{month_name_de(self._month)} {self._year}"
+            subtitle = f"{month_label} — {lease_info}"
+            filename = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part}.xlsx"
+            group_by_month = False
+
+        if not trips:
+            self.notify("Keine Fahrten zum Exportieren", severity="warning")
+            self._write_log("[yellow]Export abgebrochen: keine Fahrten[/yellow]")
+            return
+
+        out_path = Path(db.path) / filename
+        try:
+            export_trips(
+                trips=trips,
+                out_path=out_path,
+                title_line1=title_line1,
+                subtitle=subtitle,
+                group_by_month=group_by_month,
+            )
+        except Exception as exc:
+            self._write_log(f"[red]Excel-Export fehlgeschlagen: {exc}[/red]")
+            self.notify(f"Export-Fehler: {exc}", severity="error")
+            return
+
+        scope_label = "Jahr" if is_year_export else "Monat"
+        file_id = self._register_log_file(out_path)
+        self._write_log(
+            f"[green]Excel-Export ({scope_label}) erfolgreich: "
+            f"{len(trips)} Fahrten → "
+            f"[@click=app.open_log_file({file_id})]{out_path.name}[/][/green]"
+        )
+        self.notify(f"Excel-Export gespeichert: {out_path.name}", severity="information")
 
     def action_show_settings(self) -> None:
         """Oeffnet die Einstellungen."""

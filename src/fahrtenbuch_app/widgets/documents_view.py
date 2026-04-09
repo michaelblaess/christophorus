@@ -5,6 +5,7 @@ from pathlib import Path
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.message import Message
 from textual.widgets import DataTable
 
 
@@ -22,6 +23,18 @@ class DocumentsView(Vertical):
     }
     """
 
+    class DocumentOpened(Message):
+        """Wird gesendet wenn der Benutzer einen Beleg oeffnen will."""
+
+        def __init__(self, path: Path) -> None:
+            super().__init__()
+            self.path = path
+
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self._documents: list[dict[str, object]] = []
+        self._base_path: Path = Path(".")
+
     def compose(self) -> ComposeResult:
         yield DataTable(id="docs-data", cursor_type="row", zebra_stripes=True)
 
@@ -30,12 +43,25 @@ class DocumentsView(Vertical):
         table = self.query_one("#docs-data", DataTable)
         table.add_columns("#", "Typ", "Datum", "Bezug", "Datei")
 
-    def load_data(self, documents: list[dict[str, object]]) -> None:
-        """Laedt die Dokumente in die Tabelle."""
+    def load_data(
+        self,
+        documents: list[dict[str, object]],
+        base_path: Path,
+    ) -> None:
+        """Laedt die Dokumente in die Tabelle, sortiert nach Datum (aufsteigend)."""
+        self._base_path = base_path
+        # Nach Datum sortieren: Trip-Datum oder Blacklist-Datum, ISO-Form sortiert lexikographisch
+        def sort_key(doc: dict[str, object]) -> str:
+            trip_date = str(doc.get("trip_date") or "")
+            bl_date = str(doc.get("bl_date") or "")
+            return trip_date or bl_date or ""
+
+        self._documents = sorted(documents, key=sort_key)
+
         table = self.query_one("#docs-data", DataTable)
         table.clear()
 
-        for idx, doc in enumerate(documents):
+        for idx, doc in enumerate(self._documents):
             doc_id = str(doc.get("id", ""))
             path = str(doc.get("path", ""))
             filename = Path(path).name or path
@@ -68,6 +94,22 @@ class DocumentsView(Vertical):
                 Text(filename, style="dim"),
                 key=str(idx),
             )
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Oeffnet den Beleg bei Enter/Doppelklick auf einer Zeile."""
+        try:
+            idx = int(str(event.row_key.value))
+        except (ValueError, TypeError):
+            return
+        if idx < 0 or idx >= len(self._documents):
+            return
+        path = str(self._documents[idx].get("path", ""))
+        if not path:
+            return
+        file_path = Path(path)
+        if not file_path.is_absolute():
+            file_path = self._base_path / file_path
+        self.post_message(self.DocumentOpened(file_path))
 
     @staticmethod
     def _format_date(date_str: str) -> str:

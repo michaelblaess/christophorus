@@ -59,6 +59,7 @@ class TripTable(Vertical):
         self._blacklist_map: dict[date, str] = {}
         self._blacklist_entries_by_date: dict[date, dict[str, object]] = {}
         self._show_blacklist: bool = False
+        self._year_mode: bool = False
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
@@ -78,8 +79,14 @@ class TripTable(Vertical):
         category_colors: dict[str, str] | None = None,
         blacklist_map: dict[date, str] | None = None,
         blacklist_entries: list[dict[str, object]] | None = None,
+        year_mode: bool = False,
     ) -> None:
-        """Laedt die Fahrten in die Tabelle."""
+        """Laedt die Fahrten in die Tabelle.
+
+        year_mode=True: Alle Fahrten eines Jahres anzeigen, Blacklist-Filter
+        greift auf das ganze Jahr statt nur einen Monat.
+        """
+        self._year_mode = year_mode
         self._last_month_data = month_data
         self._last_holidays_map = holidays_map if holidays_map is not None else {}
         self._last_category_colors = category_colors
@@ -134,12 +141,17 @@ class TripTable(Vertical):
             except (ValueError, IndexError):
                 trip_rows.append((date(9999, 1, 1), trip.date, trip, idx))
 
-        # Blacklist-Nur-Eintraege fuer den aktuellen Monat (Tage ohne Trip)
+        # Blacklist-Nur-Eintraege fuer den aktuellen Monat/Jahr (Tage ohne Trip)
         bl_only_rows: list[tuple[date, dict[str, object]]] = []
         if self._show_blacklist:
             for d, entry in self._blacklist_entries_by_date.items():
-                if d.year == month_data.year and d.month == month_data.month:
-                    if d not in trip_dates:
+                if d in trip_dates:
+                    continue
+                if self._year_mode:
+                    if d.year == month_data.year:
+                        bl_only_rows.append((d, entry))
+                else:
+                    if d.year == month_data.year and d.month == month_data.month:
                         bl_only_rows.append((d, entry))
 
         # Kombiniert sortieren nach Datum
