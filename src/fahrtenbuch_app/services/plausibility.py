@@ -85,11 +85,11 @@ CAT_FUEL_CONSUMPTION = "fuel_consumption"
 BUSINESS_QUOTA_MIN = 0.50
 WORKTIME_RATIO_FACTOR = 1.3
 
-# Verbrauchs-Toleranz bei Full-to-Full-Intervallen: +/- 15 % um den in den
+# Verbrauchs-Toleranz bei Full-to-Full-Intervallen: +/- 20 % um den in den
 # Vehicle-Settings hinterlegten Durchschnittsverbrauch. Strecken kuerzer als
 # FUEL_MIN_INTERVAL_KM liefern durch Messrauschen (Tank nicht exakt voll,
 # Restluft) keine sinnvollen Quoten und werden ausgelassen.
-FUEL_TOLERANCE = 0.15
+FUEL_TOLERANCE = 0.20
 FUEL_MIN_INTERVAL_KM = 50
 
 
