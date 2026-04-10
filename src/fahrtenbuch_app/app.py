@@ -53,6 +53,8 @@ class FahrtenbuchApp(App):
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
         Binding("l", "toggle_log", "Log"),
+        Binding("plus", "log_bigger", "Log +", key_display="+"),
+        Binding("minus", "log_smaller", "Log -", key_display="-"),
         Binding("c", "copy_log", "Log kopieren"),
         Binding("i", "show_info", "Info"),
     ]
@@ -80,6 +82,10 @@ class FahrtenbuchApp(App):
         self._log_lines: list[str] = []
         self._log_file_map: dict[int, Path] = {}
         self._log_file_counter: int = 0
+        # Plausi-Zustand: trip_ids mit Problemen + Monats-Stats fuer Markierung
+        self._problem_trip_ids: set[int] = set()
+        self._problem_months: dict[int, int] = {}  # month -> count (nur aktuelles Jahr)
+        self._log_height: int = 10
 
     def compose(self) -> ComposeResult:
         """Erstellt das UI-Layout."""
@@ -240,6 +246,7 @@ class FahrtenbuchApp(App):
 
         table = self.query_one("#trip-table", TripTable)
         table.load_data(month_data, holidays_map, category_colors, blacklist_map, blacklist_entries)
+        table.set_problem_trip_ids(self._problem_trip_ids)
 
         calendar_view = self.query_one("#calendar-view", CalendarView)
         calendar_view.load_data(month_data, holidays_map, category_colors, blacklist_map)
@@ -289,6 +296,24 @@ class FahrtenbuchApp(App):
         log.write(f"[dim]{timestamp}[/dim] {message}")
         # Plain-Text-Fassung fuer "Log kopieren" mithalten
         self._log_lines.append(f"{timestamp} {_strip_markup(message)}")
+
+    def action_log_bigger(self) -> None:
+        """Vergroessert das Log-Fenster um 5 Zeilen (max 40)."""
+        self._log_height = min(self._log_height + 5, 40)
+        self._apply_log_height()
+
+    def action_log_smaller(self) -> None:
+        """Verkleinert das Log-Fenster um 5 Zeilen (min 3)."""
+        self._log_height = max(self._log_height - 5, 3)
+        self._apply_log_height()
+
+    def _apply_log_height(self) -> None:
+        """Setzt die aktuelle Log-Hoehe auf das Widget."""
+        try:
+            log = self.query_one("#log-panel", RichLog)
+            log.styles.height = self._log_height
+        except Exception:
+            pass
 
     def action_copy_log(self) -> None:
         """Kopiert den gesamten Log-Inhalt in die Zwischenablage."""
@@ -442,6 +467,53 @@ class FahrtenbuchApp(App):
             self.notify("Fahrt nicht gefunden", severity="warning")
             return
 
+        documents = db.get_documents(trip_id=trip.id)
+        if documents:
+            # Bei verknuepften Belegen muss der Nutzer bestaetigen, weil der
+            # CASCADE-Delete die documents-Zeilen mitentfernt. Die physischen
+            # Dateien bleiben erhalten.
+            from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
+
+            count = len(documents)
+            beleg_word = "Beleg" if count == 1 else "Belege"
+            trip_label = f"{trip.date} — {trip.purpose}"
+            message = (
+                f"Diese Fahrt hat {count} verknuepfte{'n' if count == 1 else ''} "
+                f"{beleg_word} in der Datenbank.\n\n"
+                f"Beim Loeschen werden die Beleg-Eintraege mitentfernt.\n"
+                f"Die Dateien auf der Festplatte bleiben unberuehrt.\n\n"
+                f"Fahrt: {trip_label}"
+            )
+            self.push_screen(
+                ConfirmScreen(
+                    title="Fahrt mit Belegen loeschen?",
+                    message=message,
+                    confirm_label="Loeschen",
+                ),
+                callback=lambda confirmed: self._finalize_delete_trip(
+                    trip.id, bool(confirmed)
+                ),
+            )
+            return
+
+        self._do_delete_trip(trip.id)
+
+    def _finalize_delete_trip(self, trip_id: int, confirmed: bool) -> None:
+        """Callback nach dem Bestaetigungsdialog."""
+        if not confirmed:
+            self.notify("Loeschen abgebrochen", severity="information")
+            return
+        self._do_delete_trip(trip_id)
+
+    def _do_delete_trip(self, trip_id: int) -> None:
+        """Fuehrt das eigentliche Loeschen aus."""
+        if self._fahrtenbuch is None:
+            return
+        db = self._fahrtenbuch.database
+        trip = db.get_trip_by_id(trip_id)
+        if trip is None:
+            self.notify("Fahrt nicht mehr vorhanden", severity="warning")
+            return
         db.delete_trip(trip.id)
         self._write_log(
             f"[red]Fahrt geloescht: {trip.date} — {trip.purpose}[/red]"
@@ -537,7 +609,9 @@ class FahrtenbuchApp(App):
         if vehicle:
             lease_km = vehicle.lease_km_per_month
         year_view = self.query_one("#year-view", YearView)
-        year_view.load_data(self._year, month_data, lease_km)
+        year_view.load_data(
+            self._year, month_data, lease_km, self._problem_months
+        )
 
     def _refresh_year_trip_table(self) -> None:
         """Laedt alle Fahrten des Jahres in die Jahres-Liste."""
@@ -574,6 +648,7 @@ class FahrtenbuchApp(App):
             blacklist_entries,
             year_mode=True,
         )
+        year_table.set_problem_trip_ids(self._problem_trip_ids)
 
     def _refresh_documents_view(self) -> None:
         """Laedt alle Belege in die DocumentsView."""
@@ -812,9 +887,76 @@ class FahrtenbuchApp(App):
         tabs.active = "tab-year"
 
     def action_check_plausibility(self) -> None:
-        """Fuehrt die Plausibilitaetspruefung durch."""
-        self._write_log("[dim]Plausibilitaet — noch nicht implementiert[/dim]")
-        self.notify("Plausibilitaet — noch nicht implementiert", severity="warning")
+        """Fuehrt die Plausibilitaetspruefung durch.
+
+        Laedt alle Issues aus run_all_checks, schreibt sie ins Log und
+        markiert die betroffenen Trip-IDs in Monats- und Jahreslisten rot.
+        Erneutes Druecken nach Reparatur raeumt die Markierungen wieder ab,
+        falls keine Probleme mehr gefunden werden.
+        """
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            return
+
+        from fahrtenbuch_app.services.plausibility import (
+            run_all_checks,
+            SEVERITY_ERROR,
+            SEVERITY_WARNING,
+        )
+
+        db = self._fahrtenbuch.database
+        holidays_map = self._holiday_service.get_holidays_in_year(self._year)
+        report = run_all_checks(db, holidays_by_date=holidays_map)
+
+        # Problem-Trip-IDs fuer die Liste neu setzen
+        new_problem_ids: set[int] = set()
+        new_problem_months: dict[int, int] = {}
+        for issue in report.issues:
+            if issue.trip_id is not None and issue.trip_id > 0:
+                new_problem_ids.add(issue.trip_id)
+            if issue.year == self._year and issue.month is not None:
+                new_problem_months[issue.month] = new_problem_months.get(issue.month, 0) + 1
+        self._problem_trip_ids = new_problem_ids
+        self._problem_months = new_problem_months
+
+        self._write_log("")
+        self._write_log(
+            f"[bold]Plausibilitaetspruefung[/bold]: "
+            f"[red]{report.error_count} Fehler[/red], "
+            f"[yellow]{report.warning_count} Warnungen[/yellow], "
+            f"[dim]{report.info_count} Hinweise[/dim]"
+        )
+        if not report.has_issues:
+            self._write_log("[green]Alle Pruefungen ohne Befund — saubere Daten.[/green]")
+            self.notify("Plausibilitaet: keine Probleme gefunden", severity="information")
+        else:
+            # Issues nach Severity, dann nach Datum ausgeben
+            severity_order = {SEVERITY_ERROR: 0, SEVERITY_WARNING: 1}
+            sorted_issues = sorted(
+                report.issues,
+                key=lambda i: (severity_order.get(i.severity, 9), i.trip_date, i.trip_id or 0),
+            )
+            for issue in sorted_issues:
+                date_de = ""
+                if issue.trip_date:
+                    try:
+                        parts = issue.trip_date.split("-")
+                        date_de = f"{parts[2]}.{parts[1]}.{parts[0]}"
+                    except IndexError:
+                        date_de = issue.trip_date
+                prefix = "[red]FEHLER[/red]" if issue.severity == SEVERITY_ERROR else "[yellow]WARNUNG[/yellow]"
+                id_part = f"Trip #{issue.trip_id}" if issue.trip_id else "Global"
+                self._write_log(f"  {prefix} {date_de} {id_part}: {issue.message}")
+            self.notify(
+                f"Plausibilitaet: {report.error_count} Fehler, "
+                f"{report.warning_count} Warnungen",
+                severity="warning" if report.error_count == 0 else "error",
+            )
+
+        # Views mit neuen Problem-Markierungen neu laden
+        self._refresh_data()
+        self._refresh_year_view()
+        self._refresh_year_trip_table()
 
     def action_show_info(self) -> None:
         """Zeigt den Info-Dialog."""

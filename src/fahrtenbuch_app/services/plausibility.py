@@ -12,7 +12,7 @@ sowohl testbar als auch gefahrlos wiederholt aufrufbar.
 from dataclasses import dataclass, field
 from datetime import date
 
-from fahrtenbuch_app.models.trip import Trip
+from fahrtenbuch_app.models.trip import Trip, get_business_categories
 from fahrtenbuch_app.services.database import Database
 
 __all__ = [
@@ -30,10 +30,12 @@ __all__ = [
     "CAT_BLACKLIST_BUSINESS",
     "CAT_NEGATIVE_DISTANCE",
     "CAT_EMPTY_TRIP",
+    "CAT_CATEGORY_COLUMN_MISMATCH",
     "check_chain_ascending",
     "check_distance_matches_columns",
     "check_vehicle_end_limit",
     "check_empty_trips",
+    "check_category_column_match",
     "check_weekend_business",
     "check_holiday_business",
     "check_blacklist_business",
@@ -56,6 +58,7 @@ CAT_HOLIDAY_BUSINESS = "holiday_business"
 CAT_BLACKLIST_BUSINESS = "blacklist_business"
 CAT_NEGATIVE_DISTANCE = "negative_distance"
 CAT_EMPTY_TRIP = "empty_trip"
+CAT_CATEGORY_COLUMN_MISMATCH = "category_column_mismatch"
 
 
 @dataclass
@@ -327,6 +330,57 @@ def check_empty_trips(database: Database) -> list[PlausibilityIssue]:
     return issues
 
 
+def check_category_column_match(database: Database) -> list[PlausibilityIssue]:
+    """Prueft ob die km-Spalte zur Kategorie passt.
+
+    - Business-Kategorien (business, fuel, service, ...) muessen km in
+      km_business haben, km_private muss 0 sein.
+    - Alle anderen Kategorien (private, fuel_private, ...) muessen km in
+      km_private haben, km_business muss 0 sein.
+
+    Das faengt Bugs beim Kategoriewechsel in der Detail-Maske ab, bei denen
+    die km nicht korrekt zwischen den Spalten umgebucht wurden. Ein solcher
+    Trip kann zufaellig eine konsistente Distanz haben und wuerde von
+    check_distance_matches_columns nicht erkannt.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    business_cats = get_business_categories()
+    for trip in trips:
+        d = _parse_trip_date(trip)
+        if trip.category in business_cats:
+            # Business: km_private muss 0 sein
+            if trip.km_private > 0:
+                issues.append(PlausibilityIssue(
+                    severity=SEVERITY_WARNING,
+                    category=CAT_CATEGORY_COLUMN_MISMATCH,
+                    message=(
+                        f"Kategorie '{trip.category}' ist geschaeftlich, aber "
+                        f"km_private={trip.km_private} km ist gesetzt"
+                    ),
+                    trip_id=trip.id,
+                    trip_date=trip.date,
+                    year=d.year if d else None,
+                    month=d.month if d else None,
+                ))
+        else:
+            # Nicht-Business: km_business muss 0 sein
+            if trip.km_business > 0:
+                issues.append(PlausibilityIssue(
+                    severity=SEVERITY_WARNING,
+                    category=CAT_CATEGORY_COLUMN_MISMATCH,
+                    message=(
+                        f"Kategorie '{trip.category}' ist privat, aber "
+                        f"km_business={trip.km_business} km ist gesetzt"
+                    ),
+                    trip_id=trip.id,
+                    trip_date=trip.date,
+                    year=d.year if d else None,
+                    month=d.month if d else None,
+                ))
+    return issues
+
+
 def check_weekend_business(database: Database) -> list[PlausibilityIssue]:
     """Findet reine Business-Fahrten am Wochenende.
 
@@ -450,6 +504,7 @@ def run_all_checks(
     report.issues.extend(check_chain_ascending(database))
     report.issues.extend(check_distance_matches_columns(database))
     report.issues.extend(check_empty_trips(database))
+    report.issues.extend(check_category_column_match(database))
     report.issues.extend(check_vehicle_end_limit(database))
     report.issues.extend(check_weekend_business(database))
     if holidays_by_date:

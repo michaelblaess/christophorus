@@ -65,6 +65,11 @@ class HolidayService:
                 result[d] = name
         return result
 
+    def get_holidays_in_year(self, year: int) -> dict[date, str]:
+        """Gibt alle Feiertage eines Jahres zurueck als {date: name}."""
+        h = self._get_holidays(year)
+        return {d: name for d, name in sorted(h.items()) if d.year == year}
+
     def count_workdays_in_month(self, year: int, month: int) -> int:
         """Zaehlt die Arbeitstage in einem Monat."""
         import calendar

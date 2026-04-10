@@ -98,8 +98,8 @@ class WorktimesView(Vertical):
         for month_nr in range(1, 13):
             hours = self._worktimes.get(month_nr, 0.0)
             total_hours += hours
-            hours_str = f"{hours:.1f}" if hours > 0 else "—"
-            per_day = f"{hours / 22:.1f}" if hours > 0 else "—"
+            hours_str = f"{hours:.2f}" if hours > 0 else "—"
+            per_day = f"{hours / 22:.2f}" if hours > 0 else "—"
 
             style = "" if hours > 0 else "dim"
             table.add_row(
@@ -113,8 +113,8 @@ class WorktimesView(Vertical):
         avg = total_hours / 12 if total_hours > 0 else 0.0
         table.add_row(
             Text("Gesamt / Durchschnitt", style="bold"),
-            Text(f"{total_hours:.1f}", style="bold"),
-            Text(f"\u00d8 {avg:.1f}", style="bold"),
+            Text(f"{total_hours:.2f}", style="bold"),
+            Text(f"\u00d8 {avg:.2f}", style="bold"),
             key="total",
         )
 
@@ -130,7 +130,7 @@ class WorktimesView(Vertical):
         self._selected_month = month_nr
         hours = self._worktimes.get(month_nr, 0.0)
         hours_input = self.query_one("#wt-hours-input", Input)
-        hours_input.value = f"{hours:.1f}" if hours > 0 else ""
+        hours_input.value = f"{hours:.2f}" if hours > 0 else ""
         hours_input.placeholder = f"{_MONTH_NAMES[month_nr - 1]} {self._year}"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:

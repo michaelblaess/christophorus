@@ -61,6 +61,7 @@ class TripTable(Vertical):
         self._blacklist_entries_by_date: dict[date, dict[str, object]] = {}
         self._show_blacklist: bool = False
         self._year_mode: bool = False
+        self._problem_trip_ids: set[int] = set()
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
@@ -109,6 +110,13 @@ class TripTable(Vertical):
                     self._blacklist_entries_by_date[d] = entry
                 except (ValueError, IndexError):
                     pass
+        self._build_rows()
+
+    def set_problem_trip_ids(self, ids: set[int]) -> None:
+        """Setzt die Trip-IDs, die nach der Plausibilitaetspruefung als
+        fehlerhaft markiert werden sollen. Leere Menge entfernt die Markierung.
+        """
+        self._problem_trip_ids = set(ids)
         self._build_rows()
 
     def toggle_blacklist(self) -> bool:
@@ -206,10 +214,18 @@ class TripTable(Vertical):
 
                 warning = ""
 
+                # Plausi-Check hat diesen Trip als problematisch markiert.
+                # Setzt direkt eine Fehler-Warnung, sodass die bestehende
+                # rote Row-Styling-Logik greift.
+                is_problem = trip.id in self._problem_trip_ids
+                if is_problem:
+                    warning = "PLAUSI"
+
                 # Blacklist-Tag pruefen
-                bl_reason = active_blacklist.get(d, "")
-                if bl_reason:
-                    warning = f"GESPERRT: {bl_reason}"
+                if not warning:
+                    bl_reason = active_blacklist.get(d, "")
+                    if bl_reason:
+                        warning = f"GESPERRT: {bl_reason}"
 
                 # Feiertag / Wochenende nur fuer reine business-Fahrten
                 # (Tanken und Service sind auch am Sonntag unkritisch).

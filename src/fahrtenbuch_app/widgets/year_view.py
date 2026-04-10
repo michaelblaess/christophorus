@@ -46,15 +46,22 @@ class MonthTile(Widget):
         self._km_private = km_private
         self._lease_km = lease_km
         self._trip_count = trip_count
+        self._problem_count: int = 0
 
     def render(self) -> RenderResult:
         """Rendert die Monatskachel mit Progressbar."""
         text = Text()
         name = _MONTH_NAMES[self._month - 1]
+        problem_suffix = ""
+        if self._problem_count > 0:
+            problem_suffix = f"  !{self._problem_count}"
 
         if self._km_total == 0:
-            text.append(f"{name}\n", style="bold dim")
-            text.append("keine Daten", style="dim")
+            text.append(f"{name}{problem_suffix}\n", style="bold dim")
+            if self._problem_count > 0:
+                text.append(f"{self._problem_count} Plausi-Befunde", style="bold red")
+            else:
+                text.append("keine Daten", style="dim")
             return text
 
         pct = min(self._km_total / self._lease_km * 100, 150) if self._lease_km > 0 else 0
@@ -71,6 +78,8 @@ class MonthTile(Widget):
         biz_style = "green" if biz_pct >= 70 else ("red" if biz_pct < 50 else "")
 
         text.append(f"{name}", style="bold")
+        if self._problem_count > 0:
+            text.append(f"  !{self._problem_count}", style="bold red")
         text.append(f"  {pct:.0f}%\n", style=f"bold {bar_style}")
 
         bar_len = 20
@@ -149,10 +158,12 @@ class YearView(VerticalScroll):
         year: int,
         month_data: dict[int, MonthData],
         lease_km: int = 1500,
+        problem_months: dict[int, int] | None = None,
     ) -> None:
         """Aktualisiert die Jahresuebersicht mit neuen Daten."""
         self._loaded_year = year
         self._title_widget.update(f"Jahresuebersicht {year}")
+        problems = problem_months or {}
 
         # MonthTiles aktualisieren
         tiles = list(self.query(MonthTile))
@@ -163,6 +174,13 @@ class YearView(VerticalScroll):
             tile._km_private = md.km_private if md else 0
             tile._lease_km = lease_km
             tile._trip_count = len(md.trips) if md else 0
+            tile._problem_count = problems.get(tile._month, 0)
+            tile.refresh()
+
+    def set_problem_months(self, problem_months: dict[int, int]) -> None:
+        """Setzt die Plausi-Befunde pro Monat und aktualisiert die Kacheln."""
+        for tile in self.query(MonthTile):
+            tile._problem_count = problem_months.get(tile._month, 0)
             tile.refresh()
 
         # Summary aktualisieren

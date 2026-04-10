@@ -108,6 +108,14 @@ class TripScreen(ModalScreen[Trip | None]):
         margin-top: 1;
         margin-bottom: 0;
     }
+    TripScreen #audit-info {
+        height: auto;
+        margin-top: 1;
+        padding: 0 1;
+        color: $text-muted;
+        text-style: italic;
+        border-top: solid $surface-lighten-1;
+    }
     TripScreen #docs-list {
         height: auto;
         margin-bottom: 1;
@@ -275,6 +283,13 @@ class TripScreen(ModalScreen[Trip | None]):
                     id="input-km-private",
                 )
 
+            # Audit-Info (nur im Bearbeitungsmodus)
+            if self._is_edit and self._trip is not None and self._trip.id > 0:
+                yield Static(
+                    self._format_audit_text(self._trip.id),
+                    id="audit-info",
+                )
+
             # Belege-Sektion (nur im Bearbeitungsmodus)
             if self._is_edit and self._trip is not None:
                 yield Static("Belege", id="docs-title")
@@ -290,6 +305,38 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="button-row"):
                 yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
                 yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
+
+    def _format_audit_text(self, trip_id: int) -> str:
+        """Formatiert die Audit-Informationen (created/changed) fuer die
+        Anzeige im Dialog. Fehlende Werte werden mit Bindestrich dargestellt.
+        Das Datum wird im deutschen Format ausgegeben.
+        """
+        info = self._database.get_audit_info("trips", trip_id)
+
+        def fmt_when(iso: str) -> str:
+            if not iso:
+                return "\u2014"
+            # Erwartet "YYYY-MM-DD HH:MM:SS", tolerant gegen Varianten
+            date_part, _, time_part = iso.partition(" ")
+            try:
+                parts = date_part.split("-")
+                de = f"{parts[2]}.{parts[1]}.{parts[0]}"
+            except IndexError:
+                return iso
+            return f"{de} {time_part}".rstrip()
+
+        def fmt_who(user: str) -> str:
+            return user if user else "\u2014"
+
+        created = (
+            f"Erstellt: {fmt_when(info['created_at'])} "
+            f"von {fmt_who(info['created_by'])}"
+        )
+        changed = (
+            f"Geaendert: {fmt_when(info['changed_at'])} "
+            f"von {fmt_who(info['changed_by'])}"
+        )
+        return f"{created}\n{changed}"
 
     def _load_addresses(self) -> None:
         """Laedt alle Adressen aus der Datenbank."""
@@ -422,7 +469,8 @@ class TripScreen(ModalScreen[Trip | None]):
             if km_start > 0:
                 biz_input.value = format_km(driven_km)
                 priv_input.value = "0"
-        elif current_category == "private":
+        else:
+            # Alle Nicht-Business-Kategorien (private, fuel_private, ...) → km_private
             if km_start > 0:
                 biz_input.value = "0"
                 priv_input.value = format_km(driven_km)
@@ -447,7 +495,8 @@ class TripScreen(ModalScreen[Trip | None]):
         if new_category in get_business_categories():
             biz_input.value = format_km(total)
             priv_input.value = "0"
-        elif new_category == "private":
+        else:
+            # Alle Nicht-Business-Kategorien (private, fuel_private, ...) → km_private
             biz_input.value = "0"
             priv_input.value = format_km(total)
 
@@ -612,7 +661,8 @@ class TripScreen(ModalScreen[Trip | None]):
             if category in get_business_categories():
                 km_business = total_km
                 km_private = 0
-            elif category == "private":
+            else:
+                # Alle Nicht-Business-Kategorien (private, fuel_private, ...)
                 km_business = 0
                 km_private = total_km
 

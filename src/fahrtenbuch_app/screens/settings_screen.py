@@ -44,6 +44,16 @@ def _format_km(value: float) -> str:
         return str(int(value))
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
+_JOURNAL_MODE_OPTIONS: list[tuple[str, str]] = [
+    ("DELETE (Dropbox-sicher, Standard)", "DELETE"),
+    ("WAL (schneller, aber .wal/.shm)", "WAL"),
+    ("TRUNCATE", "TRUNCATE"),
+    ("PERSIST", "PERSIST"),
+    ("MEMORY (fluechtig)", "MEMORY"),
+    ("OFF (kein Journal)", "OFF"),
+]
+
+
 _STATE_OPTIONS: list[tuple[str, str]] = [
     ("Baden-Wuerttemberg", "BW"),
     ("Bayern", "BY"),
@@ -72,8 +82,10 @@ class SettingsScreen(ModalScreen[bool | None]):
         align: center middle;
     }
     SettingsScreen > Vertical {
-        width: 90;
-        height: 36;
+        width: 95%;
+        max-width: 140;
+        height: 90%;
+        max-height: 48;
         background: $surface;
         border: thick $accent;
         padding: 1 2;
@@ -142,6 +154,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._database = database
         self._vehicle = database.get_vehicle()
         self._federal_state = database.get_setting("federal_state", "BB")
+        self._journal_mode = database.get_setting("db_journal_mode", "DELETE").upper()
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -219,6 +232,10 @@ class SettingsScreen(ModalScreen[bool | None]):
                 with TabPane("Kategorien", id="tab-categories"):
                     with VerticalScroll():
                         yield from self._category_fields()
+
+                with TabPane("Datenbank", id="tab-database"):
+                    with VerticalScroll():
+                        yield from self._database_fields()
 
             with Horizontal(classes="button-row"):
                 yield Button(
@@ -371,6 +388,29 @@ class SettingsScreen(ModalScreen[bool | None]):
             id="btn-add-cat",
         )
 
+    def _database_fields(self) -> ComposeResult:
+        """Felder fuer das Datenbank-Tab."""
+        # journal_mode auf dem zugelassenen Set normalisieren, sonst bleibt
+        # der Select leer wenn die DB einen exotischen Wert enthaelt.
+        allowed = {opt[1] for opt in _JOURNAL_MODE_OPTIONS}
+        current = self._journal_mode if self._journal_mode in allowed else "DELETE"
+
+        with Horizontal(classes="form-row"):
+            yield Label("Journal-Modus:")
+            yield Select(
+                options=_JOURNAL_MODE_OPTIONS,
+                value=current,
+                id="select-journal-mode",
+            )
+        yield Static(
+            "DELETE legt keine .wal/.shm-Dateien an und ist damit\n"
+            "sicher fuer Cloud-Ordner wie Dropbox oder OneDrive.\n"
+            "WAL ist schneller, erzeugt aber zwei Begleitdateien,\n"
+            "die beim Sync unbedingt zusammen uebertragen werden muessen.\n\n"
+            "Die Aenderung wird beim naechsten Programmstart aktiv.",
+            classes="addr-block",
+        )
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
         btn_id = event.button.id or ""
@@ -484,6 +524,13 @@ class SettingsScreen(ModalScreen[bool | None]):
         state_select = self.query_one("#select-federal-state", Select)
         if state_select.value != Select.BLANK:
             self._database.set_setting("federal_state", str(state_select.value))
+
+        # Journal-Modus speichern (wirkt beim naechsten Oeffnen)
+        journal_select = self.query_one("#select-journal-mode", Select)
+        if journal_select.value != Select.BLANK:
+            self._database.set_setting(
+                "db_journal_mode", str(journal_select.value)
+            )
 
         # Wohnadresse speichern
         self._database.set_setting(

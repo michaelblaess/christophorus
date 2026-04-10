@@ -49,8 +49,7 @@ SummaryPanel.hidden {
 
 #log-panel {
     height: 10;
-    min-height: 5;
-    max-height: 15;
+    min-height: 3;
     border-top: solid $accent;
     display: block;
 }

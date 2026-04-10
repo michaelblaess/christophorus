@@ -1,10 +1,50 @@
 """SQLite-basierte Datenhaltung fuer ein einzelnes Fahrtenbuch."""
 
+import getpass
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from fahrtenbuch_app.models.trip import MonthData, Trip
 from fahrtenbuch_app.models.vehicle import Vehicle
+
+
+# Tabellen, die Audit-Spalten bekommen (siehe _migrate_add_audit_columns).
+# documents hat bereits created_at — deshalb separate Liste.
+_AUDIT_TABLES_FULL: tuple[str, ...] = (
+    "vehicle",
+    "trips",
+    "addresses",
+    "settings",
+    "blacklist",
+    "worktimes",
+    "categories",
+)
+_AUDIT_TABLES_WITHOUT_CREATED_AT: tuple[str, ...] = ("documents",)
+_AUDIT_COLUMNS_FULL: tuple[str, ...] = (
+    "created_at",
+    "created_by",
+    "changed_at",
+    "changed_by",
+)
+_AUDIT_COLUMNS_NO_CREATED_AT: tuple[str, ...] = (
+    "created_by",
+    "changed_at",
+    "changed_by",
+)
+
+
+def _audit_now() -> str:
+    """Aktueller Zeitstempel im ISO-Format fuer Audit-Felder."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _audit_user() -> str:
+    """Name des aktuellen OS-Users fuer Audit-Felder."""
+    try:
+        return getpass.getuser()
+    except Exception:
+        return ""
 
 
 class Database:
@@ -41,11 +81,35 @@ class Database:
         belege_dir = self._path / "belege"
         belege_dir.mkdir(parents=True, exist_ok=True)
 
-        self._conn = sqlite3.connect(str(self._db_file))
+        self._conn = sqlite3.connect(str(self._db_file), timeout=10.0)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        # 10 Sekunden auf Locks warten, bevor "database is locked" kommt.
+        # Hilft gegen kurzzeitig offene Reader (DB Browser o.ae.).
+        self._conn.execute("PRAGMA busy_timeout=10000")
         self._conn.execute("PRAGMA foreign_keys=ON")
+        # Schema muss vor dem Lesen des journal_mode-Settings existieren,
+        # sonst gibt es die settings-Tabelle beim Erstkontakt noch nicht.
         self._init_schema()
+        self._apply_journal_mode_setting()
+
+    def _apply_journal_mode_setting(self) -> None:
+        """Liest das gewuenschte journal_mode-Setting und setzt es ggf. um.
+
+        Erlaubte Werte: DELETE (Default, Dropbox-sicher), WAL, TRUNCATE,
+        PERSIST, MEMORY, OFF. Wird nur umgestellt, wenn der aktuelle Modus
+        vom Wunsch abweicht — das vermeidet unnoetige Schreib-Locks beim
+        Oeffnen.
+        """
+        if self._conn is None:
+            return
+        allowed = {"DELETE", "WAL", "TRUNCATE", "PERSIST", "MEMORY", "OFF"}
+        wanted = self.get_setting("db_journal_mode", "DELETE").upper()
+        if wanted not in allowed:
+            wanted = "DELETE"
+        current_row = self._conn.execute("PRAGMA journal_mode").fetchone()
+        current = str(current_row[0]).upper() if current_row else ""
+        if current != wanted:
+            self._conn.execute(f"PRAGMA journal_mode={wanted}")
 
     def close(self) -> None:
         """Schliesst die Datenbank."""
@@ -148,6 +212,34 @@ class Database:
         self._migrate_addresses_remove_category_check()
         self._seed_default_categories()
         self._migrate_add_fuel_private_category()
+        self._migrate_add_audit_columns()
+
+    def _migrate_add_audit_columns(self) -> None:
+        """Fuegt created_at/created_by/changed_at/changed_by als NULL-Spalten
+        in alle Tabellen ein. Dokumente behalten ihre bestehende created_at
+        Spalte und bekommen nur die restlichen drei dazu.
+        """
+        conn = self._get_conn()
+        for table in _AUDIT_TABLES_FULL:
+            self._add_missing_columns(table, _AUDIT_COLUMNS_FULL)
+        for table in _AUDIT_TABLES_WITHOUT_CREATED_AT:
+            self._add_missing_columns(table, _AUDIT_COLUMNS_NO_CREATED_AT)
+        conn.commit()
+
+    def _add_missing_columns(
+        self, table: str, columns: tuple[str, ...]
+    ) -> None:
+        """Fuegt die angegebenen Audit-Spalten als TEXT NULL hinzu, sofern
+        sie noch nicht existieren. Idempotent — ueberspringt vorhandene.
+        """
+        conn = self._get_conn()
+        # Existierende Spalten einsammeln
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        existing = {str(row[1]) for row in rows}
+        for col in columns:
+            if col in existing:
+                continue
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
 
     def _migrate_trips_check_constraint(self) -> None:
         """Entfernt die CHECK-Constraint auf trips.category falls vorhanden.
@@ -316,12 +408,20 @@ class Database:
     ) -> int:
         """Fuegt eine neue Kategorie hinzu und gibt die ID zurueck."""
         conn = self._get_conn()
+        now = _audit_now()
+        user = _audit_user()
         cursor = conn.execute(
             """
-            INSERT INTO categories (name, display_name, counts_as_business, color)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO categories (
+                name, display_name, counts_as_business, color,
+                created_at, created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (name, display_name, 1 if counts_as_business else 0, color),
+            (
+                name, display_name, 1 if counts_as_business else 0, color,
+                now, user,
+            ),
         )
         conn.commit()
         return cursor.lastrowid or 0
@@ -340,10 +440,14 @@ class Database:
             """
             UPDATE categories SET
                 name = ?, display_name = ?,
-                counts_as_business = ?, color = ?
+                counts_as_business = ?, color = ?,
+                changed_at = ?, changed_by = ?
             WHERE id = ?
             """,
-            (name, display_name, 1 if counts_as_business else 0, color, category_id),
+            (
+                name, display_name, 1 if counts_as_business else 0, color,
+                _audit_now(), _audit_user(), category_id,
+            ),
         )
         conn.commit()
 
@@ -378,12 +482,15 @@ class Database:
     def save_vehicle(self, vehicle: Vehicle) -> None:
         """Speichert das Fahrzeug in die Datenbank (upsert)."""
         conn = self._get_conn()
+        now = _audit_now()
+        user = _audit_user()
         conn.execute(
             """
             INSERT INTO vehicle (id, name, plate, contract_number,
                 lease_km_per_month, start_km, end_km,
-                start_date, end_date, lease_months)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                start_date, end_date, lease_months,
+                created_at, created_by, changed_at, changed_by)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 plate = excluded.plate,
@@ -393,12 +500,15 @@ class Database:
                 end_km = excluded.end_km,
                 start_date = excluded.start_date,
                 end_date = excluded.end_date,
-                lease_months = excluded.lease_months
+                lease_months = excluded.lease_months,
+                changed_at = excluded.created_at,
+                changed_by = excluded.created_by
             """,
             (
                 vehicle.name, vehicle.plate, vehicle.contract_number,
                 vehicle.lease_km_per_month, vehicle.start_km, vehicle.end_km,
                 vehicle.start_date, vehicle.end_date, vehicle.lease_months,
+                now, user,
             ),
         )
         conn.commit()
@@ -501,8 +611,9 @@ class Database:
             cursor = conn.execute(
                 """
                 INSERT INTO trips (date, time_from, time_to, destination, purpose,
-                    km_start, km_end, km_business, km_private, category, round_trip)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    km_start, km_end, km_business, km_private, category, round_trip,
+                    created_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trip.date, trip.time_from, trip.time_to,
@@ -510,6 +621,7 @@ class Database:
                     new_km_start, new_km_end,
                     trip.km_business, trip.km_private, trip.category,
                     1 if trip.round_trip else 0,
+                    _audit_now(), _audit_user(),
                 ),
             )
             new_id = cursor.lastrowid or 0
@@ -551,7 +663,8 @@ class Database:
                         destination = ?, purpose = ?,
                         km_start = ?, km_end = ?,
                         km_business = ?, km_private = ?, category = ?,
-                        round_trip = ?
+                        round_trip = ?,
+                        changed_at = ?, changed_by = ?
                     WHERE id = ?
                     """,
                     (
@@ -560,6 +673,7 @@ class Database:
                         old.km_start, old.km_start + new_distance,
                         trip.km_business, trip.km_private, trip.category,
                         1 if trip.round_trip else 0,
+                        _audit_now(), _audit_user(),
                         trip_id,
                     ),
                 )
@@ -582,7 +696,8 @@ class Database:
                         destination = ?, purpose = ?,
                         km_start = ?, km_end = ?,
                         km_business = ?, km_private = ?, category = ?,
-                        round_trip = ?
+                        round_trip = ?,
+                        changed_at = ?, changed_by = ?
                     WHERE id = ?
                     """,
                     (
@@ -591,6 +706,7 @@ class Database:
                         new_km_start, new_km_end,
                         trip.km_business, trip.km_private, trip.category,
                         1 if trip.round_trip else 0,
+                        _audit_now(), _audit_user(),
                         trip_id,
                     ),
                 )
@@ -648,12 +764,19 @@ class Database:
             )
 
         changed_count = 0
+        now = _audit_now()
+        user = _audit_user()
         try:
             conn.execute("BEGIN")
             for trip_id, new_start, new_end in changes:
                 conn.execute(
-                    "UPDATE trips SET km_start = ?, km_end = ? WHERE id = ?",
-                    (new_start, new_end, trip_id),
+                    """
+                    UPDATE trips SET
+                        km_start = ?, km_end = ?,
+                        changed_at = ?, changed_by = ?
+                    WHERE id = ?
+                    """,
+                    (new_start, new_end, now, user, trip_id),
                 )
                 changed_count += 1
             conn.commit()
@@ -670,6 +793,34 @@ class Database:
             (trip_id,),
         ).fetchone()
         return self._row_to_trip(row) if row else None
+
+    def get_audit_info(
+        self, table: str, row_id: int, id_column: str = "id"
+    ) -> dict[str, str]:
+        """Liest die Audit-Spalten einer Zeile und gibt sie als Dict zurueck.
+
+        Fehlende/NULL-Werte kommen als leerer String zurueck. Der table- und
+        id_column-Parameter wird direkt in SQL eingesetzt, daher duerfen hier
+        nur intern bekannte Tabellennamen reingereicht werden — keine
+        User-Eingaben.
+        """
+        conn = self._get_conn()
+        row = conn.execute(
+            f"SELECT created_at, created_by, changed_at, changed_by "
+            f"FROM {table} WHERE {id_column} = ?",
+            (row_id,),
+        ).fetchone()
+        if row is None:
+            return {
+                "created_at": "", "created_by": "",
+                "changed_at": "", "changed_by": "",
+            }
+        return {
+            "created_at": str(row["created_at"] or ""),
+            "created_by": str(row["created_by"] or ""),
+            "changed_at": str(row["changed_at"] or ""),
+            "changed_by": str(row["changed_by"] or ""),
+        }
 
     def get_trips_for_month(self, year: int, month: int) -> list[Trip]:
         """Gibt alle Fahrten eines Monats zurueck, sortiert nach Datum und km_start."""
@@ -796,10 +947,12 @@ class Database:
         conn = self._get_conn()
         cursor = conn.execute(
             """
-            INSERT INTO addresses (category, name, address, km)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO addresses (
+                category, name, address, km, created_at, created_by
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (category, name, address, km),
+            (category, name, address, km, _audit_now(), _audit_user()),
         )
         conn.commit()
         return cursor.lastrowid or 0
@@ -811,10 +964,12 @@ class Database:
         conn = self._get_conn()
         conn.execute(
             """
-            UPDATE addresses SET name = ?, address = ?, km = ?
+            UPDATE addresses SET
+                name = ?, address = ?, km = ?,
+                changed_at = ?, changed_by = ?
             WHERE id = ?
             """,
-            (name, address, km, address_id),
+            (name, address, km, _audit_now(), _audit_user(), address_id),
         )
         conn.commit()
 
@@ -839,12 +994,18 @@ class Database:
     def set_setting(self, key: str, value: str) -> None:
         """Setzt einen Einstellungswert in der Datenbank (upsert)."""
         conn = self._get_conn()
+        now = _audit_now()
+        user = _audit_user()
         conn.execute(
             """
-            INSERT INTO settings (key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+            INSERT INTO settings (key, value, created_at, created_by)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                changed_at = excluded.created_at,
+                changed_by = excluded.created_by
             """,
-            (key, value),
+            (key, value, now, user),
         )
         conn.commit()
 
@@ -864,8 +1025,11 @@ class Database:
         """Fuegt einen Blacklist-Eintrag hinzu und gibt die ID zurueck."""
         conn = self._get_conn()
         cursor = conn.execute(
-            "INSERT INTO blacklist (date, reason) VALUES (?, ?)",
-            (date, reason),
+            """
+            INSERT INTO blacklist (date, reason, created_at, created_by)
+            VALUES (?, ?, ?, ?)
+            """,
+            (date, reason, _audit_now(), _audit_user()),
         )
         conn.commit()
         return cursor.lastrowid or 0
@@ -874,8 +1038,13 @@ class Database:
         """Aktualisiert Datum und Grund eines Blacklist-Eintrags."""
         conn = self._get_conn()
         conn.execute(
-            "UPDATE blacklist SET date = ?, reason = ? WHERE id = ?",
-            (date, reason, entry_id),
+            """
+            UPDATE blacklist SET
+                date = ?, reason = ?,
+                changed_at = ?, changed_by = ?
+            WHERE id = ?
+            """,
+            (date, reason, _audit_now(), _audit_user(), entry_id),
         )
         conn.commit()
 
@@ -944,12 +1113,16 @@ class Database:
     ) -> int:
         """Fuegt ein Dokument hinzu und gibt die ID zurueck."""
         conn = self._get_conn()
+        # documents.created_at existiert bereits mit DEFAULT datetime('now',...)
+        # — wir setzen hier nur created_by mit dem Windows-User.
         cursor = conn.execute(
             """
-            INSERT INTO documents (trip_id, blacklist_id, path, description)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO documents (
+                trip_id, blacklist_id, path, description, created_by
+            )
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (trip_id, blacklist_id, path, description),
+            (trip_id, blacklist_id, path, description, _audit_user()),
         )
         conn.commit()
         return cursor.lastrowid or 0
@@ -991,13 +1164,20 @@ class Database:
     def save_worktime(self, year: int, month: int, hours: float) -> None:
         """Speichert Arbeitsstunden fuer einen Monat (upsert)."""
         conn = self._get_conn()
+        now = _audit_now()
+        user = _audit_user()
         conn.execute(
             """
-            INSERT INTO worktimes (year, month, hours)
-            VALUES (?, ?, ?)
-            ON CONFLICT(year, month) DO UPDATE SET hours = excluded.hours
+            INSERT INTO worktimes (
+                year, month, hours, created_at, created_by
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(year, month) DO UPDATE SET
+                hours = excluded.hours,
+                changed_at = excluded.created_at,
+                changed_by = excluded.created_by
             """,
-            (year, month, hours),
+            (year, month, hours, now, user),
         )
         conn.commit()
 
