@@ -44,6 +44,33 @@ def _format_km(value: float) -> str:
         return str(int(value))
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
+
+def _format_float(value: float) -> str:
+    """Formatiert eine Gleitkommazahl fuer Eingabefelder.
+
+    Leere/Null-Werte → leer. Ganze Zahlen ohne Nachkommastellen. Sonst mit
+    deutschem Komma und bis zu 2 Nachkommastellen.
+    """
+    if value is None or value <= 0:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _parse_float(raw: str) -> float:
+    """Parst eine Gleitkommazahl aus der UI (mit deutschem Komma).
+
+    Leere/ungueltige Eingabe → 0.0.
+    """
+    s = (raw or "").strip().replace(",", ".")
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
 _JOURNAL_MODE_OPTIONS: list[tuple[str, str]] = [
     ("DELETE (Dropbox-sicher, Standard)", "DELETE"),
     ("WAL (schneller, aber .wal/.shm)", "WAL"),
@@ -283,6 +310,20 @@ class SettingsScreen(ModalScreen[bool | None]):
             yield Label("Leasingdauer (Monate):")
             yield Input(value=str(v.lease_months), id="v-lease-months")
         with Horizontal(classes="form-row"):
+            yield Label("Tankinhalt (Liter):")
+            yield Input(
+                value=_format_float(v.tank_capacity_l),
+                placeholder="z.B. 54",
+                id="v-tank-capacity",
+            )
+        with Horizontal(classes="form-row"):
+            yield Label("Verbrauch (l/100km):")
+            yield Input(
+                value=_format_float(v.consumption_l_100km),
+                placeholder="z.B. 9",
+                id="v-consumption",
+            )
+        with Horizontal(classes="form-row"):
             yield Label("Bundesland:")
             yield Select(
                 options=_STATE_OPTIONS,
@@ -517,6 +558,8 @@ class SettingsScreen(ModalScreen[bool | None]):
             start_date=self._get_input("v-start-date"),
             end_date=self._get_input("v-end-date"),
             lease_months=self._parse_int("v-lease-months", 12),
+            tank_capacity_l=_parse_float(self._get_input("v-tank-capacity")),
+            consumption_l_100km=_parse_float(self._get_input("v-consumption")),
         )
         self._database.save_vehicle(vehicle)
 

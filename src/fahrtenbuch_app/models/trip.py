@@ -7,6 +7,11 @@ from datetime import date
 # Wird beim Oeffnen eines Fahrtenbuchs aus der DB gesetzt.
 _business_categories: set[str] = {"business", "fuel", "service"}
 
+# Rein informationelle Kategorien (Anlieferung, Rueckgabe). Diese Trips
+# tragen keine km, haben kein Ziel, keinen Zweck und werden von Plausi-
+# Checks und km-Kette-Pflegen uebersprungen.
+_informational_categories: set[str] = {"delivery", "return"}
+
 
 def set_business_categories(categories: set[str]) -> None:
     """Setzt die Kategorien die als geschaeftlich zaehlen.
@@ -20,6 +25,17 @@ def set_business_categories(categories: set[str]) -> None:
 def get_business_categories() -> set[str]:
     """Gibt die aktuell konfigurierten Business-Kategorien zurueck."""
     return _business_categories
+
+
+def set_informational_categories(categories: set[str]) -> None:
+    """Setzt die Kategorien die rein informationell sind (keine km)."""
+    global _informational_categories
+    _informational_categories = categories
+
+
+def get_informational_categories() -> set[str]:
+    """Gibt die aktuell konfigurierten informationellen Kategorien zurueck."""
+    return _informational_categories
 
 
 @dataclass
@@ -38,6 +54,8 @@ class Trip:
     km_private: int = 0
     category: str = "business"
     round_trip: bool = False
+    fuel_liters: float = 0.0
+    fuel_full_tank: bool = False
 
     @property
     def km_total(self) -> int:
@@ -51,6 +69,15 @@ class Trip:
         Prueft gegen die aus der DB konfigurierten Kategorien.
         """
         return self.category in _business_categories
+
+    @property
+    def is_informational(self) -> bool:
+        """Ob dies eine rein informationelle Fahrt ist (Anlieferung/Rueckgabe).
+
+        Informationelle Trips haben keine km, kein Ziel und keinen Zweck —
+        sie markieren nur Fahrzeug-Ereignisse in der Zeitachse.
+        """
+        return self.category in _informational_categories
 
 
 @dataclass

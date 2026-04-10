@@ -7,10 +7,22 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static, TextArea
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Input,
+    Label,
+    Select,
+    Static,
+    TextArea,
+)
 
 from fahrtenbuch_app.models.settings import AddressEntry
-from fahrtenbuch_app.models.trip import Trip, get_business_categories
+from fahrtenbuch_app.models.trip import (
+    Trip,
+    get_business_categories,
+    get_informational_categories,
+)
 from fahrtenbuch_app.services.database import Database
 from fahrtenbuch_app.services.formatting import format_km, parse_km
 
@@ -35,6 +47,26 @@ def _de_to_iso(de: str) -> str:
     except (ValueError, IndexError):
         pass
     return de
+
+
+def _format_liters(value: float) -> str:
+    """Formatiert Liter mit deutschem Komma. 0 / leer → '' ."""
+    if value is None or value <= 0:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _parse_liters(raw: str) -> float:
+    """Parst Liter aus UI-Eingabe (deutsches Komma). Fehler → 0.0."""
+    s = (raw or "").strip().replace(",", ".")
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
 
 
 class TripScreen(ModalScreen[Trip | None]):
@@ -147,6 +179,12 @@ class TripScreen(ModalScreen[Trip | None]):
         self._is_edit = trip is not None and trip.id > 0
         self._addresses: list[AddressEntry] = []
         self._selected_entry_km: float = 0.0
+        # code → display_name fuer Kategorie-Lookup (z.B. "fuel"→"Tanken"),
+        # wird in compose() aus der DB befuellt.
+        self._category_labels: dict[str, str] = {}
+        # Zuletzt aktive Kategorie, damit wir beim Wechsel erkennen koennen,
+        # ob der Reisezweck der alten Kategorie-Anzeige entsprach.
+        self._current_category: str = ""
 
     def compose(self) -> ComposeResult:
         """Erstellt das Formular."""
@@ -163,6 +201,9 @@ class TripScreen(ModalScreen[Trip | None]):
                 ("Tanken", "fuel"),
                 ("Service (TUeV, Reifen, ...)", "service"),
             ]
+        # Lookup code → display_name fuer spaeteren Abgleich beim Kategoriewechsel
+        self._category_labels = {code: label for label, code in category_options}
+        self._current_category = trip.category if self._is_edit else "business"
 
         default_date_iso = trip.date if self._is_edit else ""
         default_date_de = _iso_to_de(default_date_iso) if default_date_iso else ""
@@ -283,6 +324,21 @@ class TripScreen(ModalScreen[Trip | None]):
                     id="input-km-private",
                 )
 
+            with Horizontal(classes="form-row", id="row-fuel-liters"):
+                yield Label("Getankt (Liter):")
+                yield Input(
+                    value=_format_liters(trip.fuel_liters) if self._is_edit else "",
+                    placeholder="z.B. 46,5",
+                    id="input-fuel-liters",
+                )
+
+            with Horizontal(classes="form-row", id="row-fuel-full-tank"):
+                yield Label("Volltanken:")
+                yield Checkbox(
+                    value=trip.fuel_full_tank if self._is_edit else True,
+                    id="check-fuel-full-tank",
+                )
+
             # Audit-Info (nur im Bearbeitungsmodus)
             if self._is_edit and self._trip is not None and self._trip.id > 0:
                 yield Static(
@@ -398,7 +454,13 @@ class TripScreen(ModalScreen[Trip | None]):
             # Kategorie-Wechsel: km zwischen business und private umbuchen,
             # damit die Spalten direkt passen.
             if event.value != Select.BLANK:
-                self._rebalance_km_for_category(str(event.value))
+                new_cat = str(event.value)
+                self._sync_purpose_to_category(new_cat)
+                self._apply_informational_state(new_cat)
+                self._apply_fuel_visibility(new_cat)
+                if new_cat not in get_informational_categories():
+                    self._rebalance_km_for_category(new_cat)
+                self._current_category = new_cat
             return
         if event.select.id != "select-destination":
             return
@@ -475,6 +537,100 @@ class TripScreen(ModalScreen[Trip | None]):
                 biz_input.value = "0"
                 priv_input.value = format_km(driven_km)
 
+    def _sync_purpose_to_category(self, new_category: str) -> None:
+        """Aktualisiert den Reisezweck, wenn er dem Display-Namen der alten
+        Kategorie entsprach.
+
+        So wird 'Tanken' (von import_trips/fuel) beim Wechsel auf fuel_private
+        automatisch zu 'Tanken nach Privatfahrt', waehrend selbst eingetragene
+        Reisezwecke (z.B. 'Kundentermin XYZ') unveraendert bleiben.
+        """
+        if not self._current_category or self._current_category == new_category:
+            return
+        old_label = self._category_labels.get(self._current_category, "")
+        new_label = self._category_labels.get(new_category, "")
+        if not old_label or not new_label:
+            return
+        try:
+            purpose_input = self.query_one("#input-purpose", Input)
+        except Exception:
+            return
+        if purpose_input.value.strip() == old_label:
+            purpose_input.value = new_label
+
+    def _apply_informational_state(self, category: str) -> None:
+        """Deaktiviert km-/Ziel-/Zweck-Felder fuer informationelle Kategorien
+        (Anlieferung, Rueckgabe) und nullt die Werte. Nicht-informationelle
+        Kategorien aktivieren die Felder wieder.
+        """
+        is_info = category in get_informational_categories()
+
+        try:
+            km_start_input = self.query_one("#input-km-start", Input)
+            km_end = self.query_one("#input-km-end", Input)
+            biz = self.query_one("#input-km-business", Input)
+            priv = self.query_one("#input-km-private", Input)
+            dest_select = self.query_one("#select-destination", Select)
+            dest_area = self.query_one("#input-destination", TextArea)
+            purpose = self.query_one("#input-purpose", Input)
+            round_trip = self.query_one("#select-round-trip", Select)
+        except Exception:
+            return
+
+        if is_info:
+            # Informationelle Trips haben keine km-Werte
+            km_start_input.value = ""
+            km_end.value = ""
+            biz.value = ""
+            priv.value = ""
+            dest_area.load_text("")
+            purpose.value = ""
+        else:
+            # Beim Wechsel zurueck zu einer Normal-Kategorie km_start aus dem
+            # Vorgaenger nachladen, falls es noch leer ist.
+            if not km_start_input.value.strip():
+                date_de = self.query_one("#input-date", Input).value.strip()
+                iso = _de_to_iso(date_de) if date_de else ""
+                if iso:
+                    exclude_id = (
+                        self._trip.id if (self._is_edit and self._trip) else None
+                    )
+                    try:
+                        pred = self._database.get_km_end_before(
+                            iso, exclude_trip_id=exclude_id
+                        )
+                    except Exception:
+                        pred = 0
+                    if pred > 0:
+                        km_start_input.value = format_km(pred)
+
+        km_start_input.disabled = True  # bleibt in beiden Faellen read-only
+        km_end.disabled = is_info
+        biz.disabled = is_info
+        priv.disabled = is_info
+        dest_select.disabled = is_info
+        dest_area.disabled = is_info
+        purpose.disabled = is_info
+        round_trip.disabled = is_info
+
+    def _apply_fuel_visibility(self, category: str) -> None:
+        """Blendet die Tankfelder nur bei fuel/fuel_private ein."""
+        is_fuel_cat = category in ("fuel", "fuel_private")
+        try:
+            row_liters = self.query_one("#row-fuel-liters", Horizontal)
+            row_full = self.query_one("#row-fuel-full-tank", Horizontal)
+        except Exception:
+            return
+        row_liters.display = is_fuel_cat
+        row_full.display = is_fuel_cat
+        if not is_fuel_cat:
+            # Eingaben leeren, damit sie bei action_save nicht wieder
+            # eingeschleppt werden, wenn der User die Kategorie wechselt.
+            try:
+                self.query_one("#input-fuel-liters", Input).value = ""
+            except Exception:
+                pass
+
     def _rebalance_km_for_category(self, new_category: str) -> None:
         """Verschiebt km zwischen business und private, wenn die Kategorie
         gewechselt wird. Die Gesamt-km (km_business + km_private) bleiben
@@ -536,9 +692,20 @@ class TripScreen(ModalScreen[Trip | None]):
         return None
 
     def on_mount(self) -> None:
-        """Laedt Belege nach dem Mounten."""
+        """Laedt Belege nach dem Mounten und setzt informational-Zustand."""
         if self._is_edit and self._trip is not None:
             self._refresh_docs()
+
+        # Initialen informational-Zustand anhand der aktuellen Kategorie setzen
+        try:
+            category_select = self.query_one("#select-category", Select)
+            current = str(category_select.value) if category_select.value != Select.BLANK else ""
+        except Exception:
+            current = ""
+        if current:
+            self._apply_informational_state(current)
+            self._apply_fuel_visibility(current)
+            self._current_category = current
 
     def _refresh_docs(self) -> None:
         """Aktualisiert die Belegliste."""
@@ -654,33 +821,66 @@ class TripScreen(ModalScreen[Trip | None]):
         km_business = parse_km(self.query_one("#input-km-business", Input).value)
         km_private = parse_km(self.query_one("#input-km-private", Input).value)
 
-        # Safety net: Spalten-Zuordnung an die Kategorie angleichen, falls
-        # der User die Inputs nicht selbst aktualisiert hat.
-        total_km = km_business + km_private
-        if total_km > 0:
-            if category in get_business_categories():
-                km_business = total_km
-                km_private = 0
-            else:
-                # Alle Nicht-Business-Kategorien (private, fuel_private, ...)
-                km_business = 0
-                km_private = total_km
+        is_informational = category in get_informational_categories()
 
-        round_trip = self._is_round_trip()
+        if is_informational:
+            # Informationelle Trips (Anlieferung, Rueckgabe) haben keine km,
+            # kein Ziel, keinen Zweck. Die DB-Schicht forciert 0/0 auch noch
+            # einmal — hier schon sauber setzen, damit die Werte konsistent
+            # im Trip-Objekt landen.
+            km_start = 0
+            km_end = 0
+            km_business = 0
+            km_private = 0
+            destination_value = ""
+            purpose_value = ""
+            round_trip = False
+        else:
+            # Safety net: Spalten-Zuordnung an die Kategorie angleichen, falls
+            # der User die Inputs nicht selbst aktualisiert hat.
+            total_km = km_business + km_private
+            if total_km > 0:
+                if category in get_business_categories():
+                    km_business = total_km
+                    km_private = 0
+                else:
+                    # Alle Nicht-Business-Kategorien (private, fuel_private, ...)
+                    km_business = 0
+                    km_private = total_km
+
+            destination_value = self.query_one("#input-destination", TextArea).text.strip()
+            purpose_value = self.query_one("#input-purpose", Input).value.strip()
+            round_trip = self._is_round_trip()
+
+        # Tankfelder nur bei fuel/fuel_private beruecksichtigen
+        fuel_liters = 0.0
+        fuel_full_tank = False
+        if category in ("fuel", "fuel_private"):
+            try:
+                fuel_liters = _parse_liters(
+                    self.query_one("#input-fuel-liters", Input).value
+                )
+                fuel_full_tank = bool(
+                    self.query_one("#check-fuel-full-tank", Checkbox).value
+                )
+            except Exception:
+                pass
 
         trip = Trip(
             id=self._trip.id if self._is_edit and self._trip else 0,
             date=trip_date,
             time_from=self.query_one("#input-time-from", Input).value.strip(),
             time_to=self.query_one("#input-time-to", Input).value.strip(),
-            destination=self.query_one("#input-destination", TextArea).text.strip(),
-            purpose=self.query_one("#input-purpose", Input).value.strip(),
+            destination=destination_value,
+            purpose=purpose_value,
             km_start=km_start,
             km_end=km_end,
             km_business=km_business,
             km_private=km_private,
             category=category,
             round_trip=round_trip,
+            fuel_liters=fuel_liters,
+            fuel_full_tank=fuel_full_tank,
         )
         self.dismiss(trip)
 

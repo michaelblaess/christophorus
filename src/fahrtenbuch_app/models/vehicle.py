@@ -17,6 +17,8 @@ class Vehicle:
     start_date: str = ""
     end_date: str = ""
     lease_months: int = 12
+    tank_capacity_l: float = 0.0
+    consumption_l_100km: float = 0.0
 
     @property
     def total_lease_km(self) -> int:
@@ -45,6 +47,8 @@ class Vehicle:
             "start_date": self.start_date,
             "end_date": self.end_date,
             "lease_months": self.lease_months,
+            "tank_capacity_l": self.tank_capacity_l,
+            "consumption_l_100km": self.consumption_l_100km,
         }
 
     @staticmethod
@@ -60,4 +64,6 @@ class Vehicle:
             start_date=data.get("start_date", ""),
             end_date=data.get("end_date", ""),
             lease_months=data.get("lease_months", 12),
+            tank_capacity_l=float(data.get("tank_capacity_l", 0.0)),
+            consumption_l_100km=float(data.get("consumption_l_100km", 0.0)),
         )

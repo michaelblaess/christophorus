@@ -11,7 +11,11 @@ from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
 from fahrtenbuch_app import __version__, __year__
 from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
 from fahrtenbuch_app.models.settings import GlobalConfig
-from fahrtenbuch_app.models.trip import Trip, set_business_categories
+from fahrtenbuch_app.models.trip import (
+    Trip,
+    set_business_categories,
+    set_informational_categories,
+)
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.widgets.blacklist_view import BlacklistView
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
@@ -199,6 +203,7 @@ class FahrtenbuchApp(App):
 
         # Business-Kategorien aus DB laden
         set_business_categories(db.get_business_category_names())
+        set_informational_categories(db.get_informational_category_names())
 
         # HolidayService mit gespeichertem Bundesland
         federal_state = db.get_setting("federal_state", "BB")
@@ -816,6 +821,11 @@ class FahrtenbuchApp(App):
             self._write_log("[yellow]Export abgebrochen: keine Fahrten[/yellow]")
             return
 
+        # Anzeige-Labels der Kategorien fuer informationelle Trip-Zeilen
+        category_labels = {
+            code: label for label, code in db.get_category_options()
+        }
+
         out_path = Path(db.path) / filename
         try:
             export_trips(
@@ -824,6 +834,7 @@ class FahrtenbuchApp(App):
                 title_line1=title_line1,
                 subtitle=subtitle,
                 group_by_month=group_by_month,
+                category_labels=category_labels,
             )
         except Exception as exc:
             self._write_log(f"[red]Excel-Export fehlgeschlagen: {exc}[/red]")
@@ -864,6 +875,7 @@ class FahrtenbuchApp(App):
 
         # Business-Kategorien aus DB neu laden
         set_business_categories(db.get_business_category_names())
+        set_informational_categories(db.get_informational_category_names())
 
         federal_state = db.get_setting("federal_state", "BB")
         self._holiday_service = HolidayService(federal_state)

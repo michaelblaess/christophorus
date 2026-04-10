@@ -202,7 +202,8 @@ class Database:
                 name TEXT UNIQUE NOT NULL,
                 display_name TEXT NOT NULL,
                 counts_as_business INTEGER NOT NULL DEFAULT 1,
-                color TEXT NOT NULL DEFAULT 'green'
+                color TEXT NOT NULL DEFAULT 'green',
+                is_informational INTEGER NOT NULL DEFAULT 0
             );
         """)
         conn.commit()
@@ -212,6 +213,10 @@ class Database:
         self._migrate_addresses_remove_category_check()
         self._seed_default_categories()
         self._migrate_add_fuel_private_category()
+        self._migrate_add_informational_flag()
+        self._migrate_add_informational_categories()
+        self._migrate_add_fuel_columns()
+        self._migrate_add_vehicle_tank_columns()
         self._migrate_add_audit_columns()
 
     def _migrate_add_audit_columns(self) -> None:
@@ -363,6 +368,94 @@ class Database:
         )
         conn.commit()
 
+    def _migrate_add_informational_flag(self) -> None:
+        """Fuegt die is_informational-Spalte in bestehende DBs ein.
+
+        Informational-Kategorien (z.B. Fahrzeug-Anlieferung) tragen keine
+        km bei und werden von Plausi-Checks und km-Summen uebersprungen.
+        """
+        conn = self._get_conn()
+        rows = conn.execute("PRAGMA table_info(categories)").fetchall()
+        existing = {str(row[1]) for row in rows}
+        if "is_informational" not in existing:
+            conn.execute(
+                "ALTER TABLE categories ADD COLUMN "
+                "is_informational INTEGER NOT NULL DEFAULT 0"
+            )
+            conn.commit()
+
+    def _migrate_add_fuel_columns(self) -> None:
+        """Fuegt fuel_liters und fuel_full_tank zur trips-Tabelle hinzu.
+
+        fuel_liters: getankte Menge in Litern (REAL, Default 0).
+        fuel_full_tank: 1 wenn vollgetankt, 0 sonst (INTEGER, Default 0).
+        Beide nur fuer Trips der Kategorien fuel/fuel_private relevant.
+        """
+        conn = self._get_conn()
+        rows = conn.execute("PRAGMA table_info(trips)").fetchall()
+        existing = {str(row[1]) for row in rows}
+        if "fuel_liters" not in existing:
+            conn.execute(
+                "ALTER TABLE trips ADD COLUMN "
+                "fuel_liters REAL NOT NULL DEFAULT 0"
+            )
+        if "fuel_full_tank" not in existing:
+            conn.execute(
+                "ALTER TABLE trips ADD COLUMN "
+                "fuel_full_tank INTEGER NOT NULL DEFAULT 0"
+            )
+        conn.commit()
+
+    def _migrate_add_vehicle_tank_columns(self) -> None:
+        """Fuegt tank_capacity_l und consumption_l_100km zur vehicle-Tabelle.
+
+        Basis fuer die Tank-Plausibilitaets-Checks: Wie gross ist der Tank
+        und welchen Durchschnittsverbrauch nehmen wir als Referenz an.
+        """
+        conn = self._get_conn()
+        rows = conn.execute("PRAGMA table_info(vehicle)").fetchall()
+        existing = {str(row[1]) for row in rows}
+        if "tank_capacity_l" not in existing:
+            conn.execute(
+                "ALTER TABLE vehicle ADD COLUMN "
+                "tank_capacity_l REAL NOT NULL DEFAULT 0"
+            )
+        if "consumption_l_100km" not in existing:
+            conn.execute(
+                "ALTER TABLE vehicle ADD COLUMN "
+                "consumption_l_100km REAL NOT NULL DEFAULT 0"
+            )
+        conn.commit()
+
+    def _migrate_add_informational_categories(self) -> None:
+        """Fuegt die Kategorien 'delivery' und 'return' ein, falls fehlend."""
+        conn = self._get_conn()
+        existing = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM categories WHERE name IN (?, ?)",
+                ("delivery", "return"),
+            ).fetchall()
+        }
+        to_insert = [
+            ("delivery", "Anlieferung", 0, "white", 1),
+            ("return", "Rueckgabe / Abholung", 0, "white", 1),
+        ]
+        for row in to_insert:
+            if row[0] in existing:
+                continue
+            conn.execute(
+                """
+                INSERT INTO categories (
+                    name, display_name, counts_as_business, color,
+                    is_informational
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                row,
+            )
+        conn.commit()
+
     # ------------------------------------------------------------------
     # Categories
     # ------------------------------------------------------------------
@@ -380,6 +473,18 @@ class Database:
         conn = self._get_conn()
         rows = conn.execute(
             "SELECT name FROM categories WHERE counts_as_business = 1"
+        ).fetchall()
+        return {row["name"] for row in rows}
+
+    def get_informational_category_names(self) -> set[str]:
+        """Gibt die Namen aller informationellen Kategorien zurueck.
+
+        Diese Trips (Anlieferung, Rueckgabe) tragen keine km und werden von
+        Plausi-Checks und km-Kette-Pflegen uebersprungen.
+        """
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT name FROM categories WHERE is_informational = 1"
         ).fetchall()
         return {row["name"] for row in rows}
 
@@ -477,6 +582,8 @@ class Database:
             start_date=row["start_date"],
             end_date=row["end_date"],
             lease_months=row["lease_months"],
+            tank_capacity_l=float(row["tank_capacity_l"] or 0),
+            consumption_l_100km=float(row["consumption_l_100km"] or 0),
         )
 
     def save_vehicle(self, vehicle: Vehicle) -> None:
@@ -489,8 +596,9 @@ class Database:
             INSERT INTO vehicle (id, name, plate, contract_number,
                 lease_km_per_month, start_km, end_km,
                 start_date, end_date, lease_months,
+                tank_capacity_l, consumption_l_100km,
                 created_at, created_by, changed_at, changed_by)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 plate = excluded.plate,
@@ -501,6 +609,8 @@ class Database:
                 start_date = excluded.start_date,
                 end_date = excluded.end_date,
                 lease_months = excluded.lease_months,
+                tank_capacity_l = excluded.tank_capacity_l,
+                consumption_l_100km = excluded.consumption_l_100km,
                 changed_at = excluded.created_at,
                 changed_by = excluded.created_by
             """,
@@ -508,6 +618,7 @@ class Database:
                 vehicle.name, vehicle.plate, vehicle.contract_number,
                 vehicle.lease_km_per_month, vehicle.start_km, vehicle.end_km,
                 vehicle.start_date, vehicle.end_date, vehicle.lease_months,
+                vehicle.tank_capacity_l, vehicle.consumption_l_100km,
                 now, user,
             ),
         )
@@ -516,6 +627,15 @@ class Database:
     # ------------------------------------------------------------------
     # Trips
     # ------------------------------------------------------------------
+
+    # Informationelle Trips (Anlieferung/Rueckgabe) nehmen nicht an der
+    # km-Kette teil. Die SQL-Filter schliessen sie ueber die categories-Tabelle
+    # aus, damit weder Vorgaenger-Lookup noch Shift-Cascades sie anfassen.
+    _SQL_EXCLUDE_INFORMATIONAL = (
+        "category NOT IN ("
+        "SELECT name FROM categories WHERE is_informational = 1"
+        ")"
+    )
 
     def get_km_end_before(
         self, date_iso: str, exclude_trip_id: int | None = None
@@ -531,15 +651,19 @@ class Database:
         Trip mit date < exclude_trip_date oder (date = exclude_trip_date und
         id < exclude_trip_id). Sortierung in der Kette ist (date, id).
 
+        Informationelle Trips (Anlieferung/Rueckgabe) werden uebersprungen,
+        da sie keine km tragen.
+
         Fallback wenn nichts gefunden: vehicle.start_km.
         """
         conn = self._get_conn()
+        excl = self._SQL_EXCLUDE_INFORMATIONAL
         if exclude_trip_id is not None:
             row = conn.execute(
-                """
+                f"""
                 SELECT km_end FROM trips
-                WHERE (date < ?)
-                   OR (date = ? AND id < ?)
+                WHERE ((date < ?) OR (date = ? AND id < ?))
+                  AND {excl}
                 ORDER BY date DESC, id DESC
                 LIMIT 1
                 """,
@@ -547,9 +671,10 @@ class Database:
             ).fetchone()
         else:
             row = conn.execute(
-                """
+                f"""
                 SELECT km_end FROM trips
                 WHERE date <= ?
+                  AND {excl}
                 ORDER BY date DESC, id DESC
                 LIMIT 1
                 """,
@@ -571,25 +696,31 @@ class Database:
         if delta == 0:
             return
         conn = self._get_conn()
+        excl = self._SQL_EXCLUDE_INFORMATIONAL
         if exclude_trip_id is not None:
             conn.execute(
-                """
+                f"""
                 UPDATE trips
                 SET km_start = km_start + ?, km_end = km_end + ?
-                WHERE (date > ?)
-                   OR (date = ? AND id > ?)
+                WHERE ((date > ?) OR (date = ? AND id > ?))
+                  AND {excl}
                 """,
                 (delta, delta, date_iso, date_iso, exclude_trip_id),
             )
         else:
             conn.execute(
-                """
+                f"""
                 UPDATE trips
                 SET km_start = km_start + ?, km_end = km_end + ?
                 WHERE date > ?
+                  AND {excl}
                 """,
                 (delta, delta, date_iso),
             )
+
+    def _is_informational_category(self, category: str) -> bool:
+        """Prueft ob die Kategorie rein informationell ist (keine km)."""
+        return category in self.get_informational_category_names()
 
     def add_trip(self, trip: Trip) -> int:
         """Fuegt eine neue Fahrt hinzu und baut die km-Kette auf.
@@ -599,33 +730,51 @@ class Database:
         eingegebene Distanz (km_end - km_start) erhalten bleibt. Alle nachfolgenden
         Trips werden um diese Distanz verschoben. Bei Ueberschreitung der
         Fahrzeug-Endkilometer wird die Transaktion zurueckgerollt.
+
+        Informationelle Trips (Anlieferung/Rueckgabe) werden mit km_start = 0
+        und km_end = 0 gespeichert und loesen keinen Shift aus.
         """
-        distance = max(0, trip.km_end - trip.km_start)
+        is_info = self._is_informational_category(trip.category)
+        distance = 0 if is_info else max(0, trip.km_end - trip.km_start)
         conn = self._get_conn()
         try:
             conn.execute("BEGIN")
-            predecessor_km = self.get_km_end_before(trip.date)
-            new_km_start = predecessor_km
-            new_km_end = new_km_start + distance
+            if is_info:
+                new_km_start = 0
+                new_km_end = 0
+                km_business = 0
+                km_private = 0
+            else:
+                predecessor_km = self.get_km_end_before(trip.date)
+                new_km_start = predecessor_km
+                new_km_end = new_km_start + distance
+                km_business = trip.km_business
+                km_private = trip.km_private
 
+            is_fuel_cat = trip.category in ("fuel", "fuel_private")
+            fuel_liters = float(trip.fuel_liters) if is_fuel_cat else 0.0
+            fuel_full_tank = 1 if (is_fuel_cat and trip.fuel_full_tank) else 0
             cursor = conn.execute(
                 """
                 INSERT INTO trips (date, time_from, time_to, destination, purpose,
                     km_start, km_end, km_business, km_private, category, round_trip,
+                    fuel_liters, fuel_full_tank,
                     created_at, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trip.date, trip.time_from, trip.time_to,
                     trip.destination, trip.purpose,
                     new_km_start, new_km_end,
-                    trip.km_business, trip.km_private, trip.category,
+                    km_business, km_private, trip.category,
                     1 if trip.round_trip else 0,
+                    fuel_liters, fuel_full_tank,
                     _audit_now(), _audit_user(),
                 ),
             )
             new_id = cursor.lastrowid or 0
             # Alle Nachfolger um die Distanz dieser Fahrt nach oben verschieben
+            # (entfaellt bei informationellen Trips — distance == 0)
             self._shift_trips_after(trip.date, distance, exclude_trip_id=new_id)
             conn.commit()
             return new_id
@@ -647,15 +796,43 @@ class Database:
         if old is None:
             raise ValueError(f"Trip {trip_id} nicht gefunden")
 
-        old_distance = max(0, old.km_end - old.km_start)
-        new_distance = max(0, trip.km_end - trip.km_start)
+        old_is_info = self._is_informational_category(old.category)
+        new_is_info = self._is_informational_category(trip.category)
+
+        old_distance = 0 if old_is_info else max(0, old.km_end - old.km_start)
+        new_distance = 0 if new_is_info else max(0, trip.km_end - trip.km_start)
+
+        # Felder fuer INSERT/UPDATE anhand des Informational-Zustands normalisieren
+        if new_is_info:
+            new_km_business = 0
+            new_km_private = 0
+            new_destination = ""
+            new_purpose = ""
+            new_round_trip = 0
+        else:
+            new_km_business = trip.km_business
+            new_km_private = trip.km_private
+            new_destination = trip.destination
+            new_purpose = trip.purpose
+            new_round_trip = 1 if trip.round_trip else 0
+
+        # Tankfelder nur bei fuel/fuel_private speichern
+        is_fuel_cat = trip.category in ("fuel", "fuel_private")
+        new_fuel_liters = float(trip.fuel_liters) if is_fuel_cat else 0.0
+        new_fuel_full_tank = 1 if (is_fuel_cat and trip.fuel_full_tank) else 0
 
         try:
             conn.execute("BEGIN")
-            if trip.date == old.date:
-                # Datum unveraendert: km_start bleibt wie gehabt,
+            if trip.date == old.date and old_is_info == new_is_info:
+                # Datum und Typ unveraendert: km_start bleibt wie gehabt,
                 # km_end nach neuer Distanz, Nachfolger um delta shiften.
                 delta = new_distance - old_distance
+                if new_is_info:
+                    upd_km_start = 0
+                    upd_km_end = 0
+                else:
+                    upd_km_start = old.km_start
+                    upd_km_end = old.km_start + new_distance
                 conn.execute(
                     """
                     UPDATE trips SET
@@ -664,31 +841,37 @@ class Database:
                         km_start = ?, km_end = ?,
                         km_business = ?, km_private = ?, category = ?,
                         round_trip = ?,
+                        fuel_liters = ?, fuel_full_tank = ?,
                         changed_at = ?, changed_by = ?
                     WHERE id = ?
                     """,
                     (
                         trip.date, trip.time_from, trip.time_to,
-                        trip.destination, trip.purpose,
-                        old.km_start, old.km_start + new_distance,
-                        trip.km_business, trip.km_private, trip.category,
-                        1 if trip.round_trip else 0,
+                        new_destination, new_purpose,
+                        upd_km_start, upd_km_end,
+                        new_km_business, new_km_private, trip.category,
+                        new_round_trip,
+                        new_fuel_liters, new_fuel_full_tank,
                         _audit_now(), _audit_user(),
                         trip_id,
                     ),
                 )
                 self._shift_trips_after(trip.date, delta, exclude_trip_id=trip_id)
             else:
-                # Datum geaendert: zuerst alte Nachfolger rueckabwickeln
+                # Datum oder Typ geaendert: zuerst alte Nachfolger rueckabwickeln
+                # (alte Distanz), dann neue Position + neue Kette.
                 self._shift_trips_after(
                     old.date, -old_distance, exclude_trip_id=trip_id
                 )
-                # Neue km_start aus neuem Vorgaenger
-                predecessor_km = self.get_km_end_before(
-                    trip.date, exclude_trip_id=trip_id
-                )
-                new_km_start = predecessor_km
-                new_km_end = new_km_start + new_distance
+                if new_is_info:
+                    new_km_start = 0
+                    new_km_end = 0
+                else:
+                    predecessor_km = self.get_km_end_before(
+                        trip.date, exclude_trip_id=trip_id
+                    )
+                    new_km_start = predecessor_km
+                    new_km_end = new_km_start + new_distance
                 conn.execute(
                     """
                     UPDATE trips SET
@@ -697,15 +880,17 @@ class Database:
                         km_start = ?, km_end = ?,
                         km_business = ?, km_private = ?, category = ?,
                         round_trip = ?,
+                        fuel_liters = ?, fuel_full_tank = ?,
                         changed_at = ?, changed_by = ?
                     WHERE id = ?
                     """,
                     (
                         trip.date, trip.time_from, trip.time_to,
-                        trip.destination, trip.purpose,
+                        new_destination, new_purpose,
                         new_km_start, new_km_end,
-                        trip.km_business, trip.km_private, trip.category,
-                        1 if trip.round_trip else 0,
+                        new_km_business, new_km_private, trip.category,
+                        new_round_trip,
+                        new_fuel_liters, new_fuel_full_tank,
                         _audit_now(), _audit_user(),
                         trip_id,
                     ),
@@ -724,7 +909,10 @@ class Database:
         old = self.get_trip_by_id(trip_id)
         if old is None:
             return
-        old_distance = max(0, old.km_end - old.km_start)
+        if self._is_informational_category(old.category):
+            old_distance = 0
+        else:
+            old_distance = max(0, old.km_end - old.km_start)
         try:
             conn.execute("BEGIN")
             conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
@@ -745,12 +933,17 @@ class Database:
         conn = self._get_conn()
         vehicle = self.get_vehicle()
         cursor_state = vehicle.start_km
+        info_cats = self.get_informational_category_names()
         rows = conn.execute(
-            "SELECT id, km_start, km_end FROM trips ORDER BY date, id"
+            "SELECT id, km_start, km_end, category FROM trips ORDER BY date, id"
         ).fetchall()
 
         changes: list[tuple[int, int, int]] = []  # (id, new_start, new_end)
         for row in rows:
+            if str(row["category"]) in info_cats:
+                # Informationelle Trips bleiben bei 0/0 und zaehlen nicht mit
+                changes.append((int(row["id"]), 0, 0))
+                continue
             distance = max(0, int(row["km_end"]) - int(row["km_start"]))
             new_start = cursor_state
             new_end = new_start + distance
@@ -823,14 +1016,14 @@ class Database:
         }
 
     def get_trips_for_month(self, year: int, month: int) -> list[Trip]:
-        """Gibt alle Fahrten eines Monats zurueck, sortiert nach Datum und km_start."""
+        """Gibt alle Fahrten eines Monats zurueck, sortiert nach Datum und Startzeit."""
         conn = self._get_conn()
         month_prefix = f"{year}-{month:02d}"
         rows = conn.execute(
             """
             SELECT * FROM trips
             WHERE date LIKE ? || '%'
-            ORDER BY date, km_start
+            ORDER BY date, time_from, id
             """,
             (month_prefix,),
         ).fetchall()
@@ -842,14 +1035,14 @@ class Database:
         return MonthData(year=year, month=month, trips=trips)
 
     def get_trips_for_year(self, year: int) -> list[Trip]:
-        """Gibt alle Fahrten eines Jahres zurueck, sortiert nach Datum und km_start."""
+        """Gibt alle Fahrten eines Jahres zurueck, sortiert nach Datum und Startzeit."""
         conn = self._get_conn()
         year_prefix = f"{year}-"
         rows = conn.execute(
             """
             SELECT * FROM trips
             WHERE date LIKE ? || '%'
-            ORDER BY date, km_start
+            ORDER BY date, time_from, id
             """,
             (year_prefix,),
         ).fetchall()
@@ -907,6 +1100,11 @@ class Database:
     @staticmethod
     def _row_to_trip(row: sqlite3.Row) -> Trip:
         """Konvertiert eine Datenbankzeile in ein Trip-Objekt."""
+        keys = row.keys() if hasattr(row, "keys") else []
+        fuel_liters = float(row["fuel_liters"] or 0) if "fuel_liters" in keys else 0.0
+        fuel_full_tank = (
+            bool(row["fuel_full_tank"]) if "fuel_full_tank" in keys else False
+        )
         return Trip(
             id=row["id"],
             date=row["date"],
@@ -920,6 +1118,8 @@ class Database:
             km_private=row["km_private"],
             category=row["category"],
             round_trip=bool(row["round_trip"]),
+            fuel_liters=fuel_liters,
+            fuel_full_tank=fuel_full_tank,
         )
 
     # ------------------------------------------------------------------

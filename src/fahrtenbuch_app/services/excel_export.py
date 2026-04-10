@@ -8,7 +8,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from fahrtenbuch_app.models.trip import Trip
+from fahrtenbuch_app.models.trip import Trip, get_informational_categories
 
 
 # Layout orientiert am Vorlage-Fahrtenbuch
@@ -92,13 +92,33 @@ def _write_header_block(ws: Worksheet, title_line1: str, subtitle: str) -> None:
     ws.row_dimensions[5].height = 18
 
 
-def _write_trip_row(ws: Worksheet, row: int, trip: Trip) -> None:
-    """Schreibt eine einzelne Fahrt-Zeile."""
+def _write_trip_row(
+    ws: Worksheet,
+    row: int,
+    trip: Trip,
+    category_labels: dict[str, str] | None = None,
+) -> None:
+    """Schreibt eine einzelne Fahrt-Zeile.
+
+    Informationelle Trips (Anlieferung/Rueckgabe) werden als Label-Zeile ohne
+    km-Werte geschrieben — nur Datum und Kategorie-Anzeigename.
+    """
     date_obj = _iso_to_date(trip.date)
     if date_obj is not None:
         ws.cell(row=row, column=1, value=date_obj).number_format = "DD.MM.YYYY"
     else:
         ws.cell(row=row, column=1, value=trip.date)
+
+    if trip.category in get_informational_categories():
+        label = (category_labels or {}).get(trip.category, trip.category)
+        ws.cell(row=row, column=2, value="")
+        cell = ws.cell(row=row, column=3, value=label)
+        cell.font = Font(italic=True, bold=True)
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=9)
+        for col in range(1, 10):
+            ws.cell(row=row, column=col).border = _BORDER
+        return
 
     ws.cell(row=row, column=2, value=_format_time_range(trip.time_from, trip.time_to))
     ws.cell(row=row, column=3, value=trip.destination)
@@ -157,6 +177,7 @@ def export_trips(
     title_line1: str,
     subtitle: str,
     group_by_month: bool = False,
+    category_labels: dict[str, str] | None = None,
 ) -> None:
     """Schreibt eine Trip-Liste als Excel-Datei.
 
@@ -205,7 +226,7 @@ def export_trips(
                 month_private = 0
 
             current_month = trip_month
-            _write_trip_row(ws, current_row, trip)
+            _write_trip_row(ws, current_row, trip, category_labels)
             month_business += trip.km_business
             month_private += trip.km_private
             total_business += trip.km_business
@@ -224,7 +245,7 @@ def export_trips(
             current_row += 1
     else:
         for trip in trips:
-            _write_trip_row(ws, current_row, trip)
+            _write_trip_row(ws, current_row, trip, category_labels)
             total_business += trip.km_business
             total_private += trip.km_private
             current_row += 1

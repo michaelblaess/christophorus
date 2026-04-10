@@ -12,7 +12,11 @@ sowohl testbar als auch gefahrlos wiederholt aufrufbar.
 from dataclasses import dataclass, field
 from datetime import date
 
-from fahrtenbuch_app.models.trip import Trip, get_business_categories
+from fahrtenbuch_app.models.trip import (
+    Trip,
+    get_business_categories,
+    get_informational_categories,
+)
 from fahrtenbuch_app.services.database import Database
 
 __all__ = [
@@ -33,8 +37,12 @@ __all__ = [
     "CAT_CATEGORY_COLUMN_MISMATCH",
     "CAT_WORKTIME_RATIO",
     "CAT_BUSINESS_QUOTA_LOW",
+    "CAT_FUEL_OVER_TANK",
+    "CAT_FUEL_CONSUMPTION",
     "BUSINESS_QUOTA_MIN",
     "WORKTIME_RATIO_FACTOR",
+    "FUEL_TOLERANCE",
+    "FUEL_MIN_INTERVAL_KM",
     "check_chain_ascending",
     "check_distance_matches_columns",
     "check_vehicle_end_limit",
@@ -45,6 +53,8 @@ __all__ = [
     "check_blacklist_business",
     "check_worktime_trip_ratio",
     "check_business_quota",
+    "check_fuel_tank_capacity",
+    "check_fuel_consumption_range",
     "run_all_checks",
 ]
 
@@ -67,11 +77,20 @@ CAT_EMPTY_TRIP = "empty_trip"
 CAT_CATEGORY_COLUMN_MISMATCH = "category_column_mismatch"
 CAT_WORKTIME_RATIO = "worktime_ratio"
 CAT_BUSINESS_QUOTA_LOW = "business_quota_low"
+CAT_FUEL_OVER_TANK = "fuel_over_tank"
+CAT_FUEL_CONSUMPTION = "fuel_consumption"
 
 # Schwellen: 50% Business-Quote pro Jahr (Finanzamt-Regel), 1.3x der
 # Jahres-Durchschnittsrate bei Fahrten pro Arbeitsstunde.
 BUSINESS_QUOTA_MIN = 0.50
 WORKTIME_RATIO_FACTOR = 1.3
+
+# Verbrauchs-Toleranz bei Full-to-Full-Intervallen: +/- 15 % um den in den
+# Vehicle-Settings hinterlegten Durchschnittsverbrauch. Strecken kuerzer als
+# FUEL_MIN_INTERVAL_KM liefern durch Messrauschen (Tank nicht exakt voll,
+# Restluft) keine sinnvollen Quoten und werden ausgelassen.
+FUEL_TOLERANCE = 0.15
+FUEL_MIN_INTERVAL_KM = 50
 
 
 @dataclass
@@ -145,11 +164,18 @@ def _parse_trip_date(trip: Trip) -> date | None:
 
 
 def _load_all_trips_ordered(database: Database) -> list[Trip]:
-    """Laedt alle Trips aus der DB sortiert nach (date, id).
+    """Laedt alle Trips aus der DB sortiert nach (date, id), ohne
+    informationelle Trips (Anlieferung/Rueckgabe).
 
-    Stimmt mit der kanonischen Reihenfolge der km-Kette ueberein.
+    Informationelle Trips tragen keine km und sind fuer keinen Plausi-Check
+    relevant. Das Auslassen hier haelt alle Einzel-Checks frei von
+    Sonderfaellen.
     """
-    return database.get_all_trips_ordered()
+    info_cats = get_informational_categories()
+    return [
+        t for t in database.get_all_trips_ordered()
+        if t.category not in info_cats
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -625,6 +651,109 @@ def check_business_quota(database: Database) -> list[PlausibilityIssue]:
     return issues
 
 
+def check_fuel_tank_capacity(database: Database) -> list[PlausibilityIssue]:
+    """Prueft ob getankte Liter die Tankkapazitaet ueberschreiten.
+
+    Loest aus, wenn fuel_liters > tank_capacity_l. Ist tank_capacity_l nicht
+    gepflegt (0), wird der Check uebersprungen — sonst wuerde er bei neuen
+    DBs permanent feuern.
+    """
+    issues: list[PlausibilityIssue] = []
+    vehicle = database.get_vehicle()
+    if vehicle.tank_capacity_l <= 0:
+        return issues
+    trips = _load_all_trips_ordered(database)
+    for trip in trips:
+        if trip.category not in ("fuel", "fuel_private"):
+            continue
+        if trip.fuel_liters <= 0:
+            continue
+        if trip.fuel_liters <= vehicle.tank_capacity_l + 0.5:
+            # Kleine Toleranz fuer Messrauschen am Tankwart-Automat
+            continue
+        d = _parse_trip_date(trip)
+        issues.append(PlausibilityIssue(
+            severity=SEVERITY_ERROR,
+            category=CAT_FUEL_OVER_TANK,
+            message=(
+                f"Tankfuellung {trip.fuel_liters:.2f} l ueberschreitet "
+                f"Tankkapazitaet {vehicle.tank_capacity_l:.0f} l"
+            ),
+            trip_id=trip.id,
+            trip_date=trip.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
+    return issues
+
+
+def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
+    """Prueft den Verbrauch zwischen zwei Volltank-Events.
+
+    Idee: Zwischen zwei Full-Tank-Tankungen entspricht die nachgetankte Menge
+    genau dem Verbrauch der zurueckgelegten Strecke. Liegt der daraus errechnete
+    Verbrauch (l/100km) ausserhalb von vehicle.consumption_l_100km +/-
+    FUEL_TOLERANCE, ist entweder die km-Kette falsch, die Literangabe falsch
+    oder der Fahrstil sehr ungewoehnlich.
+
+    km-Basis: trip.km_end zum Tankzeitpunkt. Bei fuel_private ist der Trip
+    nicht-business, aber fuer die Verbrauchsrechnung egal — Liter zwischen
+    Volltanks zaehlen immer. Zur Strecke wird aber km_end des jeweiligen
+    Tank-Trips genommen, nicht die getankten Liter in die Verbrauchsrechnung
+    des eigenen Tankvorgangs eingehen (Liter tanken wir NACH dem Fahren).
+
+    Intervalle kuerzer als FUEL_MIN_INTERVAL_KM werden uebersprungen, weil
+    sie zu rauschanfaellig sind.
+    """
+    issues: list[PlausibilityIssue] = []
+    vehicle = database.get_vehicle()
+    if vehicle.consumption_l_100km <= 0:
+        return issues
+
+    trips = _load_all_trips_ordered(database)
+    full_tanks: list[Trip] = [
+        t for t in trips
+        if t.category in ("fuel", "fuel_private")
+        and t.fuel_full_tank
+        and t.fuel_liters > 0
+    ]
+    if len(full_tanks) < 2:
+        return issues
+
+    target = vehicle.consumption_l_100km
+    low = target * (1 - FUEL_TOLERANCE)
+    high = target * (1 + FUEL_TOLERANCE)
+
+    for prev, curr in zip(full_tanks, full_tanks[1:]):
+        distance_km = curr.km_end - prev.km_end
+        if distance_km < FUEL_MIN_INTERVAL_KM:
+            continue
+        if distance_km <= 0:
+            continue
+        # Liter, die zwischen zwei Volltankungen nachgefuellt wurden, ent-
+        # sprechen dem Verbrauch auf dem Intervall = curr.fuel_liters.
+        consumption = curr.fuel_liters * 100.0 / distance_km
+        if low <= consumption <= high:
+            continue
+        d = _parse_trip_date(curr)
+        severity = SEVERITY_WARNING if consumption < target * 2 else SEVERITY_ERROR
+        issues.append(PlausibilityIssue(
+            severity=severity,
+            category=CAT_FUEL_CONSUMPTION,
+            message=(
+                f"Verbrauch {consumption:.1f} l/100km zwischen Volltank "
+                f"{prev.date} und {curr.date} ({distance_km} km, "
+                f"{curr.fuel_liters:.2f} l) — erwartet "
+                f"{target:.1f} l/100km +/- {int(FUEL_TOLERANCE * 100)} %"
+            ),
+            trip_id=curr.id,
+            trip_date=curr.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
+    return issues
+
+
 _MONTH_NAMES_DE = [
     "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -656,6 +785,8 @@ def run_all_checks(
     report.issues.extend(check_blacklist_business(database))
     report.issues.extend(check_worktime_trip_ratio(database))
     report.issues.extend(check_business_quota(database))
+    report.issues.extend(check_fuel_tank_capacity(database))
+    report.issues.extend(check_fuel_consumption_range(database))
     return report
 
 
