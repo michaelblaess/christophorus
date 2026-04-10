@@ -93,13 +93,18 @@ def _write_header_block(ws: Worksheet, title_line1: str, subtitle: str) -> None:
 
 
 def _is_untimed_private(trip: Trip) -> bool:
-    """Privater Trip ohne Fahrzeit — typische Mehrtages-Aggregation.
+    """Privater Sammeleintrag ohne Zeit UND ohne Ziel — Mehrtages-Aggregat.
 
-    Wird im Export ohne Datum/Fahrzeit ausgegeben (Vorlage zeigt nur den
-    Reisezweck plus km), weil das exakte Startdatum bei solchen Fahrten
-    nicht sinnvoll ist.
+    Wird im Export ohne Datum ausgegeben (Vorlage zeigt nur den Reisezweck
+    plus km), weil das exakte Startdatum bei solchen Fahrten nicht sinnvoll
+    ist. Privatfahrten mit konkretem Ziel (z.B. Supermarkt) behalten ihr
+    Datum, auch wenn die Uhrzeit fehlt.
     """
-    return trip.category == "private" and not trip.time_from.strip()
+    return (
+        trip.category == "private"
+        and not trip.time_from.strip()
+        and not trip.destination.strip()
+    )
 
 
 def _write_trip_row(
