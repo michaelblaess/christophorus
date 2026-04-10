@@ -56,6 +56,7 @@ class FahrtenbuchApp(App):
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
+        Binding("r", "rebuild_km", "km reparieren"),
         Binding("l", "toggle_log", "Log"),
         Binding("plus", "log_bigger", "Log +", key_display="+"),
         Binding("minus", "log_smaller", "Log -", key_display="-"),
@@ -970,6 +971,66 @@ class FahrtenbuchApp(App):
         self._refresh_year_view()
         self._refresh_year_trip_table()
 
+    def action_rebuild_km(self) -> None:
+        """Baut die km-Kette nach (Datum, Uhrzeit, id) neu auf.
+
+        Die Distanzen (km_end - km_start) der einzelnen Trips bleiben erhalten;
+        es werden nur km_start und km_end so zugewiesen, dass die Kette in
+        chronologischer Reihenfolge (inkl. time_from innerhalb eines Tages)
+        lueckenlos ist. Vorher wird per ConfirmScreen abgesichert.
+        """
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            return
+
+        from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
+
+        message = (
+            "Die km-Kette wird nach Datum und Uhrzeit neu aufgebaut.\n\n"
+            "Die Distanz jeder einzelnen Fahrt bleibt unveraendert — es werden "
+            "nur km_Anfang und km_Ende so zugewiesen, dass die Kette lueckenlos "
+            "in zeitlicher Reihenfolge ist.\n\n"
+            "Diese Aktion kann nicht automatisch rueckgaengig gemacht werden."
+        )
+        self.push_screen(
+            ConfirmScreen(
+                title="km-Kette neu aufbauen?",
+                message=message,
+                confirm_label="Neu aufbauen",
+            ),
+            callback=lambda confirmed: self._finalize_rebuild_km(bool(confirmed)),
+        )
+
+    def _finalize_rebuild_km(self, confirmed: bool) -> None:
+        """Callback nach dem Rebuild-Bestaetigungsdialog."""
+        if not confirmed:
+            self.notify("km-Rebuild abgebrochen", severity="information")
+            return
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        db = self._fahrtenbuch.database
+        try:
+            changed, final_km = db.rebuild_all_km()
+        except ValueError as exc:
+            self._write_log(f"[red]Rebuild abgebrochen: {exc}[/red]")
+            self.notify(str(exc), severity="error")
+            return
+        except Exception as exc:
+            self._write_log(f"[red]Rebuild fehlgeschlagen: {exc}[/red]")
+            self.notify("Rebuild fehlgeschlagen", severity="error")
+            return
+        self._write_log(
+            f"[green]km-Kette neu aufgebaut: {changed} Fahrten, "
+            f"Endstand {final_km} km[/green]"
+        )
+        self.notify(
+            f"{changed} Fahrten neu verkettet (Endstand {final_km} km)",
+            severity="information",
+        )
+        self._refresh_data()
+        self._refresh_year_view()
+        self._refresh_year_trip_table()
+
     def action_show_info(self) -> None:
         """Zeigt den Info-Dialog."""
         from fahrtenbuch_app.screens.info_screen import InfoScreen
@@ -982,5 +1043,7 @@ class FahrtenbuchApp(App):
         if len(self.screen_stack) > 1:
             return None
         if action == "export_excel" and self._fahrtenbuch is None:
+            return None
+        if action == "rebuild_km" and self._fahrtenbuch is None:
             return None
         return True

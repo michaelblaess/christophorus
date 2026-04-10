@@ -51,7 +51,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
         align: center middle;
     }
     BlacklistDetailScreen > Vertical {
-        width: 64;
+        width: 80;
         height: auto;
         max-height: 32;
         border: double $accent;

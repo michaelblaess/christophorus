@@ -638,18 +638,25 @@ class Database:
     )
 
     def get_km_end_before(
-        self, date_iso: str, exclude_trip_id: int | None = None
+        self,
+        date_iso: str,
+        time_from: str = "",
+        exclude_trip_id: int | None = None,
     ) -> int:
         """Gibt km_end des chronologischen Vorgaengers zurueck.
 
+        Die Kette wird nach (date, time_from, id) sortiert. Ein Trip auf dem
+        gleichen Tag mit frueherer Uhrzeit ist Vorgaenger; Trips ohne Uhrzeit
+        (time_from == "") sortieren zuerst.
+
         Vorgaenger eines NEUEN Trips (exclude_trip_id is None): letzter Trip
-        mit date <= date_iso. Der neue Trip wird beim Insert die hoechste id
-        bekommen und damit innerhalb des Tages ans Ende sortiert — alle
-        bestehenden same-day-Trips sind also seine Vorgaenger.
+        mit (date, time_from) < (neues_date, neues_time_from). Same-day-Trips
+        mit gleicher time_from gelten als Vorgaenger (neuer Trip bekommt die
+        hoechste id und kommt zuletzt).
 
         Vorgaenger eines BESTEHENDEN Trips (exclude_trip_id gesetzt): letzter
-        Trip mit date < exclude_trip_date oder (date = exclude_trip_date und
-        id < exclude_trip_id). Sortierung in der Kette ist (date, id).
+        Trip mit (date, time_from, id) < (exclude_trip_date, exclude_time_from,
+        exclude_trip_id).
 
         Informationelle Trips (Anlieferung/Rueckgabe) werden uebersprungen,
         da sie keine km tragen.
@@ -662,23 +669,30 @@ class Database:
             row = conn.execute(
                 f"""
                 SELECT km_end FROM trips
-                WHERE ((date < ?) OR (date = ? AND id < ?))
+                WHERE (
+                    (date < ?)
+                    OR (date = ? AND time_from < ?)
+                    OR (date = ? AND time_from = ? AND id < ?)
+                )
                   AND {excl}
-                ORDER BY date DESC, id DESC
+                ORDER BY date DESC, time_from DESC, id DESC
                 LIMIT 1
                 """,
-                (date_iso, date_iso, exclude_trip_id),
+                (date_iso, date_iso, time_from, date_iso, time_from, exclude_trip_id),
             ).fetchone()
         else:
             row = conn.execute(
                 f"""
                 SELECT km_end FROM trips
-                WHERE date <= ?
+                WHERE (
+                    (date < ?)
+                    OR (date = ? AND time_from <= ?)
+                )
                   AND {excl}
-                ORDER BY date DESC, id DESC
+                ORDER BY date DESC, time_from DESC, id DESC
                 LIMIT 1
                 """,
-                (date_iso,),
+                (date_iso, date_iso, time_from),
             ).fetchone()
         if row is not None:
             return int(row["km_end"])
@@ -686,12 +700,21 @@ class Database:
         return vehicle.start_km
 
     def _shift_trips_after(
-        self, date_iso: str, delta: int, exclude_trip_id: int | None = None
+        self,
+        date_iso: str,
+        time_from: str,
+        delta: int,
+        exclude_trip_id: int | None = None,
     ) -> None:
-        """Verschiebt km_start/km_end aller Trips nach date_iso um delta.
+        """Verschiebt km_start/km_end aller Trips nach (date, time_from, id).
 
-        Bei gleichem Datum werden nur Trips mit id > exclude_trip_id verschoben,
-        so dass der gerade eingefuegte Trip nicht sich selbst anfasst.
+        Die Kette wird nach (date, time_from, id) sortiert. Verschoben werden
+        alle Trips, die nach dem Referenzpunkt kommen — also echte Nachfolger
+        in der Chain-Ordnung.
+
+        Bei gleichem Datum+Uhrzeit werden nur Trips mit id > exclude_trip_id
+        verschoben, so dass der gerade eingefuegte Trip nicht sich selbst
+        anfasst.
         """
         if delta == 0:
             return
@@ -702,20 +725,32 @@ class Database:
                 f"""
                 UPDATE trips
                 SET km_start = km_start + ?, km_end = km_end + ?
-                WHERE ((date > ?) OR (date = ? AND id > ?))
+                WHERE (
+                    (date > ?)
+                    OR (date = ? AND time_from > ?)
+                    OR (date = ? AND time_from = ? AND id > ?)
+                )
                   AND {excl}
                 """,
-                (delta, delta, date_iso, date_iso, exclude_trip_id),
+                (
+                    delta, delta,
+                    date_iso,
+                    date_iso, time_from,
+                    date_iso, time_from, exclude_trip_id,
+                ),
             )
         else:
             conn.execute(
                 f"""
                 UPDATE trips
                 SET km_start = km_start + ?, km_end = km_end + ?
-                WHERE date > ?
+                WHERE (
+                    (date > ?)
+                    OR (date = ? AND time_from > ?)
+                )
                   AND {excl}
                 """,
-                (delta, delta, date_iso),
+                (delta, delta, date_iso, date_iso, time_from),
             )
 
     def _is_informational_category(self, category: str) -> bool:
@@ -745,7 +780,7 @@ class Database:
                 km_business = 0
                 km_private = 0
             else:
-                predecessor_km = self.get_km_end_before(trip.date)
+                predecessor_km = self.get_km_end_before(trip.date, trip.time_from)
                 new_km_start = predecessor_km
                 new_km_end = new_km_start + distance
                 km_business = trip.km_business
@@ -775,7 +810,9 @@ class Database:
             new_id = cursor.lastrowid or 0
             # Alle Nachfolger um die Distanz dieser Fahrt nach oben verschieben
             # (entfaellt bei informationellen Trips — distance == 0)
-            self._shift_trips_after(trip.date, distance, exclude_trip_id=new_id)
+            self._shift_trips_after(
+                trip.date, trip.time_from, distance, exclude_trip_id=new_id
+            )
             conn.commit()
             return new_id
         except Exception:
@@ -821,11 +858,18 @@ class Database:
         new_fuel_liters = float(trip.fuel_liters) if is_fuel_cat else 0.0
         new_fuel_full_tank = 1 if (is_fuel_cat and trip.fuel_full_tank) else 0
 
+        # Eine reine Distanz-Aenderung (Datum + Uhrzeit + Typ gleich) darf den
+        # bestehenden km_start behalten — die Chain-Position bleibt identisch.
+        # Jede andere Aenderung (Datum, Uhrzeit, Typ) kann die Chain-Position
+        # verschieben und muss ueber den "full re-place"-Pfad laufen.
+        position_unchanged = (
+            trip.date == old.date
+            and trip.time_from == old.time_from
+            and old_is_info == new_is_info
+        )
         try:
             conn.execute("BEGIN")
-            if trip.date == old.date and old_is_info == new_is_info:
-                # Datum und Typ unveraendert: km_start bleibt wie gehabt,
-                # km_end nach neuer Distanz, Nachfolger um delta shiften.
+            if position_unchanged:
                 delta = new_distance - old_distance
                 if new_is_info:
                     upd_km_start = 0
@@ -856,19 +900,22 @@ class Database:
                         trip_id,
                     ),
                 )
-                self._shift_trips_after(trip.date, delta, exclude_trip_id=trip_id)
-            else:
-                # Datum oder Typ geaendert: zuerst alte Nachfolger rueckabwickeln
-                # (alte Distanz), dann neue Position + neue Kette.
                 self._shift_trips_after(
-                    old.date, -old_distance, exclude_trip_id=trip_id
+                    trip.date, trip.time_from, delta, exclude_trip_id=trip_id
+                )
+            else:
+                # Position in der Kette kann sich aendern: alte Nachfolger
+                # zurueckrollen, Trip an neuer Stelle einsetzen, neue Nachfolger
+                # verschieben.
+                self._shift_trips_after(
+                    old.date, old.time_from, -old_distance, exclude_trip_id=trip_id
                 )
                 if new_is_info:
                     new_km_start = 0
                     new_km_end = 0
                 else:
                     predecessor_km = self.get_km_end_before(
-                        trip.date, exclude_trip_id=trip_id
+                        trip.date, trip.time_from, exclude_trip_id=trip_id
                     )
                     new_km_start = predecessor_km
                     new_km_end = new_km_start + new_distance
@@ -896,7 +943,7 @@ class Database:
                     ),
                 )
                 self._shift_trips_after(
-                    trip.date, new_distance, exclude_trip_id=trip_id
+                    trip.date, trip.time_from, new_distance, exclude_trip_id=trip_id
                 )
             conn.commit()
         except Exception:
@@ -916,7 +963,9 @@ class Database:
         try:
             conn.execute("BEGIN")
             conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
-            self._shift_trips_after(old.date, -old_distance, exclude_trip_id=trip_id)
+            self._shift_trips_after(
+                old.date, old.time_from, -old_distance, exclude_trip_id=trip_id
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -935,7 +984,8 @@ class Database:
         cursor_state = vehicle.start_km
         info_cats = self.get_informational_category_names()
         rows = conn.execute(
-            "SELECT id, km_start, km_end, category FROM trips ORDER BY date, id"
+            "SELECT id, km_start, km_end, category FROM trips "
+            "ORDER BY date, time_from, id"
         ).fetchall()
 
         changes: list[tuple[int, int, int]] = []  # (id, new_start, new_end)
@@ -1054,14 +1104,15 @@ class Database:
         return MonthData(year=year, month=0, trips=trips)
 
     def get_all_trips_ordered(self) -> list[Trip]:
-        """Gibt alle Trips der Datenbank zurueck, sortiert nach (date, id).
+        """Gibt alle Trips der Datenbank zurueck, sortiert nach
+        (date, time_from, id).
 
         Diese Reihenfolge entspricht der kanonischen km-Kette und wird von
         Plausibilitaets-Checks und Tests verwendet.
         """
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT * FROM trips ORDER BY date, id"
+            "SELECT * FROM trips ORDER BY date, time_from, id"
         ).fetchall()
         return [self._row_to_trip(row) for row in rows]
 

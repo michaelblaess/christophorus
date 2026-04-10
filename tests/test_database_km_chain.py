@@ -296,6 +296,129 @@ class TestGetKmEndBefore:
 
 
 # ---------------------------------------------------------------------------
+# Time-basierte Kettenordnung
+# ---------------------------------------------------------------------------
+
+
+def _add_trip_at(
+    database: Database,
+    date: str,
+    time_from: str,
+    distance: int,
+) -> int:
+    """Helper: Trip mit konkreter Uhrzeit anlegen."""
+    t = make_trip(date, distance)
+    t.time_from = time_from
+    t.time_to = time_from  # Inhalt irrelevant fuer Kette, nur time_from zaehlt
+    return database.add_trip(t)
+
+
+class TestTimeFromOrdering:
+    """Same-day-Trips werden anhand time_from in die Kette eingefuegt."""
+
+    def test_earlier_time_inserted_later_places_first(
+        self, database: Database
+    ) -> None:
+        """Zuerst 17:00 eingefuegt, dann 16:00 — 16:00 muss in der Kette zuerst kommen."""
+        id_late = _add_trip_at(database, "2024-03-01", "17:00", 36)
+        id_early = _add_trip_at(database, "2024-03-01", "16:00", 41)
+        assert_chain_intact(database, 10000)
+        early = database.get_trip_by_id(id_early)
+        late = database.get_trip_by_id(id_late)
+        assert early is not None and late is not None
+        assert early.km_start == 10000
+        assert early.km_end == 10041
+        assert late.km_start == 10041
+        assert late.km_end == 10077
+
+    def test_three_trips_same_day_ordered_by_time(
+        self, database: Database
+    ) -> None:
+        _add_trip_at(database, "2024-03-01", "12:00", 20)
+        _add_trip_at(database, "2024-03-01", "08:00", 10)
+        _add_trip_at(database, "2024-03-01", "18:00", 30)
+        assert_chain_intact(database, 10000)
+        trips = database.get_all_trips_ordered()
+        assert [t.time_from for t in trips] == ["08:00", "12:00", "18:00"]
+        assert [t.km_start for t in trips] == [10000, 10010, 10030]
+        assert [t.km_end for t in trips] == [10010, 10030, 10060]
+
+    def test_update_time_from_repositions_chain(
+        self, database: Database
+    ) -> None:
+        """Uhrzeit eines Trips aendern → Kette muss neu ausgerichtet werden."""
+        id_a = _add_trip_at(database, "2024-03-01", "09:00", 100)
+        id_b = _add_trip_at(database, "2024-03-01", "15:00", 50)
+        # A startet bei 10000, B bei 10100 — alles normal
+        b_before = database.get_trip_by_id(id_b)
+        assert b_before is not None
+        assert b_before.km_start == 10100
+
+        # Uhrzeit von A von 09:00 auf 18:00 schieben — A muss NACH B landen
+        a = database.get_trip_by_id(id_a)
+        assert a is not None
+        a.time_from = "18:00"
+        database.update_trip(id_a, a)
+        assert_chain_intact(database, 10000)
+
+        b_after = database.get_trip_by_id(id_b)
+        a_after = database.get_trip_by_id(id_a)
+        assert b_after is not None and a_after is not None
+        assert b_after.km_start == 10000
+        assert b_after.km_end == 10050
+        assert a_after.km_start == 10050
+        assert a_after.km_end == 10150
+
+    def test_delete_by_time_shifts_correct_successors(
+        self, database: Database
+    ) -> None:
+        _add_trip_at(database, "2024-03-01", "08:00", 10)
+        id_mid = _add_trip_at(database, "2024-03-01", "12:00", 20)
+        _add_trip_at(database, "2024-03-01", "18:00", 30)
+        database.delete_trip(id_mid)
+        assert_chain_intact(database, 10000)
+        trips = database.get_all_trips_ordered()
+        assert [t.time_from for t in trips] == ["08:00", "18:00"]
+        assert trips[-1].km_end == 10040
+
+    def test_rebuild_heals_misordered_same_day_chain(
+        self, database: Database
+    ) -> None:
+        """Simuliert die Dezember-29-Situation: Trips same-day in falscher
+        Zeit-Reihenfolge eingefuegt → rebuild_all_km repariert die Kette.
+        """
+        # Insert-Reihenfolge: 17:00 zuerst, 16:00 danach
+        id_late = _add_trip_at(database, "2024-03-01", "17:00", 36)
+        id_early = _add_trip_at(database, "2024-03-01", "16:00", 41)
+        # Mit der neuen Logik stimmt die Kette bereits — um die alte Bug-
+        # Situation nachzustellen, setzen wir die km_start/km_end bewusst
+        # im alten (date, id)-Stil: 16:00-Trip bekommt den hoeheren km_start.
+        conn = database._get_conn()  # type: ignore[reportPrivateUsage]
+        conn.execute(
+            "UPDATE trips SET km_start = ?, km_end = ? WHERE id = ?",
+            (10000, 10036, id_late),
+        )
+        conn.execute(
+            "UPDATE trips SET km_start = ?, km_end = ? WHERE id = ?",
+            (10036, 10077, id_early),
+        )
+        conn.commit()
+
+        # rebuild stellt die zeitliche Reihenfolge wieder her
+        changed, final_km = database.rebuild_all_km()
+        assert changed == 2
+        assert final_km == 10077
+        assert_chain_intact(database, 10000)
+        early = database.get_trip_by_id(id_early)
+        late = database.get_trip_by_id(id_late)
+        assert early is not None and late is not None
+        assert early.km_start == 10000
+        assert early.km_end == 10041
+        assert late.km_start == 10041
+        assert late.km_end == 10077
+
+
+# ---------------------------------------------------------------------------
 # rebuild_all_km
 # ---------------------------------------------------------------------------
 

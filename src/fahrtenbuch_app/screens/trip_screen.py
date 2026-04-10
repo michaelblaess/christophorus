@@ -185,6 +185,10 @@ class TripScreen(ModalScreen[Trip | None]):
         # Zuletzt aktive Kategorie, damit wir beim Wechsel erkennen koennen,
         # ob der Reisezweck der alten Kategorie-Anzeige entsprach.
         self._current_category: str = ""
+        # Re-Entry-Schutz fuer die km-Auto-Berechnung: wenn wir selbst ein
+        # Input-Feld programmatisch aendern, soll der Handler nicht noch mal
+        # zurueckspringen.
+        self._km_updating: bool = False
 
     def compose(self) -> ComposeResult:
         """Erstellt das Formular."""
@@ -411,11 +415,15 @@ class TripScreen(ModalScreen[Trip | None]):
             pass
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Berechnet km_start neu, wenn sich das Datum aendert.
-
-        Die Distanz (km_end - km_start) bleibt dabei erhalten, damit der
-        gespeicherte Wert bei reiner Datumsaenderung nicht explodiert.
+        """Reagiert auf Feldaenderungen:
+        - Datum aendert km_start (Vorgaenger), Distanz bleibt erhalten.
+        - km_business / km_private addieren auf km_end = km_start + Summe.
         """
+        if self._km_updating:
+            return
+        if event.input.id in ("input-km-business", "input-km-private"):
+            self._update_km_end_from_columns()
+            return
         if event.input.id != "input-date":
             return
         iso = _de_to_iso(event.value.strip())
@@ -506,6 +514,38 @@ class TripScreen(ModalScreen[Trip | None]):
         """Prueft ob Hin- und Rueckfahrt ausgewaehlt ist."""
         rt_select = self.query_one("#select-round-trip", Select)
         return str(rt_select.value) == "roundtrip"
+
+    def _update_km_end_from_columns(self) -> None:
+        """Setzt km_end = km_start + km_business + km_private.
+
+        Wird aufgerufen, wenn der User km_business oder km_private direkt
+        eingibt, damit der Endkilometerstand automatisch mitwaechst und die
+        Cascade beim Speichern die richtige Distanz sieht.
+        """
+        try:
+            km_start_input = self.query_one("#input-km-start", Input)
+            km_end_input = self.query_one("#input-km-end", Input)
+            biz_input = self.query_one("#input-km-business", Input)
+            priv_input = self.query_one("#input-km-private", Input)
+        except Exception:
+            return
+        if km_end_input.disabled:
+            return
+        km_start = parse_km(km_start_input.value)
+        km_business = parse_km(biz_input.value)
+        km_private = parse_km(priv_input.value)
+        total = km_business + km_private
+        if total <= 0:
+            return
+        new_end = km_start + total
+        new_value = format_km(new_end)
+        if km_end_input.value == new_value:
+            return
+        self._km_updating = True
+        try:
+            km_end_input.value = new_value
+        finally:
+            self._km_updating = False
 
     def _recalculate_km(self) -> None:
         """Berechnet km-Werte basierend auf Strecke und Adress-Entfernung."""

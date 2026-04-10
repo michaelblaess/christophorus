@@ -92,24 +92,41 @@ def _write_header_block(ws: Worksheet, title_line1: str, subtitle: str) -> None:
     ws.row_dimensions[5].height = 18
 
 
+def _is_untimed_private(trip: Trip) -> bool:
+    """Privater Trip ohne Fahrzeit — typische Mehrtages-Aggregation.
+
+    Wird im Export ohne Datum/Fahrzeit ausgegeben (Vorlage zeigt nur den
+    Reisezweck plus km), weil das exakte Startdatum bei solchen Fahrten
+    nicht sinnvoll ist.
+    """
+    return trip.category == "private" and not trip.time_from.strip()
+
+
 def _write_trip_row(
     ws: Worksheet,
     row: int,
     trip: Trip,
     category_labels: dict[str, str] | None = None,
+    *,
+    prev_km_row: int | None = None,
 ) -> None:
     """Schreibt eine einzelne Fahrt-Zeile.
 
     Informationelle Trips (Anlieferung/Rueckgabe) werden als Label-Zeile ohne
     km-Werte geschrieben — nur Datum und Kategorie-Anzeigename.
-    """
-    date_obj = _iso_to_date(trip.date)
-    if date_obj is not None:
-        ws.cell(row=row, column=1, value=date_obj).number_format = "DD.MM.YYYY"
-    else:
-        ws.cell(row=row, column=1, value=trip.date)
 
+    km_start (Spalte E) referenziert per Formel das km_end der letzten realen
+    Vorgaenger-Zeile (prev_km_row), sodass der Steuerberater beim Nacheditieren
+    einzelner km-Werte die Kette live neu berechnen kann. Die erste reale Zeile
+    bekommt einen hart geschriebenen km_start aus dem Trip. km_end (Spalte F)
+    ist immer eine Formel = E + G + I.
+    """
     if trip.category in get_informational_categories():
+        date_obj = _iso_to_date(trip.date)
+        if date_obj is not None:
+            ws.cell(row=row, column=1, value=date_obj).number_format = "DD.MM.YYYY"
+        else:
+            ws.cell(row=row, column=1, value=trip.date)
         label = (category_labels or {}).get(trip.category, trip.category)
         ws.cell(row=row, column=2, value="")
         cell = ws.cell(row=row, column=3, value=label)
@@ -120,19 +137,33 @@ def _write_trip_row(
             ws.cell(row=row, column=col).border = _BORDER
         return
 
+    # Datum: bei Privatfahrten ohne Fahrzeit leer lassen (Mehrtages-Aggregat)
+    if not _is_untimed_private(trip):
+        date_obj = _iso_to_date(trip.date)
+        if date_obj is not None:
+            ws.cell(row=row, column=1, value=date_obj).number_format = "DD.MM.YYYY"
+        else:
+            ws.cell(row=row, column=1, value=trip.date)
+
     ws.cell(row=row, column=2, value=_format_time_range(trip.time_from, trip.time_to))
     ws.cell(row=row, column=3, value=trip.destination)
     ws.cell(row=row, column=4, value=trip.purpose)
 
-    if trip.km_start:
-        ws.cell(row=row, column=5, value=trip.km_start)
-    if trip.km_end:
-        ws.cell(row=row, column=6, value=trip.km_end)
+    # km_start: erste reale Zeile hart, sonst Formel auf Vorgaenger-Zeile
+    if prev_km_row is None:
+        if trip.km_start:
+            ws.cell(row=row, column=5, value=trip.km_start)
+    else:
+        ws.cell(row=row, column=5, value=f"=F{prev_km_row}")
+
     if trip.km_business:
         ws.cell(row=row, column=7, value=trip.km_business)
     # Spalte H (Wohng/Arbeit) bleibt leer — nicht im aktuellen Modell
     if trip.km_private:
         ws.cell(row=row, column=9, value=trip.km_private)
+
+    # km_end als Formel = km_start + geschaeftl. + privat
+    ws.cell(row=row, column=6, value=f"=E{row}+G{row}+I{row}")
 
     # Zellen-Styling: Borders + Wrap fuer Ziel/Zweck
     for col in range(1, 10):
@@ -201,6 +232,8 @@ def export_trips(
     current_row = 6
     total_business = 0
     total_private = 0
+    prev_km_row: int | None = None
+    informational = get_informational_categories()
 
     if group_by_month and trips:
         # Nach Monat gruppieren und Zwischensummen einfuegen
@@ -226,7 +259,9 @@ def export_trips(
                 month_private = 0
 
             current_month = trip_month
-            _write_trip_row(ws, current_row, trip, category_labels)
+            _write_trip_row(ws, current_row, trip, category_labels, prev_km_row=prev_km_row)
+            if trip.category not in informational:
+                prev_km_row = current_row
             month_business += trip.km_business
             month_private += trip.km_private
             total_business += trip.km_business
@@ -245,7 +280,9 @@ def export_trips(
             current_row += 1
     else:
         for trip in trips:
-            _write_trip_row(ws, current_row, trip, category_labels)
+            _write_trip_row(ws, current_row, trip, category_labels, prev_km_row=prev_km_row)
+            if trip.category not in informational:
+                prev_km_row = current_row
             total_business += trip.km_business
             total_private += trip.km_private
             current_row += 1
