@@ -18,6 +18,8 @@ _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 _STYLE_BUSINESS = "green"
 _STYLE_ERROR = "bold red"
 _STYLE_MUTED = "dim"
+_STYLE_HOLIDAY = "yellow"
+_STYLE_HOLIDAY_BOLD = "bold yellow"
 
 
 class DayTile(Widget):
@@ -36,7 +38,7 @@ class DayTile(Widget):
     }
     DayTile.holiday {
         background: $surface-darken-2;
-        border: solid $warning;
+        border: solid yellow;
     }
     DayTile.business {
         border: solid green;
@@ -59,7 +61,6 @@ class DayTile(Widget):
         trip_day: TripDay | None = None,
         is_outside: bool = False,
         holiday_name: str = "",
-        category_colors: dict[str, str] | None = None,
         blacklist_reason: str = "",
         **kwargs: object,
     ) -> None:
@@ -68,7 +69,6 @@ class DayTile(Widget):
         self._trip_day = trip_day
         self._is_outside = is_outside
         self._holiday_name = holiday_name
-        self._type_styles = category_colors if category_colors else _DEFAULT_TYPE_STYLES
         self._blacklist_reason = blacklist_reason
 
     def on_mount(self) -> None:
@@ -126,8 +126,8 @@ class DayTile(Widget):
             return text
 
         if self._holiday_name:
-            text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
-            text.append(f"\n{self._holiday_name[:18]}", style="dim italic")
+            text.append(f"{day_num} {weekday}", style=_STYLE_HOLIDAY_BOLD)
+            text.append(f"\n{self._holiday_name[:18]}", style=_STYLE_HOLIDAY)
             if self._trip_day and self._trip_day.trips:
                 text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
             return text
@@ -180,7 +180,6 @@ class CalendarView(Vertical):
         super().__init__(**kwargs)
         self._last_month_data: MonthData | None = None
         self._last_holidays: dict[date, str] = {}
-        self._last_category_colors: dict[str, str] | None = None
         self._blacklist_map: dict[date, str] = {}
         self._show_blacklist: bool = False
 
@@ -196,12 +195,12 @@ class CalendarView(Vertical):
         Args:
             month_data: Monatsdaten mit Fahrten.
             holidays: Feiertage im Monat.
-            category_colors: Mapping von Kategorie-Name zu Farbe aus der DB.
+            category_colors: Unbenutzt (Legacy, bleibt fuer API-Kompatibilitaet).
             blacklist_map: Gesperrte Tage (date -> Grund). Aktualisiert internen Stand.
         """
+        del category_colors
         self._last_month_data = month_data
         self._last_holidays = holidays if holidays is not None else {}
-        self._last_category_colors = category_colors
         if blacklist_map is not None:
             self._blacklist_map = blacklist_map
         self._build_tiles()
@@ -226,7 +225,6 @@ class CalendarView(Vertical):
 
         month_data = self._last_month_data
         holidays = self._last_holidays
-        category_colors = self._last_category_colors
         active_blacklist = self._blacklist_map if self._show_blacklist else {}
 
         trip_days = {td.day: td for td in month_data.trip_days}
@@ -248,7 +246,6 @@ class CalendarView(Vertical):
                     trip_day=td,
                     is_outside=is_outside,
                     holiday_name=holiday,
-                    category_colors=category_colors,
                     blacklist_reason=bl_reason,
                 )
                 row.mount(tile)

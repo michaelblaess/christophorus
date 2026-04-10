@@ -13,7 +13,9 @@ from fahrtenbuch_app.models.trip import Trip
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
 from fahrtenbuch_app.services.plausibility import (
+    BUSINESS_QUOTA_MIN,
     CAT_BLACKLIST_BUSINESS,
+    CAT_BUSINESS_QUOTA_LOW,
     CAT_CHAIN_BACKWARD,
     CAT_CHAIN_BREAK,
     CAT_DISTANCE_MISMATCH,
@@ -22,15 +24,19 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_NEGATIVE_DISTANCE,
     CAT_OVER_LIMIT,
     CAT_WEEKEND_BUSINESS,
+    CAT_WORKTIME_RATIO,
     SEVERITY_ERROR,
     SEVERITY_WARNING,
+    WORKTIME_RATIO_FACTOR,
     check_blacklist_business,
+    check_business_quota,
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,
     check_holiday_business,
     check_vehicle_end_limit,
     check_weekend_business,
+    check_worktime_trip_ratio,
     run_all_checks,
 )
 
@@ -387,3 +393,152 @@ class TestRunAllChecks:
         groups = report.by_month()
         assert (2024, 3) in groups
         assert (2024, 4) in groups
+
+
+# ---------------------------------------------------------------------------
+# check_worktime_trip_ratio
+# ---------------------------------------------------------------------------
+
+
+def _add_business_trips_in_month(
+    database: Database, year: int, month: int, count: int
+) -> None:
+    """Legt count Business-Fahrten im angegebenen Monat an (Wochentage)."""
+    added = 0
+    day = 1
+    while added < count and day <= 28:
+        d = date(year, month, day)
+        if d.weekday() < 5:
+            database.add_trip(make_trip(d.strftime("%Y-%m-%d"), 30))
+            added += 1
+        day += 1
+
+
+class TestCheckWorktimeTripRatio:
+    def test_no_worktimes_no_issues(self, database: Database) -> None:
+        """Ohne gepflegte Arbeitszeit kein Vergleich moeglich."""
+        _add_business_trips_in_month(database, 2024, 9, 10)
+        assert check_worktime_trip_ratio(database) == []
+
+    def test_single_month_worktime_no_baseline(
+        self, database: Database
+    ) -> None:
+        """Ein einzelner Monat mit Arbeitszeit reicht nicht als Baseline."""
+        _add_business_trips_in_month(database, 2024, 9, 20)
+        database.save_worktime(2024, 9, 168.0)
+        assert check_worktime_trip_ratio(database) == []
+
+    def test_proportional_trips_no_issue(self, database: Database) -> None:
+        """Wenn Fahrten proportional zu Arbeitszeit sind, keine Warnung."""
+        # September: 160h, 20 Fahrten -> 0.125/h
+        # Oktober:   80h,  10 Fahrten -> 0.125/h (gleiche Rate)
+        _add_business_trips_in_month(database, 2024, 9, 20)
+        _add_business_trips_in_month(database, 2024, 10, 10)
+        database.save_worktime(2024, 9, 160.0)
+        database.save_worktime(2024, 10, 80.0)
+        issues = check_worktime_trip_ratio(database)
+        assert [i for i in issues if i.category == CAT_WORKTIME_RATIO] == []
+
+    def test_vacation_month_flagged(self, database: Database) -> None:
+        """Urlaubsmonat mit wenig Arbeitszeit aber vielen Fahrten warnt.
+
+        User-Szenario: August 98.5h statt September 168.25h, gleich viele
+        Fahrten — das ist der klassische Urlaub-mit-Fehlbuchung.
+        """
+        _add_business_trips_in_month(database, 2024, 8, 18)
+        _add_business_trips_in_month(database, 2024, 9, 18)
+        database.save_worktime(2024, 8, 98.5)
+        database.save_worktime(2024, 9, 168.25)
+        issues = check_worktime_trip_ratio(database)
+        worktime = [i for i in issues if i.category == CAT_WORKTIME_RATIO]
+        # Nur August ueberschreitet die Rate — September liegt unter
+        assert len(worktime) == 1
+        assert worktime[0].severity == SEVERITY_WARNING
+        assert worktime[0].year == 2024
+        assert worktime[0].month == 8
+
+    def test_threshold_factor(self, database: Database) -> None:
+        """Grenzfall: genau am Faktor loest keine Warnung aus."""
+        # Drei Monate mit gleichen 100h. Monat 1 hat mehr Fahrten.
+        _add_business_trips_in_month(database, 2024, 1, 15)
+        _add_business_trips_in_month(database, 2024, 2, 10)
+        _add_business_trips_in_month(database, 2024, 3, 10)
+        database.save_worktime(2024, 1, 100.0)
+        database.save_worktime(2024, 2, 100.0)
+        database.save_worktime(2024, 3, 100.0)
+        # Durchschnitt = 35/300 = 0.1167/h, expected Jan = 11.67
+        # Jan actual = 15, ratio zu expected = 15/11.67 = 1.286 < 1.3
+        assert WORKTIME_RATIO_FACTOR == 1.3
+        issues = check_worktime_trip_ratio(database)
+        worktime = [i for i in issues if i.category == CAT_WORKTIME_RATIO]
+        assert worktime == []
+
+    def test_skip_months_without_worktime(self, database: Database) -> None:
+        """Monate ohne Arbeitszeit werden komplett uebersprungen."""
+        _add_business_trips_in_month(database, 2024, 1, 5)
+        _add_business_trips_in_month(database, 2024, 2, 5)
+        _add_business_trips_in_month(database, 2024, 3, 50)  # kein worktime
+        database.save_worktime(2024, 1, 160.0)
+        database.save_worktime(2024, 2, 160.0)
+        issues = check_worktime_trip_ratio(database)
+        # Maerz darf keinen Befund erzeugen, da keine Arbeitszeit gepflegt
+        march = [i for i in issues if i.month == 3]
+        assert march == []
+
+
+# ---------------------------------------------------------------------------
+# check_business_quota
+# ---------------------------------------------------------------------------
+
+
+class TestCheckBusinessQuota:
+    def test_empty_db_no_issues(self, database: Database) -> None:
+        assert check_business_quota(database) == []
+
+    def test_all_business_no_issue(self, database: Database) -> None:
+        database.add_trip(make_trip("2024-03-01", 100))
+        database.add_trip(make_trip("2024-04-01", 200))
+        assert check_business_quota(database) == []
+
+    def test_exactly_fifty_percent_no_issue(self, database: Database) -> None:
+        """50% ist der Grenzwert — genau am Limit kein Befund."""
+        database.add_trip(make_trip("2024-03-01", 100, business=True))
+        database.add_trip(make_trip("2024-04-01", 100, business=False))
+        assert BUSINESS_QUOTA_MIN == 0.50
+        issues = check_business_quota(database)
+        assert [i for i in issues if i.category == CAT_BUSINESS_QUOTA_LOW] == []
+
+    def test_below_fifty_percent_warns(self, database: Database) -> None:
+        """Weniger als 50% Business loest Warnung aus."""
+        database.add_trip(make_trip("2024-03-01", 40, business=True))
+        database.add_trip(make_trip("2024-04-01", 60, business=False))
+        issues = check_business_quota(database)
+        quota = [i for i in issues if i.category == CAT_BUSINESS_QUOTA_LOW]
+        assert len(quota) == 1
+        assert quota[0].severity == SEVERITY_WARNING
+        assert quota[0].year == 2024
+        assert "40.0 %" in quota[0].message
+
+    def test_per_year_independent(self, database: Database) -> None:
+        """Jahre werden unabhaengig beurteilt."""
+        # 2024 ok (80% business)
+        database.add_trip(make_trip("2024-03-01", 80, business=True))
+        database.add_trip(make_trip("2024-04-01", 20, business=False))
+        # 2025 nicht ok (30% business) — muss warnen
+        database.add_trip(make_trip("2025-03-01", 30, business=True))
+        database.add_trip(make_trip("2025-04-01", 70, business=False))
+        issues = check_business_quota(database)
+        quota = [i for i in issues if i.category == CAT_BUSINESS_QUOTA_LOW]
+        years = [i.year for i in quota]
+        assert years == [2025]
+
+    def test_run_all_checks_includes_new_checks(
+        self, database: Database
+    ) -> None:
+        """Beide neuen Checks laufen ueber run_all_checks."""
+        # Setup fuer beide Checks: niedrige Quote + Urlaubsmonat
+        database.add_trip(make_trip("2024-03-01", 40, business=True))
+        database.add_trip(make_trip("2024-04-01", 60, business=False))
+        report = run_all_checks(database)
+        cats = {i.category for i in report.issues}
+        assert CAT_BUSINESS_QUOTA_LOW in cats

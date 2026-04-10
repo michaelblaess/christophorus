@@ -31,6 +31,10 @@ __all__ = [
     "CAT_NEGATIVE_DISTANCE",
     "CAT_EMPTY_TRIP",
     "CAT_CATEGORY_COLUMN_MISMATCH",
+    "CAT_WORKTIME_RATIO",
+    "CAT_BUSINESS_QUOTA_LOW",
+    "BUSINESS_QUOTA_MIN",
+    "WORKTIME_RATIO_FACTOR",
     "check_chain_ascending",
     "check_distance_matches_columns",
     "check_vehicle_end_limit",
@@ -39,6 +43,8 @@ __all__ = [
     "check_weekend_business",
     "check_holiday_business",
     "check_blacklist_business",
+    "check_worktime_trip_ratio",
+    "check_business_quota",
     "run_all_checks",
 ]
 
@@ -59,6 +65,13 @@ CAT_BLACKLIST_BUSINESS = "blacklist_business"
 CAT_NEGATIVE_DISTANCE = "negative_distance"
 CAT_EMPTY_TRIP = "empty_trip"
 CAT_CATEGORY_COLUMN_MISMATCH = "category_column_mismatch"
+CAT_WORKTIME_RATIO = "worktime_ratio"
+CAT_BUSINESS_QUOTA_LOW = "business_quota_low"
+
+# Schwellen: 50% Business-Quote pro Jahr (Finanzamt-Regel), 1.3x der
+# Jahres-Durchschnittsrate bei Fahrten pro Arbeitsstunde.
+BUSINESS_QUOTA_MIN = 0.50
+WORKTIME_RATIO_FACTOR = 1.3
 
 
 @dataclass
@@ -487,6 +500,137 @@ def check_blacklist_business(database: Database) -> list[PlausibilityIssue]:
     return issues
 
 
+def check_worktime_trip_ratio(database: Database) -> list[PlausibilityIssue]:
+    """Prueft ob Geschaeftsfahrten zur Arbeitszeit passen.
+
+    Fuer jedes Jahr mit gepflegten Arbeitszeiten berechnet der Check die
+    durchschnittliche Anzahl Geschaeftsfahrten pro Stunde. Monate, die
+    deutlich ueber dieser Rate liegen (Faktor WORKTIME_RATIO_FACTOR),
+    werden als Warnung gemeldet — typisches Szenario: Urlaubsmonat mit
+    wenig Arbeitszeit, aber genauso viele Fahrten wie ein voller Monat.
+
+    Monate ohne gepflegte Arbeitszeit werden uebersprungen (kein Vergleich
+    moeglich). Jahre mit weniger als zwei gepflegten Monaten liefern keine
+    sinnvolle Baseline und werden ebenfalls ignoriert.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    if not trips:
+        return issues
+
+    business_cats = get_business_categories()
+
+    # Business-Trip-Anzahl pro (year, month)
+    trips_per_month: dict[tuple[int, int], int] = {}
+    years_with_trips: set[int] = set()
+    for trip in trips:
+        if trip.category not in business_cats:
+            continue
+        d = _parse_trip_date(trip)
+        if d is None:
+            continue
+        key = (d.year, d.month)
+        trips_per_month[key] = trips_per_month.get(key, 0) + 1
+        years_with_trips.add(d.year)
+
+    for year in sorted(years_with_trips):
+        worktimes = database.get_worktimes(year)
+        hours_per_month: dict[int, float] = {}
+        for wt in worktimes:
+            month = int(wt.get("month", 0))
+            hours = float(wt.get("hours", 0.0))
+            if month and hours > 0:
+                hours_per_month[month] = hours
+
+        if len(hours_per_month) < 2:
+            # Weniger als 2 Monate Arbeitszeit gepflegt — keine Baseline
+            continue
+
+        # Jahres-Durchschnittsrate: Gesamt-Business-Fahrten / Gesamt-Stunden
+        total_trips = sum(
+            trips_per_month.get((year, m), 0) for m in hours_per_month
+        )
+        total_hours = sum(hours_per_month.values())
+        if total_trips == 0 or total_hours <= 0:
+            continue
+        avg_rate = total_trips / total_hours
+
+        for month, hours in sorted(hours_per_month.items()):
+            actual = trips_per_month.get((year, month), 0)
+            expected = avg_rate * hours
+            if expected <= 0 or actual == 0:
+                continue
+            if actual > expected * WORKTIME_RATIO_FACTOR:
+                issues.append(PlausibilityIssue(
+                    severity=SEVERITY_WARNING,
+                    category=CAT_WORKTIME_RATIO,
+                    message=(
+                        f"{_MONTH_NAMES_DE[month - 1]} {year}: "
+                        f"{actual} Geschaeftsfahrten bei nur {hours:.2f} h "
+                        f"Arbeitszeit — erwartet ca. {expected:.1f} Fahrten "
+                        f"(Jahresdurchschnitt {avg_rate:.2f}/h). "
+                        f"Urlaub/Krankheit eingerechnet?"
+                    ),
+                    trip_id=None,
+                    trip_date=f"{year:04d}-{month:02d}-01",
+                    year=year,
+                    month=month,
+                ))
+
+    return issues
+
+
+def check_business_quota(database: Database) -> list[PlausibilityIssue]:
+    """Prueft die Business-Quote pro Jahr (Finanzamt-Regel >=50%).
+
+    Summe km_business / (km_business + km_private) muss pro Jahr
+    mindestens BUSINESS_QUOTA_MIN betragen. Darunter gilt das Fahrtenbuch
+    dem Finanzamt als nicht mehr ueberwiegend betrieblich — der gesamte
+    Nachweis ist dann gefaehrdet.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    if not trips:
+        return issues
+
+    sums_per_year: dict[int, tuple[int, int]] = {}
+    for trip in trips:
+        d = _parse_trip_date(trip)
+        if d is None:
+            continue
+        biz, priv = sums_per_year.get(d.year, (0, 0))
+        sums_per_year[d.year] = (biz + trip.km_business, priv + trip.km_private)
+
+    for year in sorted(sums_per_year):
+        biz, priv = sums_per_year[year]
+        total = biz + priv
+        if total <= 0:
+            continue
+        ratio = biz / total
+        if ratio < BUSINESS_QUOTA_MIN:
+            issues.append(PlausibilityIssue(
+                severity=SEVERITY_WARNING,
+                category=CAT_BUSINESS_QUOTA_LOW,
+                message=(
+                    f"Jahr {year}: nur {ratio * 100:.1f} % geschaeftlich "
+                    f"({biz} von {total} km). Finanzamt verlangt "
+                    f"mindestens {BUSINESS_QUOTA_MIN * 100:.0f} %."
+                ),
+                trip_id=None,
+                trip_date=f"{year:04d}-01-01",
+                year=year,
+                month=1,
+            ))
+
+    return issues
+
+
+_MONTH_NAMES_DE = [
+    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+]
+
+
 # ---------------------------------------------------------------------------
 # Gesamt-Report
 # ---------------------------------------------------------------------------
@@ -510,6 +654,8 @@ def run_all_checks(
     if holidays_by_date:
         report.issues.extend(check_holiday_business(database, holidays_by_date))
     report.issues.extend(check_blacklist_business(database))
+    report.issues.extend(check_worktime_trip_ratio(database))
+    report.issues.extend(check_business_quota(database))
     return report
 
 
