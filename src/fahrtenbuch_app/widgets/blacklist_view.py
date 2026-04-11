@@ -37,17 +37,40 @@ class BlacklistView(Vertical):
     def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._row_entries: dict[str, dict[str, object]] = {}
+        self._last_entries: list[dict[str, object]] = []
+        self._show_id: bool = False
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="blacklist-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Spalten anlegen."""
+        self._setup_columns()
+
+    def _setup_columns(self) -> None:
+        """Legt die Spalten an (optional mit ID-Spalte am Anfang)."""
         table = self.query_one("#blacklist-data", DataTable)
-        table.add_columns("#", "Datum", "Tag", "Grund / Anlass")
+        if self._show_id:
+            table.add_column("ID", key="id", width=5)
+        table.add_columns("Datum", "Tag", "Grund / Anlass")
+
+    def set_show_id(self, value: bool) -> None:
+        """Schaltet die ID-Spalte ein/aus."""
+        if self._show_id == value:
+            return
+        self._show_id = value
+        try:
+            table = self.query_one("#blacklist-data", DataTable)
+        except Exception:
+            return
+        table.clear(columns=True)
+        self._setup_columns()
+        if self._last_entries:
+            self.load_data(self._last_entries)
 
     def load_data(self, entries: list[dict[str, object]]) -> None:
         """Laedt die Blacklist-Eintraege in die Tabelle."""
+        self._last_entries = entries
         table = self.query_one("#blacklist-data", DataTable)
         table.clear()
         self._row_entries.clear()
@@ -73,13 +96,15 @@ class BlacklistView(Vertical):
             row_key = str(idx)
             self._row_entries[row_key] = entry
 
-            table.add_row(
-                Text(entry_id, style="dim"),
+            cells: list[Text] = []
+            if self._show_id:
+                cells.append(Text(entry_id, style="dim"))
+            cells.extend([
                 Text(date_de, style=date_style),
                 Text(weekday, style="dim"),
                 Text(reason, style="bold" if not is_weekend else "dim"),
-                key=row_key,
-            )
+            ])
+            table.add_row(*cells, key=row_key)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Oeffnet Detail-Ansicht beim Auswaehlen einer Zeile (Enter / Doppelklick)."""

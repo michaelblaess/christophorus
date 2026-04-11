@@ -210,6 +210,9 @@ class FahrtenbuchApp(App):
         federal_state = db.get_setting("federal_state", "BB")
         self._holiday_service = HolidayService(federal_state)
 
+        # ID-Spalte in Tabellen auf aktuellen Setting-Wert synchronisieren
+        self._apply_show_id_setting()
+
         # UI aktualisieren
         vehicle = self._fahrtenbuch.vehicle
         config_panel = self.query_one("#config-panel", ConfigPanel)
@@ -220,6 +223,26 @@ class FahrtenbuchApp(App):
             self._write_log(f"Fahrzeug: {vehicle.name} ({vehicle.plate})")
 
         self._refresh_data()
+
+    def _apply_show_id_setting(self) -> None:
+        """Liest die ID-Spalten-Einstellung aus der DB und wendet sie auf
+        alle Tabellen-Widgets an.
+        """
+        if self._fahrtenbuch is None:
+            return
+        show_id = (
+            self._fahrtenbuch.database.get_setting("show_id_column", "0") == "1"
+        )
+        for widget_id, cls in (
+            ("#trip-table", TripTable),
+            ("#trip-table-year", TripTable),
+            ("#blacklist-view", BlacklistView),
+            ("#documents-view", DocumentsView),
+        ):
+            try:
+                self.query_one(widget_id, cls).set_show_id(show_id)
+            except Exception:
+                pass
 
     def _refresh_data(self) -> None:
         """Laedt und zeigt die Daten fuer den aktuellen Monat."""
@@ -888,6 +911,7 @@ class FahrtenbuchApp(App):
 
         config_panel = self.query_one("#config-panel", ConfigPanel)
         config_panel.update_vehicle(vehicle, str(self._fahrtenbuch.path))
+        self._apply_show_id_setting()
         self._refresh_data()
 
     def action_open_fahrtenbuch(self) -> None:

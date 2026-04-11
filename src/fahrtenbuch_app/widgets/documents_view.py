@@ -34,14 +34,35 @@ class DocumentsView(Vertical):
         super().__init__(**kwargs)
         self._documents: list[dict[str, object]] = []
         self._base_path: Path = Path(".")
+        self._show_id: bool = False
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="docs-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Spalten anlegen."""
+        self._setup_columns()
+
+    def _setup_columns(self) -> None:
+        """Legt die Spalten an (optional mit ID-Spalte am Anfang)."""
         table = self.query_one("#docs-data", DataTable)
-        table.add_columns("#", "Typ", "Datum", "Bezug", "Datei")
+        if self._show_id:
+            table.add_column("ID", key="id", width=5)
+        table.add_columns("Typ", "Datum", "Bezug", "Datei")
+
+    def set_show_id(self, value: bool) -> None:
+        """Schaltet die ID-Spalte ein/aus."""
+        if self._show_id == value:
+            return
+        self._show_id = value
+        try:
+            table = self.query_one("#docs-data", DataTable)
+        except Exception:
+            return
+        table.clear(columns=True)
+        self._setup_columns()
+        if self._documents:
+            self.load_data(self._documents, self._base_path)
 
     def load_data(
         self,
@@ -86,14 +107,16 @@ class DocumentsView(Vertical):
                 date_de = ""
                 bezug = ""
 
-            table.add_row(
-                Text(doc_id, style="dim"),
+            cells: list[Text] = []
+            if self._show_id:
+                cells.append(Text(doc_id, style="dim"))
+            cells.extend([
                 Text(typ, style="green" if typ == "Fahrt" else "red" if typ == "Blacklist" else "dim"),
                 Text(date_de),
                 Text(bezug),
                 Text(filename, style="dim"),
-                key=str(idx),
-            )
+            ])
+            table.add_row(*cells, key=str(idx))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Oeffnet den Beleg bei Enter/Doppelklick auf einer Zeile."""

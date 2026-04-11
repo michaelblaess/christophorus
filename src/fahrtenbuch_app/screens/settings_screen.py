@@ -182,6 +182,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._vehicle = database.get_vehicle()
         self._federal_state = database.get_setting("federal_state", "BB")
         self._journal_mode = database.get_setting("db_journal_mode", "DELETE").upper()
+        self._show_id_column = database.get_setting("show_id_column", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -451,6 +452,13 @@ class SettingsScreen(ModalScreen[bool | None]):
             "Die Aenderung wird beim naechsten Programmstart aktiv.",
             classes="addr-block",
         )
+        with Horizontal(classes="form-row"):
+            yield Label("Anzeige:")
+            yield Checkbox(
+                "ID-Spalte in Tabellen anzeigen (nur TUI, nicht im Export)",
+                value=self._show_id_column,
+                id="check-show-id-column",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -574,6 +582,10 @@ class SettingsScreen(ModalScreen[bool | None]):
             self._database.set_setting(
                 "db_journal_mode", str(journal_select.value)
             )
+
+        # ID-Spalte in Tabellen
+        show_id = self._get_checkbox("check-show-id-column")
+        self._database.set_setting("show_id_column", "1" if show_id else "0")
 
         # Wohnadresse speichern
         self._database.set_setting(

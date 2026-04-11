@@ -876,17 +876,14 @@ class TripScreen(ModalScreen[Trip | None]):
             purpose_value = ""
             round_trip = False
         else:
-            # Safety net: Spalten-Zuordnung an die Kategorie angleichen, falls
-            # der User die Inputs nicht selbst aktualisiert hat.
-            total_km = km_business + km_private
-            if total_km > 0:
-                if category in get_business_categories():
-                    km_business = total_km
-                    km_private = 0
-                else:
-                    # Alle Nicht-Business-Kategorien (private, fuel_private, ...)
-                    km_business = 0
-                    km_private = total_km
+            # Wenn der User die km manuell in genau eine Spalte geschrieben hat,
+            # die nicht zur Kategorie passt, gleicht sich die Kategorie an — nicht
+            # umgekehrt. Frueher hat ein Safety-Net hier die User-Eingaben
+            # ueberschrieben, sodass "km auf privat umbuchen" nie gespeichert wurde.
+            if km_private > 0 and km_business == 0 and category in get_business_categories():
+                category = "fuel_private" if category == "fuel" else "private"
+            elif km_business > 0 and km_private == 0 and category not in get_business_categories():
+                category = "fuel" if category == "fuel_private" else "business"
 
             destination_value = self.query_one("#input-destination", TextArea).text.strip()
             purpose_value = self.query_one("#input-purpose", Input).value.strip()

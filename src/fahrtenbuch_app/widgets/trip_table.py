@@ -62,14 +62,24 @@ class TripTable(Vertical):
         self._show_blacklist: bool = False
         self._year_mode: bool = False
         self._problem_trip_ids: set[int] = set()
+        self._show_id: bool = False
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
-        """Tabellenspalten erstellen. Ziel-Spalte hat eine feste Breite, damit
-        lange Adressen sichtbar bleiben."""
+        """Tabellenspalten erstellen."""
+        self._setup_columns()
+
+    def _setup_columns(self) -> None:
+        """Legt die Spalten an (optional mit ID-Spalte am Anfang).
+
+        Ziel-Spalte hat eine feste Breite, damit lange Adressen sichtbar
+        bleiben.
+        """
         table = self.query_one("#trip-data", DataTable)
+        if self._show_id:
+            table.add_column("ID", key="id", width=5)
         table.add_column("Datum", key="date")
         table.add_column("Tag", key="weekday")
         table.add_column("Fahrzeit", key="time")
@@ -79,6 +89,20 @@ class TripTable(Vertical):
         table.add_column("km Ende", key="km_end")
         table.add_column("geschaeftl.", key="km_business")
         table.add_column("privat", key="km_private")
+
+    def set_show_id(self, value: bool) -> None:
+        """Schaltet die ID-Spalte ein/aus. Spalten werden neu aufgebaut."""
+        if self._show_id == value:
+            return
+        self._show_id = value
+        try:
+            table = self.query_one("#trip-data", DataTable)
+        except Exception:
+            return
+        table.clear(columns=True)
+        self._setup_columns()
+        if self._last_month_data is not None:
+            self._build_rows()
 
     def load_data(
         self,
@@ -186,7 +210,10 @@ class TripTable(Vertical):
                 # Blacklist-Nur-Zeile: kein Trip, nur Grund — ausschliesslich rot
                 reason = str(entry.get("reason", ""))
                 entry_id = int(entry.get("id", 0))
-                table.add_row(
+                cells: list[Text] = []
+                if self._show_id:
+                    cells.append(Text("", style=_STYLE_MUTED))
+                cells.extend([
                     Text(date_de, style=_STYLE_ERROR),
                     Text(weekday, style=_STYLE_ERROR),
                     Text("", style=_STYLE_MUTED),
@@ -196,8 +223,8 @@ class TripTable(Vertical):
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
-                    key=row_key,
-                )
+                ])
+                table.add_row(*cells, key=row_key)
                 self._bl_only_rows[row_key] = (entry_id, date_str, reason)
             else:
                 # Normaler Trip
@@ -256,7 +283,10 @@ class TripTable(Vertical):
                     _STYLE_ERROR if warning else _STYLE_BUSINESS
                 )
 
-                table.add_row(
+                cells = []
+                if self._show_id:
+                    cells.append(Text(str(trip.id) if trip.id else "", style=_STYLE_MUTED))
+                cells.extend([
                     Text(date_de, style=row_style),
                     Text(weekday, style=_STYLE_ERROR if warning else _STYLE_MUTED),
                     Text(time_str, style=_STYLE_MUTED),
@@ -272,8 +302,8 @@ class TripTable(Vertical):
                         format_km(trip.km_private) if trip.km_private > 0 else "",
                         style=_STYLE_MUTED,
                     ),
-                    key=row_key,
-                )
+                ])
+                table.add_row(*cells, key=row_key)
                 self._row_trips[row_key] = (trip, orig_idx)
 
             row_idx += 1
