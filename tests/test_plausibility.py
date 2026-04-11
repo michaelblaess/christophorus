@@ -20,12 +20,17 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_CHAIN_BREAK,
     CAT_DISTANCE_MISMATCH,
     CAT_EMPTY_TRIP,
+    CAT_FUEL_RANGE_EXCEEDED,
+    CAT_GHOST_BUSINESS_TRIP,
     CAT_HOLIDAY_BUSINESS,
     CAT_NEGATIVE_DISTANCE,
     CAT_OVER_LIMIT,
     CAT_WEEKEND_BUSINESS,
     CAT_WORKTIME_RATIO,
+    GHOST_TRIP_MIN_KM,
+    GHOST_TRIP_WINDOW_DAYS,
     SEVERITY_ERROR,
+    SEVERITY_INFO,
     SEVERITY_WARNING,
     WORKTIME_RATIO_FACTOR,
     check_blacklist_business,
@@ -33,6 +38,8 @@ from fahrtenbuch_app.services.plausibility import (
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,
+    check_fuel_range_exceeded,
+    check_ghost_business_trips,
     check_holiday_business,
     check_vehicle_end_limit,
     check_weekend_business,
@@ -542,3 +549,160 @@ class TestCheckBusinessQuota:
         report = run_all_checks(database)
         cats = {i.category for i in report.issues}
         assert CAT_BUSINESS_QUOTA_LOW in cats
+
+
+# ---------------------------------------------------------------------------
+# check_fuel_range_exceeded
+# ---------------------------------------------------------------------------
+
+
+def _vehicle_with_tank(
+    database: Database, tank_l: float = 54.0, consumption: float = 7.5
+) -> None:
+    """Setzt Tank- und Verbrauchswerte am Testwagen.
+
+    Ohne gepflegte Tankdaten werden die Fuel-Checks uebersprungen — die
+    Tests brauchen darum ein konfiguriertes Fahrzeug.
+    """
+    vehicle = database.get_vehicle()
+    vehicle.tank_capacity_l = tank_l
+    vehicle.consumption_l_100km = consumption
+    database.save_vehicle(vehicle)
+
+
+def _add_full_tank(
+    database: Database, date_iso: str, km_end: int, liters: float = 50.0
+) -> None:
+    """Legt einen Volltank-Event am angegebenen Endkilometerstand an."""
+    trip = make_trip(date_iso, 0, business=False)
+    trip.category = "fuel_private"
+    trip.fuel_liters = liters
+    trip.fuel_full_tank = True
+    database.add_trip(trip)
+    # km_end passend machen (rebuild + direkter Update)
+    fetched = database.get_all_trips_ordered()[-1]
+    conn = database._get_conn()  # type: ignore[reportPrivateUsage]
+    conn.execute(
+        "UPDATE trips SET km_start=?, km_end=? WHERE id=?",
+        (km_end, km_end, fetched.id),
+    )
+    conn.commit()
+
+
+class TestCheckFuelRangeExceeded:
+    def test_no_vehicle_tank_data_no_issues(self, database: Database) -> None:
+        """Ohne gepflegte Tank-/Verbrauchs-Daten wird der Check uebersprungen."""
+        # Standard-Fixture hat tank_capacity_l=0
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_full_tank(database, "2024-01-15", 20000)  # 10000 km = physikalisch unmoeglich
+        assert check_fuel_range_exceeded(database) == []
+
+    def test_within_range_no_issue(self, database: Database) -> None:
+        """Ein Intervall innerhalb der max. Reichweite loest nichts aus."""
+        _vehicle_with_tank(database)  # 54l / 7.5 * 0.8 = min 6.0 -> 900km max
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_full_tank(database, "2024-01-15", 10700)  # 700 km, OK
+        issues = check_fuel_range_exceeded(database)
+        assert [i for i in issues if i.category == CAT_FUEL_RANGE_EXCEEDED] == []
+
+    def test_range_exceeded_errors(self, database: Database) -> None:
+        """Ueber max. Reichweite -> ERROR, Message nennt km-Grenze."""
+        _vehicle_with_tank(database)
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_full_tank(database, "2024-01-20", 11100)  # 1100 km > 900 km
+        issues = check_fuel_range_exceeded(database)
+        errors = [i for i in issues if i.category == CAT_FUEL_RANGE_EXCEEDED]
+        assert len(errors) == 1
+        assert errors[0].severity == SEVERITY_ERROR
+        assert "1100 km" in errors[0].message
+        assert "900" in errors[0].message
+
+    def test_multiple_intervals_independent(self, database: Database) -> None:
+        """Mehrere Intervalle werden unabhaengig beurteilt."""
+        _vehicle_with_tank(database)
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_full_tank(database, "2024-01-10", 10700)  # 700 km, OK
+        _add_full_tank(database, "2024-02-01", 11900)  # 1200 km, BAD
+        _add_full_tank(database, "2024-02-10", 12600)  # 700 km, OK
+        errors = [
+            i for i in check_fuel_range_exceeded(database)
+            if i.category == CAT_FUEL_RANGE_EXCEEDED
+        ]
+        assert len(errors) == 1
+
+    def test_single_full_tank_no_issue(self, database: Database) -> None:
+        """Ein einzelner Volltank kann keinen Intervall-Fehler erzeugen."""
+        _vehicle_with_tank(database)
+        _add_full_tank(database, "2024-01-01", 10000)
+        assert check_fuel_range_exceeded(database) == []
+
+
+# ---------------------------------------------------------------------------
+# check_ghost_business_trips
+# ---------------------------------------------------------------------------
+
+
+class TestCheckGhostBusinessTrips:
+    def test_empty_db_no_issues(self, database: Database) -> None:
+        assert check_ghost_business_trips(database) == []
+
+    def test_single_trip_no_issue(self, database: Database) -> None:
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde Nord"))
+        assert check_ghost_business_trips(database) == []
+
+    def test_close_duplicate_flagged(self, database: Database) -> None:
+        """Zwei identische Trips innerhalb des Fensters -> INFO."""
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde Nord"))
+        database.add_trip(make_trip("2024-03-08", 260, destination="Kunde Nord"))
+        issues = check_ghost_business_trips(database)
+        ghosts = [i for i in issues if i.category == CAT_GHOST_BUSINESS_TRIP]
+        assert len(ghosts) == 1
+        assert ghosts[0].severity == SEVERITY_INFO
+        assert "2024-03-01" in ghosts[0].message
+        assert "7 Tage" in ghosts[0].message
+
+    def test_far_duplicate_not_flagged(self, database: Database) -> None:
+        """Abstand groesser als Fenster -> keine Meldung."""
+        assert GHOST_TRIP_WINDOW_DAYS == 14
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde Nord"))
+        database.add_trip(make_trip("2024-03-20", 260, destination="Kunde Nord"))
+        issues = check_ghost_business_trips(database)
+        assert [i for i in issues if i.category == CAT_GHOST_BUSINESS_TRIP] == []
+
+    def test_small_km_below_threshold(self, database: Database) -> None:
+        """Kurzstrecken-Routinen (Supermarkt) werden nicht gemeldet."""
+        assert GHOST_TRIP_MIN_KM == 100
+        database.add_trip(make_trip("2024-03-01", 20, destination="Kunde X"))
+        database.add_trip(make_trip("2024-03-02", 20, destination="Kunde X"))
+        assert check_ghost_business_trips(database) == []
+
+    def test_different_km_not_flagged(self, database: Database) -> None:
+        """Gleiche Destination, aber andere km-Summe -> kein Ghost."""
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde Nord"))
+        database.add_trip(make_trip("2024-03-03", 280, destination="Kunde Nord"))
+        issues = check_ghost_business_trips(database)
+        assert [i for i in issues if i.category == CAT_GHOST_BUSINESS_TRIP] == []
+
+    def test_different_destinations_not_flagged(self, database: Database) -> None:
+        """Gleiche km, aber andere Destination -> kein Ghost."""
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde A"))
+        database.add_trip(make_trip("2024-03-03", 260, destination="Kunde B"))
+        assert check_ghost_business_trips(database) == []
+
+    def test_private_trips_not_flagged(self, database: Database) -> None:
+        """Private Fahrten sind vom Ghost-Check ausgenommen."""
+        database.add_trip(
+            make_trip("2024-03-01", 260, destination="Kunde Nord", business=False)
+        )
+        database.add_trip(
+            make_trip("2024-03-03", 260, destination="Kunde Nord", business=False)
+        )
+        assert check_ghost_business_trips(database) == []
+
+    def test_destination_case_insensitive(self, database: Database) -> None:
+        """Destination-Vergleich ist case-insensitive mit strip."""
+        database.add_trip(make_trip("2024-03-01", 260, destination="  KUNDE NORD  "))
+        database.add_trip(make_trip("2024-03-03", 260, destination="kunde nord"))
+        issues = check_ghost_business_trips(database)
+        ghosts = [i for i in issues if i.category == CAT_GHOST_BUSINESS_TRIP]
+        assert len(ghosts) == 1

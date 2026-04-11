@@ -39,10 +39,14 @@ __all__ = [
     "CAT_BUSINESS_QUOTA_LOW",
     "CAT_FUEL_OVER_TANK",
     "CAT_FUEL_CONSUMPTION",
+    "CAT_FUEL_RANGE_EXCEEDED",
+    "CAT_GHOST_BUSINESS_TRIP",
     "BUSINESS_QUOTA_MIN",
     "WORKTIME_RATIO_FACTOR",
     "FUEL_TOLERANCE",
     "FUEL_MIN_INTERVAL_KM",
+    "GHOST_TRIP_WINDOW_DAYS",
+    "GHOST_TRIP_MIN_KM",
     "check_chain_ascending",
     "check_distance_matches_columns",
     "check_vehicle_end_limit",
@@ -55,6 +59,8 @@ __all__ = [
     "check_business_quota",
     "check_fuel_tank_capacity",
     "check_fuel_consumption_range",
+    "check_fuel_range_exceeded",
+    "check_ghost_business_trips",
     "run_all_checks",
 ]
 
@@ -79,6 +85,8 @@ CAT_WORKTIME_RATIO = "worktime_ratio"
 CAT_BUSINESS_QUOTA_LOW = "business_quota_low"
 CAT_FUEL_OVER_TANK = "fuel_over_tank"
 CAT_FUEL_CONSUMPTION = "fuel_consumption"
+CAT_FUEL_RANGE_EXCEEDED = "fuel_range_exceeded"
+CAT_GHOST_BUSINESS_TRIP = "ghost_business_trip"
 
 # Schwellen: 50% Business-Quote pro Jahr (Finanzamt-Regel), 1.3x der
 # Jahres-Durchschnittsrate bei Fahrten pro Arbeitsstunde.
@@ -91,6 +99,12 @@ WORKTIME_RATIO_FACTOR = 1.3
 # Restluft) keine sinnvollen Quoten und werden ausgelassen.
 FUEL_TOLERANCE = 0.20
 FUEL_MIN_INTERVAL_KM = 50
+
+# Ghost-Trip-Heuristik: zwei geschaeftliche Trips mit gleicher Destination
+# und gleicher km-Summe innerhalb des Fensters sind verdaechtig. Minimum-km
+# hebt typische Kurzstrecken-Routinen (Supermarkt, Post) aus dem Radar.
+GHOST_TRIP_WINDOW_DAYS = 14
+GHOST_TRIP_MIN_KM = 100
 
 
 @dataclass
@@ -754,6 +768,140 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
     return issues
 
 
+def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
+    """Prueft ob zwischen zwei Volltankungen mehr km gefahren wurden als
+    der Tank physikalisch hergeben kann.
+
+    Das ist der harte physikalische Partner zu check_fuel_consumption_range:
+    Bei tank_capacity_l = 54 und consumption_l_100km = 7.5 (untere Toleranz
+    6.0) reicht ein voller Tank fuer maximal 900 km. Laengere Intervalle
+    sind physikalisch unmoeglich und weisen zwingend auf eine fehlende
+    Tankung ODER einen ueberzaehligen Trip (Ghost) im Intervall hin.
+
+    Severity ist ERROR — dieser Befund ist sicher falsch, nicht nur
+    verdaechtig. Der Check laeuft nur, wenn tank_capacity_l und
+    consumption_l_100km gepflegt sind.
+    """
+    issues: list[PlausibilityIssue] = []
+    vehicle = database.get_vehicle()
+    if vehicle.tank_capacity_l <= 0 or vehicle.consumption_l_100km <= 0:
+        return issues
+
+    # Maximale Reichweite bei optimalem (minimalem) Verbrauch — das ist
+    # die physikalische Obergrenze, an der Messrauschen nichts mehr aendert.
+    min_consumption = vehicle.consumption_l_100km * (1 - FUEL_TOLERANCE)
+    if min_consumption <= 0:
+        return issues
+    max_range_km = vehicle.tank_capacity_l * 100.0 / min_consumption
+
+    trips = _load_all_trips_ordered(database)
+    full_tanks: list[Trip] = [
+        t for t in trips
+        if t.category in ("fuel", "fuel_private")
+        and t.fuel_full_tank
+        and t.fuel_liters > 0
+    ]
+    if len(full_tanks) < 2:
+        return issues
+
+    for prev, curr in zip(full_tanks, full_tanks[1:]):
+        distance_km = curr.km_end - prev.km_end
+        if distance_km <= max_range_km:
+            continue
+        d = _parse_trip_date(curr)
+        issues.append(PlausibilityIssue(
+            severity=SEVERITY_ERROR,
+            category=CAT_FUEL_RANGE_EXCEEDED,
+            message=(
+                f"Zwischen Volltank {prev.date} und {curr.date} wurden "
+                f"{distance_km} km gefahren — Tank "
+                f"({vehicle.tank_capacity_l:.0f} l) reicht maximal ca. "
+                f"{max_range_km:.0f} km. Eine Tankung fehlt oder ein Trip "
+                f"im Intervall ist ueberzaehlig."
+            ),
+            trip_id=curr.id,
+            trip_date=curr.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
+    return issues
+
+
+def check_ghost_business_trips(database: Database) -> list[PlausibilityIssue]:
+    """Findet Verdachtsfaelle auf doppelt erfasste Geschaeftsfahrten.
+
+    Ghost-Trips sind Geschaeftsfahrten, die im Log stehen, aber nie
+    stattgefunden haben — typisches Muster: eine wiederkehrende Route
+    (Kunde Nord, Musterstadt) wird aus Gewohnheit nochmal eingetragen. Die km
+    stimmen, die Destination stimmt, aber der Tank sagt: "unmoeglich".
+
+    Heuristik: zwei Trips mit
+    - identischer normalisierter Destination (erste 50 Zeichen, lower)
+    - identischer km_business-Summe
+    - km_business >= GHOST_TRIP_MIN_KM (kein Kurzstrecken-Routine-Spam)
+    - Abstand <= GHOST_TRIP_WINDOW_DAYS
+    werden als INFO gemeldet. Severity INFO weil es legitim sein kann
+    (woechentlicher Kundentermin), aber manuelle Pruefung verdient.
+
+    Kombiniert mit check_fuel_range_exceeded ist das der diagnostische
+    Hebel: Range-Verletzung = harte Evidenz, Ghost-Liste = Kandidaten.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    business_cats = get_business_categories()
+
+    # Nur echte business-Fahrten (ohne fuel/service) mit signifikanten km
+    candidates: list[tuple[Trip, date]] = []
+    for trip in trips:
+        if trip.category != "business":
+            continue
+        if trip.km_business < GHOST_TRIP_MIN_KM:
+            continue
+        d = _parse_trip_date(trip)
+        if d is None:
+            continue
+        candidates.append((trip, d))
+
+    # Gruppieren nach (normalisierte destination, km_business)
+    groups: dict[tuple[str, int], list[tuple[Trip, date]]] = {}
+    for trip, d in candidates:
+        key = (trip.destination.strip().lower()[:50], trip.km_business)
+        groups.setdefault(key, []).append((trip, d))
+
+    # Fuer jede Gruppe: aufeinanderfolgende Paare im Fenster melden
+    reported_ids: set[int] = set()
+    for key, entries in groups.items():
+        if len(entries) < 2:
+            continue
+        entries_sorted = sorted(entries, key=lambda x: (x[1], x[0].id))
+        for (prev_trip, prev_d), (curr_trip, curr_d) in zip(
+            entries_sorted, entries_sorted[1:]
+        ):
+            delta_days = (curr_d - prev_d).days
+            if delta_days <= 0 or delta_days > GHOST_TRIP_WINDOW_DAYS:
+                continue
+            if curr_trip.id in reported_ids:
+                continue
+            reported_ids.add(curr_trip.id)
+            dest_short = curr_trip.destination.strip()[:40]
+            issues.append(PlausibilityIssue(
+                severity=SEVERITY_INFO,
+                category=CAT_GHOST_BUSINESS_TRIP,
+                message=(
+                    f"Gleiche Strecke wie Trip am {prev_trip.date} "
+                    f"({curr_trip.km_business} km, {dest_short}) — "
+                    f"{delta_days} Tage Abstand. Bitte pruefen ob wirklich "
+                    f"gefahren."
+                ),
+                trip_id=curr_trip.id,
+                trip_date=curr_trip.date,
+                year=curr_d.year,
+                month=curr_d.month,
+            ))
+
+    return issues
+
+
 _MONTH_NAMES_DE = [
     "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
     "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -787,6 +935,8 @@ def run_all_checks(
     report.issues.extend(check_business_quota(database))
     report.issues.extend(check_fuel_tank_capacity(database))
     report.issues.extend(check_fuel_consumption_range(database))
+    report.issues.extend(check_fuel_range_exceeded(database))
+    report.issues.extend(check_ghost_business_trips(database))
     return report
 
 
