@@ -6,9 +6,11 @@ from datetime import date
 from rich.text import Text
 from textual.app import ComposeResult, RenderResult
 from textual.containers import Horizontal, Vertical
+from textual.events import Click
+from textual.message import Message
 from textual.widget import Widget
 
-from fahrtenbuch_app.models.trip import MonthData, TripDay
+from fahrtenbuch_app.models.trip import MonthData, Trip, TripDay
 from fahrtenbuch_app.services.formatting import format_km
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -160,6 +162,12 @@ class DayTile(Widget):
 
         return text
 
+    def on_click(self, event: Click) -> None:
+        """Oeffnet den ersten Trip des Tages zum Bearbeiten."""
+        if self._trip_day and self._trip_day.trips:
+            trip = self._trip_day.trips[0]
+            self.post_message(CalendarView.TripEditRequested(trip))
+
 
 class WeekRow(Horizontal):
     """Eine Wochenzeile mit 7 Tageskacheln."""
@@ -174,6 +182,13 @@ class WeekRow(Horizontal):
 
 class CalendarView(Vertical):
     """Monatskalender mit farbigen Tageskacheln."""
+
+    class TripEditRequested(Message):
+        """Wird gesendet wenn der Benutzer einen Trip im Kalender anklickt."""
+
+        def __init__(self, trip: Trip) -> None:
+            super().__init__()
+            self.trip = trip
 
     DEFAULT_CSS = """
     CalendarView {
