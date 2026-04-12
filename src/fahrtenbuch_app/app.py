@@ -898,16 +898,20 @@ class FahrtenbuchApp(App):
         # Aktuell aktiver Tab bestimmt den Export-Scope
         is_year_export = self._current_view == "tab-list-year"
 
+        # Timestamp-Suffix vermeidet Permission-Denied, falls eine
+        # vorherige Export-Datei noch in Excel offen ist.
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+
         if is_year_export:
             trips = db.get_trips_for_year(self._year)
             subtitle = f"{self._year} — {lease_info}"
-            filename = f"Fahrtenbuch {self._year}{plate_part}.xlsx"
+            filename = f"Fahrtenbuch {self._year}{plate_part} {ts}.xlsx"
             group_by_month = True
         else:
             trips = db.get_trips_for_month(self._year, self._month)
             month_label = f"{month_name_de(self._month)} {self._year}"
             subtitle = f"{month_label} — {lease_info}"
-            filename = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part}.xlsx"
+            filename = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part} {ts}.xlsx"
             group_by_month = False
 
         if not trips:

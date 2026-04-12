@@ -103,6 +103,14 @@ WORKTIME_RATIO_FACTOR = 1.3
 FUEL_TOLERANCE = 0.20
 FUEL_MIN_INTERVAL_KM = 50
 
+# Im Winter (Nov-Maerz) sind Kaltstarts, Standheizung, Winterreifen und
+# zaehes Oel gute Gruende fuer deutlich hoeheren Verbrauch. Wenn das Setting
+# fuel_winter_tolerance aktiv ist, bekommt ein Intervall das in einem
+# Winter-Monat endet zusaetzlich FUEL_WINTER_EXTRA oben drauf (also 0.35
+# statt 0.20 Gesamt-Toleranz).
+FUEL_WINTER_MONTHS = frozenset({11, 12, 1, 2, 3})
+FUEL_WINTER_EXTRA = 0.15
+
 # Ghost-Trip-Heuristik: zwei geschaeftliche Trips mit gleicher Destination
 # und gleicher km-Summe innerhalb des Fensters sind verdaechtig. Minimum-km
 # hebt typische Kurzstrecken-Routinen (Supermarkt, Post) aus dem Radar.
@@ -781,8 +789,7 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
     ]
 
     target = vehicle.consumption_l_100km
-    low = target * (1 - FUEL_TOLERANCE)
-    high = target * (1 + FUEL_TOLERANCE)
+    winter_enabled = database.get_setting("fuel_winter_tolerance", "1") == "1"
 
     for prev, curr in zip(full_tanks, full_tanks[1:]):
         distance_km = curr.km_end - prev.km_end
@@ -798,9 +805,14 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
         )
         total_liters = curr.fuel_liters + mid_liters
         consumption = total_liters * 100.0 / distance_km
+        d = _parse_trip_date(curr)
+        tolerance = FUEL_TOLERANCE
+        if winter_enabled and d and d.month in FUEL_WINTER_MONTHS:
+            tolerance += FUEL_WINTER_EXTRA
+        low = target * (1 - tolerance)
+        high = target * (1 + tolerance)
         if low <= consumption <= high:
             continue
-        d = _parse_trip_date(curr)
         severity = SEVERITY_WARNING if consumption < target * 2 else SEVERITY_ERROR
         issues.append(PlausibilityIssue(
             severity=severity,
@@ -809,7 +821,7 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
                 f"Verbrauch {consumption:.1f} l/100km zwischen Volltank "
                 f"{prev.date} und {curr.date} ({distance_km} km, "
                 f"{total_liters:.2f} l) — erwartet "
-                f"{target:.1f} l/100km +/- {int(FUEL_TOLERANCE * 100)} %"
+                f"{target:.1f} l/100km +/- {int(tolerance * 100)} %"
             ),
             trip_id=curr.id,
             trip_date=curr.date,

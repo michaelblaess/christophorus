@@ -63,11 +63,17 @@ def set_fuel_vehicle(
     tank_capacity_l: float = 54.0,
     consumption_l_100km: float = 9.0,
 ) -> None:
-    """Aktualisiert das Test-Vehicle mit Tank- und Verbrauchsdaten."""
+    """Aktualisiert das Test-Vehicle mit Tank- und Verbrauchsdaten.
+
+    Deaktiviert gleichzeitig die Winter-Toleranz, damit Verbrauchs-Tests
+    deterministisch sind — unabhaengig davon in welchem Monat die Fixture-
+    Daten liegen.
+    """
     v = database.get_vehicle()
     v.tank_capacity_l = tank_capacity_l
     v.consumption_l_100km = consumption_l_100km
     database.save_vehicle(v)
+    database.set_setting("fuel_winter_tolerance", "0")
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +251,28 @@ class TestFuelConsumptionRangeCheck:
         issues = check_fuel_consumption_range(database)
         assert len(issues) == 1
         assert issues[0].severity == SEVERITY_WARNING
+
+    def test_winter_tolerance_suppresses_small_deviation(
+        self, database: Database
+    ) -> None:
+        """In Winter-Monaten mit aktivem Setting greift erweiterte Toleranz."""
+        set_fuel_vehicle(database, consumption_l_100km=9.0)
+        database.set_setting("fuel_winter_tolerance", "1")
+        # 500 km, 55 L -> 11.0 l/100km, 22 % ueber 9.0 -> normal Warning,
+        # mit Winter-Toleranz (20 + 15 = 35 %) aber clean.
+        self._build_chain(database, distance_km=500, liters_second_tank=55.0)
+        assert check_fuel_consumption_range(database) == []
+
+    def test_winter_tolerance_still_flags_large_deviation(
+        self, database: Database
+    ) -> None:
+        """Grobe Ausreisser bleiben auch im Winter erkannt."""
+        set_fuel_vehicle(database, consumption_l_100km=9.0)
+        database.set_setting("fuel_winter_tolerance", "1")
+        # 500 km, 80 L -> 16.0 l/100km, 78 % ueber Ziel -> immer noch Warning
+        self._build_chain(database, distance_km=500, liters_second_tank=80.0)
+        issues = check_fuel_consumption_range(database)
+        assert len(issues) == 1
 
     def test_short_interval_skipped(self, database: Database) -> None:
         """Intervalle < FUEL_MIN_INTERVAL_KM werden uebersprungen."""

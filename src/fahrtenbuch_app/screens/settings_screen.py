@@ -185,6 +185,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._show_id_column = database.get_setting("show_id_column", "0") == "1"
         self._show_code_column = database.get_setting("show_code_column", "0") == "1"
         self._check_ghost_trips = database.get_setting("check_ghost_trips", "0") == "1"
+        self._fuel_winter_tolerance = database.get_setting("fuel_winter_tolerance", "1") == "1"
         self._show_fuel_column = database.get_setting("show_fuel_column", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
@@ -483,6 +484,13 @@ class SettingsScreen(ModalScreen[bool | None]):
                 value=self._check_ghost_trips,
                 id="check-ghost-trips",
             )
+        with Horizontal(classes="form-row"):
+            yield Label("")
+            yield Checkbox(
+                "Winter-Toleranz fuer Verbrauchs-Check (Nov-Maerz +15 %)",
+                value=self._fuel_winter_tolerance,
+                id="check-fuel-winter-tolerance",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -622,6 +630,10 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Ghost-Trips Plausi-Check
         ghost = self._get_checkbox("check-ghost-trips")
         self._database.set_setting("check_ghost_trips", "1" if ghost else "0")
+
+        # Winter-Toleranz fuer Verbrauchs-Check
+        winter = self._get_checkbox("check-fuel-winter-tolerance")
+        self._database.set_setting("fuel_winter_tolerance", "1" if winter else "0")
 
         # Wohnadresse speichern
         self._database.set_setting(
