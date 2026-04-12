@@ -61,6 +61,7 @@ class FahrtenbuchApp(App):
         Binding("plus", "log_bigger", "Log +", key_display="+"),
         Binding("minus", "log_smaller", "Log -", key_display="-"),
         Binding("c", "copy_log", "Log kopieren"),
+        Binding("ctrl+l", "clear_log", "Log leeren"),
         Binding("i", "show_info", "Info"),
     ]
 
@@ -369,6 +370,16 @@ class FahrtenbuchApp(App):
             f"{len(self._log_lines)} Log-Zeilen kopiert",
             severity="information",
         )
+
+    def action_clear_log(self) -> None:
+        """Leert das Log-Fenster und den internen Puffer."""
+        try:
+            log = self.query_one("#log-panel", RichLog)
+            log.clear()
+        except Exception:
+            pass
+        self._log_lines.clear()
+        self._write_log("Log geleert")
 
     def action_open_log_file(self, file_id: int) -> None:
         """Oeffnet eine im Log registrierte Datei im Standard-Programm."""

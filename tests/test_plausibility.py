@@ -25,6 +25,7 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_HOLIDAY_BUSINESS,
     CAT_NEGATIVE_DISTANCE,
     CAT_OVER_LIMIT,
+    CAT_END_MISMATCH,
     CAT_WEEKEND_BUSINESS,
     CAT_WORKTIME_RATIO,
     GHOST_TRIP_MIN_KM,
@@ -42,6 +43,7 @@ from fahrtenbuch_app.services.plausibility import (
     check_ghost_business_trips,
     check_holiday_business,
     check_vehicle_end_limit,
+    check_vehicle_end_reached,
     check_weekend_business,
     check_worktime_trip_ratio,
     run_all_checks,
@@ -216,6 +218,49 @@ class TestCheckVehicleEndLimit:
 
 
 # ---------------------------------------------------------------------------
+# check_vehicle_end_reached
+# ---------------------------------------------------------------------------
+
+
+class TestCheckVehicleEndReached:
+    def test_no_end_set_no_issue(self, database: Database) -> None:
+        v = database.get_vehicle()
+        v.end_km = 0
+        database.save_vehicle(v)
+        database.add_trip(make_trip("2024-03-01", 100))
+        assert check_vehicle_end_reached(database) == []
+
+    def test_exact_match_no_issue(
+        self, database: Database, vehicle: Vehicle
+    ) -> None:
+        vehicle.end_km = 10150
+        database.save_vehicle(vehicle)
+        database.add_trip(make_trip("2024-03-01", 100))
+        database.add_trip(make_trip("2024-03-02", 50))
+        assert check_vehicle_end_reached(database) == []
+
+    def test_gap_reports_warning(
+        self, database: Database, vehicle: Vehicle
+    ) -> None:
+        vehicle.end_km = 10500
+        database.save_vehicle(vehicle)
+        database.add_trip(make_trip("2024-03-01", 100))  # endet bei 10100
+        issues = check_vehicle_end_reached(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_END_MISMATCH
+        assert "400 km" in issues[0].message
+
+    def test_over_end_no_issue_here(
+        self, database: Database, vehicle: Vehicle
+    ) -> None:
+        # Ueberschreitung meldet check_vehicle_end_limit, nicht dieser Check.
+        vehicle.end_km = 10050
+        database.save_vehicle(vehicle)
+        database.add_trip(make_trip("2024-03-01", 100))
+        assert check_vehicle_end_reached(database) == []
+
+
+# ---------------------------------------------------------------------------
 # check_empty_trips
 # ---------------------------------------------------------------------------
 
@@ -351,7 +396,11 @@ class TestCheckBlacklistBusiness:
 
 
 class TestRunAllChecks:
-    def test_clean_data_no_issues(self, database: Database) -> None:
+    def test_clean_data_no_issues(self, database: Database, vehicle: Vehicle) -> None:
+        # Endkm auf 0 setzen, sonst meldet check_vehicle_end_reached eine
+        # Luecke (Fixture hat end_km=30000).
+        vehicle.end_km = 0
+        database.save_vehicle(vehicle)
         database.add_trip(make_trip("2024-03-04", 100))  # Mo
         database.add_trip(make_trip("2024-03-05", 50))   # Di
         report = run_all_checks(database)

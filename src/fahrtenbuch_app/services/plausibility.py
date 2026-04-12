@@ -29,6 +29,7 @@ __all__ = [
     "CAT_CHAIN_BACKWARD",
     "CAT_DISTANCE_MISMATCH",
     "CAT_OVER_LIMIT",
+    "CAT_END_MISMATCH",
     "CAT_WEEKEND_BUSINESS",
     "CAT_HOLIDAY_BUSINESS",
     "CAT_BLACKLIST_BUSINESS",
@@ -50,6 +51,7 @@ __all__ = [
     "check_chain_ascending",
     "check_distance_matches_columns",
     "check_vehicle_end_limit",
+    "check_vehicle_end_reached",
     "check_empty_trips",
     "check_category_column_match",
     "check_weekend_business",
@@ -75,6 +77,7 @@ CAT_CHAIN_BREAK = "chain_break"
 CAT_CHAIN_BACKWARD = "chain_backward"
 CAT_DISTANCE_MISMATCH = "distance_mismatch"
 CAT_OVER_LIMIT = "over_limit"
+CAT_END_MISMATCH = "end_mismatch"
 CAT_WEEKEND_BUSINESS = "weekend_business"
 CAT_HOLIDAY_BUSINESS = "holiday_business"
 CAT_BLACKLIST_BUSINESS = "blacklist_business"
@@ -352,6 +355,42 @@ def check_vehicle_end_limit(database: Database) -> list[PlausibilityIssue]:
                 year=d.year if d else None,
                 month=d.month if d else None,
             ))
+    return issues
+
+
+def check_vehicle_end_reached(database: Database) -> list[PlausibilityIssue]:
+    """Prueft ob die Fahrten-Summe den hinterlegten Endstand ergibt.
+
+    Wenn vehicle.end_km > 0 gesetzt ist, wird erwartet dass der letzte
+    Trip genau bei diesem km-Stand endet. Andernfalls bleibt eine Luecke
+    — Hinweis dass noch Fahrten fehlen oder der Endstand falsch eingetragen
+    ist. Die Ueberschreitung wird separat von check_vehicle_end_limit
+    gemeldet, deshalb nur Unterdeckung hier.
+    """
+    issues: list[PlausibilityIssue] = []
+    vehicle = database.get_vehicle()
+    if vehicle.end_km <= 0:
+        return issues
+    trips = _load_all_trips_ordered(database)
+    if not trips:
+        return issues
+    last = trips[-1]
+    diff = vehicle.end_km - last.km_end
+    if diff > 0:
+        d = _parse_trip_date(last)
+        issues.append(PlausibilityIssue(
+            severity=SEVERITY_WARNING,
+            category=CAT_END_MISMATCH,
+            message=(
+                f"Fahrten-Summe erreicht Endstand nicht: letzte Fahrt endet "
+                f"bei {last.km_end} km, erwartet {vehicle.end_km} km "
+                f"(Luecke {diff} km)"
+            ),
+            trip_id=last.id,
+            trip_date=last.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
     return issues
 
 
@@ -958,6 +997,7 @@ def run_all_checks(
     report.issues.extend(check_empty_trips(database))
     report.issues.extend(check_category_column_match(database))
     report.issues.extend(check_vehicle_end_limit(database))
+    report.issues.extend(check_vehicle_end_reached(database))
     report.issues.extend(check_weekend_business(database))
     if holidays_by_date:
         report.issues.extend(check_holiday_business(database, holidays_by_date))
