@@ -87,10 +87,11 @@ class DayTile(Widget):
         elif self._holiday_name:
             self.add_class("holiday")
         elif self._trip_day and self._trip_day.has_business:
-            # Nur geschaeftliche Tage bekommen den gruenen Rand — alle anderen
-            # bleiben neutral.
             self.add_class("business")
-        elif self._trip_day and self._trip_day.has_fuel:
+
+        # Tanktage gelb markieren — unabhaengig von weekend/holiday/business,
+        # damit auch Samstags-Tankungen sichtbar sind.
+        if not self._is_outside and self._trip_day and self._trip_day.has_fuel:
             self.add_class("fuel")
 
         if self._date == date.today():
