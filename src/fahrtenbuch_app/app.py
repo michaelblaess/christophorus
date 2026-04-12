@@ -445,9 +445,15 @@ class FahrtenbuchApp(App):
     def on_calendar_view_trip_edit_requested(
         self, event: CalendarView.TripEditRequested
     ) -> None:
-        """Oeffnet den TripScreen bei Klick auf eine Kalender-Kachel."""
+        """Oeffnet den TripScreen bei Klick auf eine Kalender-Kachel.
+
+        WICHTIG: _selected_trip_id wird gesetzt, damit ein anschliessendes
+        'd' die Kalender-Fahrt loescht und nicht eine stale Tabellen-Auswahl.
+        """
         if self._fahrtenbuch is None:
             return
+        self._selected_trip_id = event.trip.id
+        self._selected_trip_index = -1
         from fahrtenbuch_app.screens.trip_screen import TripScreen
 
         self.push_screen(
@@ -479,8 +485,14 @@ class FahrtenbuchApp(App):
             callback=self._on_trip_created,
         )
 
-    def _on_trip_edited(self, trip: "Trip | None") -> None:
+    def _on_trip_edited(self, trip: "Trip | None | object") -> None:
         """Callback nach dem Bearbeiten einer Fahrt."""
+        # Loesch-Anforderung aus dem TripScreen → in den normalen
+        # Loesch-Pfad mit Confirm-Alert umlenken.
+        from fahrtenbuch_app.screens.trip_screen import DELETE_REQUESTED
+        if trip is DELETE_REQUESTED:
+            self.action_delete_trip()
+            return
         if trip is None or self._fahrtenbuch is None:
             return
         # Trip hat eine ID — direkt in der DB aktualisieren
@@ -546,7 +558,12 @@ class FahrtenbuchApp(App):
             self._refresh_year_trip_table()
 
     def action_delete_trip(self) -> None:
-        """Loescht die ausgewaehlte Fahrt (funktioniert in Monats- und Jahresliste)."""
+        """Loescht die ausgewaehlte Fahrt (funktioniert in Monats- und Jahresliste).
+
+        Zeigt IMMER einen Confirm-Dialog mit Datum + Reisezweck, um versehent-
+        liches Loeschen nach stale Selektionen (z.B. Kalender -> Edit -> d)
+        zu verhindern.
+        """
         if self._fahrtenbuch is None or self._selected_trip_id <= 0:
             self.notify("Keine Fahrt ausgewaehlt", severity="warning")
             return
@@ -558,36 +575,50 @@ class FahrtenbuchApp(App):
             self.notify("Fahrt nicht gefunden", severity="warning")
             return
 
+        from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
+
+        # Datum deutsch formatieren
+        date_de = trip.date
+        try:
+            parts = trip.date.split("-")
+            if len(parts) == 3:
+                date_de = f"{parts[2]}.{parts[1]}.{parts[0]}"
+        except (ValueError, IndexError):
+            pass
+
+        purpose = trip.purpose.strip() or "(kein Reisezweck)"
+        destination = trip.destination.split("\n")[0].strip() if trip.destination else ""
+        if destination:
+            trip_label = f"{date_de}\n{purpose}\nZiel: {destination}"
+        else:
+            trip_label = f"{date_de}\n{purpose}"
+
         documents = db.get_documents(trip_id=trip.id)
         if documents:
-            # Bei verknuepften Belegen muss der Nutzer bestaetigen, weil der
-            # CASCADE-Delete die documents-Zeilen mitentfernt. Die physischen
-            # Dateien bleiben erhalten.
-            from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
-
             count = len(documents)
             beleg_word = "Beleg" if count == 1 else "Belege"
-            trip_label = f"{trip.date} — {trip.purpose}"
             message = (
-                f"Diese Fahrt hat {count} verknuepfte{'n' if count == 1 else ''} "
-                f"{beleg_word} in der Datenbank.\n\n"
-                f"Beim Loeschen werden die Beleg-Eintraege mitentfernt.\n"
-                f"Die Dateien auf der Festplatte bleiben unberuehrt.\n\n"
-                f"Fahrt: {trip_label}"
+                f"Folgende Fahrt wirklich loeschen?\n\n"
+                f"{trip_label}\n\n"
+                f"[yellow]Die Fahrt hat {count} verknuepfte{'n' if count == 1 else ''} "
+                f"{beleg_word} — Beleg-Eintraege werden mitentfernt, "
+                f"die Dateien auf der Platte bleiben.[/yellow]"
             )
-            self.push_screen(
-                ConfirmScreen(
-                    title="Fahrt mit Belegen loeschen?",
-                    message=message,
-                    confirm_label="Loeschen",
-                ),
-                callback=lambda confirmed: self._finalize_delete_trip(
-                    trip.id, bool(confirmed)
-                ),
-            )
-            return
+            title = "Fahrt mit Belegen loeschen?"
+        else:
+            message = f"Folgende Fahrt wirklich loeschen?\n\n{trip_label}"
+            title = "Fahrt loeschen?"
 
-        self._do_delete_trip(trip.id)
+        self.push_screen(
+            ConfirmScreen(
+                title=title,
+                message=message,
+                confirm_label="Loeschen",
+            ),
+            callback=lambda confirmed: self._finalize_delete_trip(
+                trip.id, bool(confirmed)
+            ),
+        )
 
     def _finalize_delete_trip(self, trip_id: int, confirmed: bool) -> None:
         """Callback nach dem Bestaetigungsdialog."""

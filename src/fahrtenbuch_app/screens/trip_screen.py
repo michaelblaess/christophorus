@@ -69,6 +69,9 @@ def _parse_liters(raw: str) -> float:
         return 0.0
 
 
+DELETE_REQUESTED = object()  # Sentinel: vom Dialog an den Caller, 'Loeschen'
+
+
 class TripScreen(ModalScreen[Trip | None]):
     """Dialog zum Anlegen oder Bearbeiten einer Fahrt."""
 
@@ -358,6 +361,8 @@ class TripScreen(ModalScreen[Trip | None]):
             with Horizontal(classes="button-row"):
                 yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
                 yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
+                if self._is_edit and self._trip is not None and self._trip.id > 0:
+                    yield Button("Loeschen", variant="error", id="btn-delete")
 
     def _format_audit_text(self, trip_id: int) -> str:
         """Formatiert die Audit-Informationen (created/changed) fuer die
@@ -786,10 +791,22 @@ class TripScreen(ModalScreen[Trip | None]):
             self.action_save()
         elif btn_id == "btn-cancel":
             self.action_cancel()
+        elif btn_id == "btn-delete":
+            self.action_request_delete()
         elif btn_id == "btn-date-picker":
             self._open_date_picker()
         elif btn_id == "btn-add-doc":
             self._open_file_picker()
+
+    def action_request_delete(self) -> None:
+        """Schliesst den Dialog mit einer Delete-Anforderung an den Caller.
+
+        Der Caller (app.py) fuehrt dann den Confirm-Dialog + das eigentliche
+        Loeschen aus — so gibt es nur einen Confirm-Pfad.
+        """
+        if self._trip is None or self._trip.id <= 0:
+            return
+        self.dismiss(DELETE_REQUESTED)  # type: ignore[arg-type]
 
     def _open_date_picker(self) -> None:
         """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
