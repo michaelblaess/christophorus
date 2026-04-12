@@ -43,6 +43,9 @@ class DayTile(Widget):
     DayTile.business {
         border: solid green;
     }
+    DayTile.fuel {
+        border: solid yellow;
+    }
     DayTile.outside {
         background: $surface-darken-2;
     }
@@ -85,6 +88,8 @@ class DayTile(Widget):
             # Nur geschaeftliche Tage bekommen den gruenen Rand — alle anderen
             # bleiben neutral.
             self.add_class("business")
+        elif self._trip_day and self._trip_day.has_fuel:
+            self.add_class("fuel")
 
         if self._date == date.today():
             self.add_class("today")
@@ -115,7 +120,7 @@ class DayTile(Widget):
         if self._holiday_name and self._trip_day and self._trip_day.has_business:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
             text.append("WARNUNG", style=_STYLE_ERROR)
-            text.append(f"\n{self._holiday_name[:18]}", style="red italic")
+            text.append(f"\n{self._holiday_name[:22]}", style="red italic")
             text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
             return text
 
@@ -127,7 +132,7 @@ class DayTile(Widget):
 
         if self._holiday_name:
             text.append(f"{day_num} {weekday}", style=_STYLE_HOLIDAY_BOLD)
-            text.append(f"\n{self._holiday_name[:18]}", style=_STYLE_HOLIDAY)
+            text.append(f"\n{self._holiday_name[:22]}", style=_STYLE_HOLIDAY)
             if self._trip_day and self._trip_day.trips:
                 text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
             return text
@@ -144,9 +149,11 @@ class DayTile(Widget):
             km_style = _STYLE_BUSINESS if td.has_business else _STYLE_MUTED
             text.append(f"{day_num} {weekday} ", style="bold")
             text.append(f"{format_km(td.km_total)} km", style=f"bold {km_style}")
+            if td.fuel_liters > 0:
+                text.append(f"  {td.fuel_liters:.0f}L", style="bold yellow")
             text.append("\n")
             for trip in td.trips[:2]:
-                label = trip.purpose[:18] if trip.purpose else trip.category
+                label = trip.purpose[:22] if trip.purpose else trip.category
                 text.append(f"{label}\n", style=_STYLE_MUTED)
         else:
             text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)

@@ -112,7 +112,15 @@ class TripDay:
     @property
     def has_fuel(self) -> bool:
         """Gibt es Tankfahrten an diesem Tag."""
-        return any(t.category == "fuel" for t in self.trips)
+        return any(t.category in ("fuel", "fuel_private") for t in self.trips)
+
+    @property
+    def fuel_liters(self) -> float:
+        """Gesamte getankte Liter an diesem Tag."""
+        return sum(
+            t.fuel_liters for t in self.trips
+            if t.category in ("fuel", "fuel_private") and t.fuel_liters > 0
+        )
 
     @property
     def has_service(self) -> bool:

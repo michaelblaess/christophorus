@@ -64,6 +64,7 @@ class TripTable(Vertical):
         self._problem_trip_ids: set[int] = set()
         self._show_id: bool = False
         self._show_code: bool = False
+        self._show_fuel: bool = False
         self._category_codes: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
@@ -89,6 +90,8 @@ class TripTable(Vertical):
         table.add_column("Fahrzeit", key="time")
         table.add_column("Ziel", key="destination", width=80)
         table.add_column("Reisezweck", key="purpose")
+        if self._show_fuel:
+            table.add_column("Liter", key="fuel", width=8)
         table.add_column("km Anfang", key="km_start")
         table.add_column("km Ende", key="km_end")
         table.add_column("geschaeftl.", key="km_business")
@@ -113,6 +116,20 @@ class TripTable(Vertical):
         if self._show_code == value:
             return
         self._show_code = value
+        try:
+            table = self.query_one("#trip-data", DataTable)
+        except Exception:
+            return
+        table.clear(columns=True)
+        self._setup_columns()
+        if self._last_month_data is not None:
+            self._build_rows()
+
+    def set_show_fuel(self, value: bool) -> None:
+        """Schaltet die Tankliter-Spalte ein/aus."""
+        if self._show_fuel == value:
+            return
+        self._show_fuel = value
         try:
             table = self.query_one("#trip-data", DataTable)
         except Exception:
@@ -237,17 +254,22 @@ class TripTable(Vertical):
                     cells.append(Text("", style=_STYLE_MUTED))
                 if self._show_code:
                     cells.append(Text("", style=_STYLE_MUTED))
-                cells.extend([
+                bl_cells = [
                     Text(date_de, style=_STYLE_ERROR),
                     Text(weekday, style=_STYLE_ERROR),
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
                     Text(f"[GESPERRT: {reason}]", style=_STYLE_ERROR),
+                ]
+                if self._show_fuel:
+                    bl_cells.append(Text("", style=_STYLE_MUTED))
+                bl_cells.extend([
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
                 ])
+                cells.extend(bl_cells)
                 table.add_row(*cells, key=row_key)
                 self._bl_only_rows[row_key] = (entry_id, date_str, reason)
             else:
@@ -320,6 +342,13 @@ class TripTable(Vertical):
                     Text(time_str, style=_STYLE_MUTED),
                     Text(dest_short, style=row_style),
                     Text(purpose_text, style=purpose_style),
+                ])
+                if self._show_fuel:
+                    fuel_text = ""
+                    if trip.category in ("fuel", "fuel_private") and trip.fuel_liters > 0:
+                        fuel_text = f"{trip.fuel_liters:.1f} L"
+                    cells.append(Text(fuel_text, style="bold yellow" if fuel_text else _STYLE_MUTED))
+                cells.extend([
                     Text(format_km(trip.km_start), style=_STYLE_MUTED),
                     Text(format_km(trip.km_end), style=_STYLE_MUTED),
                     Text(

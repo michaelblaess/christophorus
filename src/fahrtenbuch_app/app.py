@@ -243,14 +243,16 @@ class FahrtenbuchApp(App):
             except Exception:
                 pass
 
-        # Kategorie-Code-Spalte (nur TripTable)
+        # Kategorie-Code- und Tankliter-Spalte (nur TripTable)
         show_code = db.get_setting("show_code_column", "0") == "1"
+        show_fuel = db.get_setting("show_fuel_column", "0") == "1"
         category_codes = db.get_category_codes()
         for widget_id in ("#trip-table", "#trip-table-year"):
             try:
                 tt = self.query_one(widget_id, TripTable)
                 tt.set_category_codes(category_codes)
                 tt.set_show_code(show_code)
+                tt.set_show_fuel(show_fuel)
             except Exception:
                 pass
 

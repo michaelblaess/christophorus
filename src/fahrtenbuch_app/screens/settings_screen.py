@@ -185,6 +185,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._show_id_column = database.get_setting("show_id_column", "0") == "1"
         self._show_code_column = database.get_setting("show_code_column", "0") == "1"
         self._check_ghost_trips = database.get_setting("check_ghost_trips", "0") == "1"
+        self._show_fuel_column = database.get_setting("show_fuel_column", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -469,6 +470,13 @@ class SettingsScreen(ModalScreen[bool | None]):
                 id="check-show-code-column",
             )
         with Horizontal(classes="form-row"):
+            yield Label("")
+            yield Checkbox(
+                "Tankliter in Listen anzeigen",
+                value=self._show_fuel_column,
+                id="check-show-fuel-column",
+            )
+        with Horizontal(classes="form-row"):
             yield Label("Plausi-Checks:")
             yield Checkbox(
                 "Ghost-Trips pruefen (gleiche Strecke/km innerhalb 30 Tage)",
@@ -606,6 +614,10 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Kategorie-Code in Listen
         show_code = self._get_checkbox("check-show-code-column")
         self._database.set_setting("show_code_column", "1" if show_code else "0")
+
+        # Tankliter in Listen
+        show_fuel = self._get_checkbox("check-show-fuel-column")
+        self._database.set_setting("show_fuel_column", "1" if show_fuel else "0")
 
         # Ghost-Trips Plausi-Check
         ghost = self._get_checkbox("check-ghost-trips")
