@@ -120,14 +120,24 @@ class DayTile(Widget):
 
         is_weekend = self._date.weekday() >= 5
 
-        if self._holiday_name and self._trip_day and self._trip_day.has_business:
+        # Warnung nur wenn am Tag mindestens eine Business-Fahrt ist, die KEIN
+        # Geschaeftsessen ist — Geschaeftsessen am Wochenende/Feiertag sind OK.
+        has_warnable_business = False
+        if self._trip_day and self._trip_day.has_business:
+            has_warnable_business = any(
+                t.category == "business"
+                and "geschaeftsessen" not in (t.purpose or "").lower()
+                for t in self._trip_day.trips
+            )
+
+        if self._holiday_name and has_warnable_business:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
             text.append("WARNUNG", style=_STYLE_ERROR)
             text.append(f"\n{self._holiday_name[:22]}", style="red italic")
             text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
             return text
 
-        if is_weekend and self._trip_day and self._trip_day.has_business:
+        if is_weekend and has_warnable_business:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
             text.append("WARNUNG", style=_STYLE_ERROR)
             text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)

@@ -485,12 +485,15 @@ def check_weekend_business(database: Database) -> list[PlausibilityIssue]:
     """Findet reine Business-Fahrten am Wochenende.
 
     Tanken und Service sind am Wochenende OK — hier geht es nur um
-    category='business'.
+    category='business'. Geschaeftsessen (per purpose erkannt) sind am
+    Wochenende explizit zulaessig und werden uebersprungen.
     """
     issues: list[PlausibilityIssue] = []
     trips = _load_all_trips_ordered(database)
     for trip in trips:
         if trip.category != "business":
+            continue
+        if "geschaeftsessen" in trip.purpose.lower():
             continue
         d = _parse_trip_date(trip)
         if d is None or d.weekday() < 5:
@@ -523,6 +526,8 @@ def check_holiday_business(
     trips = _load_all_trips_ordered(database)
     for trip in trips:
         if trip.category != "business":
+            continue
+        if "geschaeftsessen" in trip.purpose.lower():
             continue
         d = _parse_trip_date(trip)
         if d is None:

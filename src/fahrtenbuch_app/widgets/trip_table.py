@@ -302,7 +302,9 @@ class TripTable(Vertical):
 
                 # Feiertag / Wochenende nur fuer reine business-Fahrten
                 # (Tanken und Service sind auch am Sonntag unkritisch).
-                if not warning and trip.category == "business":
+                # Geschaeftsessen sind am Wochenende explizit zulaessig.
+                is_geschaeftsessen = "geschaeftsessen" in (trip.purpose or "").lower()
+                if not warning and trip.category == "business" and not is_geschaeftsessen:
                     holiday_name = holidays_map.get(d, "")
                     if holiday_name:
                         warning = f"FEIERTAG: {holiday_name}"
