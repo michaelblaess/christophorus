@@ -469,6 +469,15 @@ class TripScreen(ModalScreen[Trip | None]):
             return
 
         key = str(event.value)
+
+        # Explizites Leer-Machen: Ziel-Textfeld raeumen und raus.
+        if key == "__clear__":
+            self._selected_entry_km = 0.0
+            dest_area = self.query_one("#input-destination", TextArea)
+            dest_area.load_text("")
+            self._recalculate_km()
+            return
+
         entry = self._find_address_entry(key)
         if entry is None:
             return
@@ -690,7 +699,12 @@ class TripScreen(ModalScreen[Trip | None]):
             priv_input.value = format_km(total)
 
     def _build_destination_options(self) -> list[tuple[str, str]]:
-        """Baut die Auswahlliste fuer Ziele aus den DB-Adressen."""
+        """Baut die Auswahlliste fuer Ziele aus den DB-Adressen.
+
+        Erster Eintrag ist immer "(leer)" um das Ziel-Feld per Auswahl
+        leeren zu koennen — haendisches Loeschen im TextArea ist
+        umstaendlicher.
+        """
         options: list[tuple[str, str]] = []
 
         category_labels = {
@@ -708,6 +722,7 @@ class TripScreen(ModalScreen[Trip | None]):
             options.append((label, f"addr_{addr.id}"))
 
         options.sort(key=lambda o: o[0].casefold())
+        options.insert(0, ("(leer)", "__clear__"))
         return options
 
     def _find_address_entry(self, key: str) -> AddressEntry | None:
