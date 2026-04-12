@@ -163,10 +163,13 @@ class DayTile(Widget):
         return text
 
     def on_click(self, event: Click) -> None:
-        """Oeffnet den ersten Trip des Tages zum Bearbeiten."""
+        """Klick: Trip bearbeiten. Doppelklick auf leere Kachel: neue Fahrt."""
+        if self._is_outside:
+            return
         if self._trip_day and self._trip_day.trips:
-            trip = self._trip_day.trips[0]
-            self.post_message(CalendarView.TripEditRequested(trip))
+            self.post_message(CalendarView.TripEditRequested(self._trip_day.trips[0]))
+        elif event.chain > 1:
+            self.post_message(CalendarView.NewTripRequested(self._date))
 
 
 class WeekRow(Horizontal):
@@ -189,6 +192,13 @@ class CalendarView(Vertical):
         def __init__(self, trip: Trip) -> None:
             super().__init__()
             self.trip = trip
+
+    class NewTripRequested(Message):
+        """Wird gesendet bei Doppelklick auf eine leere Kalender-Kachel."""
+
+        def __init__(self, day: date) -> None:
+            super().__init__()
+            self.day = day
 
     DEFAULT_CSS = """
     CalendarView {

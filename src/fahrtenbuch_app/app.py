@@ -447,6 +447,27 @@ class FahrtenbuchApp(App):
             callback=self._on_trip_edited,
         )
 
+    def on_calendar_view_new_trip_requested(
+        self, event: CalendarView.NewTripRequested
+    ) -> None:
+        """Oeffnet den TripScreen fuer eine neue Fahrt am angeklickten Tag."""
+        if self._fahrtenbuch is None:
+            return
+        from fahrtenbuch_app.screens.trip_screen import TripScreen
+
+        db = self._fahrtenbuch.database
+        last_km = db.get_last_km_end(self._year, self._month)
+        default_date = event.day.strftime("%Y-%m-%d")
+
+        self.push_screen(
+            TripScreen(
+                database=db,
+                last_km_end=last_km,
+                default_date=default_date,
+            ),
+            callback=self._on_trip_created,
+        )
+
     def _on_trip_edited(self, trip: "Trip | None") -> None:
         """Callback nach dem Bearbeiten einer Fahrt."""
         if trip is None or self._fahrtenbuch is None:
