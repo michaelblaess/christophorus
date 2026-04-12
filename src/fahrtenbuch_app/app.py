@@ -1126,19 +1126,28 @@ class FahrtenbuchApp(App):
             return
         db = self._fahrtenbuch.database
         try:
-            changed, final_km = db.rebuild_all_km()
-        except ValueError as exc:
-            self._write_log(f"[red]Rebuild abgebrochen: {exc}[/red]")
-            self.notify(str(exc), severity="error")
-            return
+            # force=True: Ueberschreitung des Vertragslimits blockiert den
+            # Rebuild nicht mehr — die Ueber-Limit-Warnung uebernimmt der
+            # Plausi-Check (check_vehicle_end_limit) separat.
+            changed, final_km = db.rebuild_all_km(force=True)
         except Exception as exc:
             self._write_log(f"[red]Rebuild fehlgeschlagen: {exc}[/red]")
             self.notify("Rebuild fehlgeschlagen", severity="error")
             return
+        vehicle = self._fahrtenbuch.vehicle
+        over_limit = (
+            vehicle.end_km > 0 and final_km > vehicle.end_km
+            if vehicle else False
+        )
         self._write_log(
             f"[green]km-Kette neu aufgebaut: {changed} Fahrten, "
             f"Endstand {final_km} km[/green]"
         )
+        if over_limit:
+            self._write_log(
+                f"[yellow]Hinweis: Endstand {final_km} km liegt ueber dem "
+                f"Vertragslimit {vehicle.end_km} km[/yellow]"
+            )
         self.notify(
             f"{changed} Fahrten neu verkettet (Endstand {final_km} km)",
             severity="information",

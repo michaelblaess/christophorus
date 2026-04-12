@@ -1001,21 +1001,30 @@ class Database:
             conn.rollback()
             raise
 
-    def rebuild_all_km(self) -> tuple[int, int]:
+    def rebuild_all_km(self, force: bool = False) -> tuple[int, int]:
         """Baut die km-Kette aller Fahrten chronologisch neu auf.
 
-        Die Distanz jedes Trips (km_end - km_start) bleibt erhalten. km_start
-        wird auf den akkumulierten Stand gesetzt, beginnend mit vehicle.start_km.
-        Rueckgabe: (Anzahl veraenderte Trips, finaler km-Stand).
-        Wirft ValueError, wenn vehicle.end_km ueberschritten wuerde.
+        Als Distanz pro Trip wird `max(km_end - km_start, km_business +
+        km_private)` genommen — so werden auch Zeilen repariert bei denen
+        der User die km-Spalten eingetragen hat aber km_start/km_end nicht
+        (typischer Bug: Rueckfahrt mit business=260, aber km_start==km_end).
+
+        km_start wird auf den akkumulierten Stand gesetzt, beginnend mit
+        vehicle.start_km. Rueckgabe: (Anzahl veraenderte Trips, finaler
+        km-Stand).
+
+        Wenn force=False und vehicle.end_km ueberschritten wuerde, wirft
+        die Methode ValueError ohne Aenderungen zu schreiben. Mit force=
+        True laeuft der Rebuild trotzdem durch — die Vertragspruefung
+        uebernimmt dann separat der Plausi-Check.
         """
         conn = self._get_conn()
         vehicle = self.get_vehicle()
         cursor_state = vehicle.start_km
         info_cats = self.get_informational_category_names()
         rows = conn.execute(
-            "SELECT id, km_start, km_end, category FROM trips "
-            "ORDER BY date, time_from, id"
+            "SELECT id, km_start, km_end, km_business, km_private, category "
+            "FROM trips ORDER BY date, time_from, id"
         ).fetchall()
 
         changes: list[tuple[int, int, int]] = []  # (id, new_start, new_end)
@@ -1024,13 +1033,17 @@ class Database:
                 # Informationelle Trips bleiben bei 0/0 und zaehlen nicht mit
                 changes.append((int(row["id"]), 0, 0))
                 continue
-            distance = max(0, int(row["km_end"]) - int(row["km_start"]))
+            distance_chain = max(0, int(row["km_end"]) - int(row["km_start"]))
+            distance_cols = max(
+                0, int(row["km_business"] or 0) + int(row["km_private"] or 0)
+            )
+            distance = max(distance_chain, distance_cols)
             new_start = cursor_state
             new_end = new_start + distance
             changes.append((int(row["id"]), new_start, new_end))
             cursor_state = new_end
 
-        if vehicle.end_km > 0 and cursor_state > vehicle.end_km:
+        if not force and vehicle.end_km > 0 and cursor_state > vehicle.end_km:
             raise ValueError(
                 f"Rebuild wuerde Endkilometerstand ueberschreiten: "
                 f"{cursor_state} km > {vehicle.end_km} km"

@@ -464,6 +464,41 @@ class TestRebuildAllKm:
         with pytest.raises(ValueError, match="Endkilometerstand"):
             database.rebuild_all_km()
 
+    def test_rebuild_force_ignores_over_limit(
+        self, database: Database, vehicle: Vehicle
+    ) -> None:
+        """Mit force=True laeuft der Rebuild auch ueber dem Vertragslimit."""
+        vehicle.end_km = 10100
+        database.save_vehicle(vehicle)
+        database.add_trip(make_trip("2024-03-01", 50))
+        database.add_trip(make_trip("2024-03-02", 200))
+        changed, final_km = database.rebuild_all_km(force=True)
+        assert changed == 2
+        assert final_km == 10250
+
+    def test_rebuild_uses_column_sum_when_chain_is_zero(
+        self, database: Database
+    ) -> None:
+        """Trip #104-Fall: km_start==km_end aber km_business=260.
+
+        Rebuild muss 260 km aus den Spalten uebernehmen, nicht bei 0
+        bleiben — sonst faellt die Kette auseinander.
+        """
+        database.add_trip(make_trip("2024-03-01", 100))
+        t2 = make_trip("2024-03-02", 260)
+        t2_id = database.add_trip(t2)
+        # Simuliere Nutzer-Bug: km_end auf km_start setzen, km_business
+        # steht aber korrekt in der Spalte.
+        database._get_conn().execute(  # type: ignore[reportPrivateUsage]
+            "UPDATE trips SET km_end = km_start WHERE id = ?", (t2_id,),
+        )
+        database._get_conn().commit()  # type: ignore[reportPrivateUsage]
+        changed, final_km = database.rebuild_all_km()
+        assert changed == 2
+        assert final_km == 10360  # 10000 + 100 + 260
+        ordered = database.get_all_trips_ordered()
+        assert ordered[1].km_end - ordered[1].km_start == 260
+
 
 # ---------------------------------------------------------------------------
 # Stress / Mixed Operations
