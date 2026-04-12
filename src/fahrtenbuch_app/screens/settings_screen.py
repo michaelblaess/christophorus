@@ -187,6 +187,9 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._check_ghost_trips = database.get_setting("check_ghost_trips", "0") == "1"
         self._fuel_winter_tolerance = database.get_setting("fuel_winter_tolerance", "1") == "1"
         self._show_fuel_column = database.get_setting("show_fuel_column", "0") == "1"
+        self._export_include_prev_december = database.get_setting(
+            "export_include_prev_december", "0"
+        ) == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -491,6 +494,13 @@ class SettingsScreen(ModalScreen[bool | None]):
                 value=self._fuel_winter_tolerance,
                 id="check-fuel-winter-tolerance",
             )
+        with Horizontal(classes="form-row"):
+            yield Label("Excel-Export:")
+            yield Checkbox(
+                "Dezember des Vorjahrs in Jahres-Export einschliessen",
+                value=self._export_include_prev_december,
+                id="check-export-include-prev-december",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -634,6 +644,12 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Winter-Toleranz fuer Verbrauchs-Check
         winter = self._get_checkbox("check-fuel-winter-tolerance")
         self._database.set_setting("fuel_winter_tolerance", "1" if winter else "0")
+
+        # Dezember des Vorjahrs in Jahres-Export
+        prev_dec = self._get_checkbox("check-export-include-prev-december")
+        self._database.set_setting(
+            "export_include_prev_december", "1" if prev_dec else "0"
+        )
 
         # Wohnadresse speichern
         self._database.set_setting(

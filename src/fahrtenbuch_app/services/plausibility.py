@@ -342,12 +342,15 @@ def check_vehicle_end_limit(database: Database) -> list[PlausibilityIssue]:
 
     Wichtig: das war frueher ein Hard-Stop in add_trip/update_trip — wir
     lassen die Aenderung durchgehen, aber melden die Ueberschreitung hier.
+    Zusaetzlich wird am Ende eine einzige Zusammenfassung mit der Gesamt-
+    Ueberschreitung erzeugt, damit der User nicht selbst nachrechnen muss.
     """
     issues: list[PlausibilityIssue] = []
     vehicle = database.get_vehicle()
     if vehicle.end_km <= 0:
         return issues
     trips = _load_all_trips_ordered(database)
+    last_over: Trip | None = None
     for trip in trips:
         if trip.km_end > vehicle.end_km:
             d = _parse_trip_date(trip)
@@ -363,6 +366,23 @@ def check_vehicle_end_limit(database: Database) -> list[PlausibilityIssue]:
                 year=d.year if d else None,
                 month=d.month if d else None,
             ))
+            last_over = trip
+    if last_over is not None:
+        overshoot = last_over.km_end - vehicle.end_km
+        d = _parse_trip_date(last_over)
+        issues.append(PlausibilityIssue(
+            severity=SEVERITY_ERROR,
+            category=CAT_OVER_LIMIT,
+            message=(
+                f"Gesamt {overshoot} km zu viel eingetragen: letzte Fahrt "
+                f"endet bei {last_over.km_end} km, erlaubt max {vehicle.end_km} km "
+                f"— Trip-km um {overshoot} km nach unten korrigieren"
+            ),
+            trip_id=last_over.id,
+            trip_date=last_over.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
     return issues
 
 

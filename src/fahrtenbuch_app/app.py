@@ -41,7 +41,7 @@ class FahrtenbuchApp(App):
     """Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher."""
 
     CSS_PATH = "app.tcss"
-    TITLE = f"Fahrtenbuch v{__version__} ({__year__})"
+    TITLE = f"Death Proof v{__version__} ({__year__})"
 
     BINDINGS = [
         Binding("q", "quit", "Beenden"),
@@ -130,7 +130,7 @@ class FahrtenbuchApp(App):
         if not self._config.log_visible:
             self.query_one("#log-panel").add_class("hidden")
 
-        self._write_log(f"Fahrtenbuch v{__version__} gestartet")
+        self._write_log(f"Death Proof v{__version__} gestartet")
 
         # Versuche zuletzt geoeffnetes Fahrtenbuch zu oeffnen
         last_path = self._config.last_opened_path
@@ -904,6 +904,12 @@ class FahrtenbuchApp(App):
 
         if is_year_export:
             trips = db.get_trips_for_year(self._year)
+            # Optional Dezember des Vorjahrs vorn anhaengen, damit die
+            # Steuerberaterin den Kettenstart sieht.
+            if db.get_setting("export_include_prev_december", "0") == "1":
+                prev_trips = db.get_trips_for_month(self._year - 1, 12)
+                if prev_trips:
+                    trips = prev_trips + trips
             subtitle = f"{self._year} — {lease_info}"
             filename = f"Fahrtenbuch {self._year}{plate_part} {ts}.xlsx"
             group_by_month = True

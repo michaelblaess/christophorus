@@ -51,7 +51,7 @@ class InfoScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with VerticalScroll():
-            yield Static(f"Fahrtenbuch v{__version__}", id="title")
+            yield Static(f"Death Proof v{__version__}", id="title")
             yield Static(
                 f"von {__author__}\n"
                 f"\n"

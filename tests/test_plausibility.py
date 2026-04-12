@@ -212,9 +212,12 @@ class TestCheckVehicleEndLimit:
         # add_trip lehnt nicht mehr ab — Plausi-Check muss melden
         database.add_trip(make_trip("2024-03-01", 200))
         issues = check_vehicle_end_limit(database)
-        assert len(issues) == 1
-        assert issues[0].category == CAT_OVER_LIMIT
-        assert issues[0].severity == SEVERITY_ERROR
+        # Ein Pro-Trip-Fehler + eine Gesamt-Zusammenfassung
+        assert len(issues) == 2
+        assert all(i.category == CAT_OVER_LIMIT for i in issues)
+        assert all(i.severity == SEVERITY_ERROR for i in issues)
+        assert "100 km" in issues[-1].message
+        assert "zu viel" in issues[-1].message
 
 
 # ---------------------------------------------------------------------------

@@ -184,16 +184,25 @@ def _write_total_row(
     ws: Worksheet,
     row: int,
     label: str,
-    km_business: int,
-    km_private: int,
+    business_formula: str,
+    private_formula: str,
+    end_km_row: int | None = None,
 ) -> None:
-    """Schreibt eine Summenzeile."""
+    """Schreibt eine Summenzeile mit Formeln.
+
+    business_formula / private_formula: Excel-Formel-Strings (ohne fuehrendes
+    '='), z.B. 'SUM(G6:G20)'. Spalte F zeigt den Tachostand am Ende des
+    Abschnitts per Formel =F{end_km_row} (letzte reale Trip-Zeile), damit
+    beim Nacheditieren alles live aktualisiert.
+    """
     cell_label = ws.cell(row=row, column=4, value=label)
     cell_label.font = Font(bold=True)
     cell_label.alignment = Alignment(horizontal="right")
 
-    ws.cell(row=row, column=7, value=km_business).font = Font(bold=True)
-    ws.cell(row=row, column=9, value=km_private).font = Font(bold=True)
+    ws.cell(row=row, column=7, value=f"={business_formula}").font = Font(bold=True)
+    ws.cell(row=row, column=9, value=f"={private_formula}").font = Font(bold=True)
+    if end_km_row is not None:
+        ws.cell(row=row, column=6, value=f"=F{end_km_row}").font = Font(bold=True)
 
     for col in range(1, 10):
         cell = ws.cell(row=row, column=col)
@@ -235,16 +244,17 @@ def export_trips(
     ws.freeze_panes = "A6"
 
     current_row = 6
-    total_business = 0
-    total_private = 0
+    first_trip_row: int | None = None
+    last_trip_row: int | None = None
+    monthly_sum_rows: list[int] = []
     prev_km_row: int | None = None
     informational = get_informational_categories()
 
     if group_by_month and trips:
         # Nach Monat gruppieren und Zwischensummen einfuegen
         current_month: tuple[int, int] | None = None
-        month_business = 0
-        month_private = 0
+        month_first_row: int | None = None
+        month_last_row: int | None = None
 
         for trip in trips:
             date_obj = _iso_to_date(trip.date)
@@ -252,49 +262,74 @@ def export_trips(
 
             if current_month is not None and trip_month != current_month:
                 # Vorherigen Monat abschliessen
-                _write_total_row(
-                    ws,
-                    current_row,
-                    f"Summe {_month_label(current_month)}:",
-                    month_business,
-                    month_private,
-                )
-                current_row += 1
-                month_business = 0
-                month_private = 0
+                if month_first_row is not None and month_last_row is not None:
+                    _write_total_row(
+                        ws,
+                        current_row,
+                        f"Summe {_month_label(current_month)}:",
+                        f"SUM(G{month_first_row}:G{month_last_row})",
+                        f"SUM(I{month_first_row}:I{month_last_row})",
+                        end_km_row=month_last_row,
+                    )
+                    monthly_sum_rows.append(current_row)
+                    current_row += 1
+                month_first_row = None
+                month_last_row = None
 
             current_month = trip_month
             _write_trip_row(ws, current_row, trip, category_labels, prev_km_row=prev_km_row)
             if trip.category not in informational:
                 prev_km_row = current_row
-            month_business += trip.km_business
-            month_private += trip.km_private
-            total_business += trip.km_business
-            total_private += trip.km_private
+                if month_first_row is None:
+                    month_first_row = current_row
+                month_last_row = current_row
+                if first_trip_row is None:
+                    first_trip_row = current_row
+                last_trip_row = current_row
             current_row += 1
 
         # Letzter Monat
-        if current_month is not None:
+        if current_month is not None and month_first_row is not None and month_last_row is not None:
             _write_total_row(
                 ws,
                 current_row,
                 f"Summe {_month_label(current_month)}:",
-                month_business,
-                month_private,
+                f"SUM(G{month_first_row}:G{month_last_row})",
+                f"SUM(I{month_first_row}:I{month_last_row})",
+                end_km_row=month_last_row,
             )
+            monthly_sum_rows.append(current_row)
             current_row += 1
     else:
         for trip in trips:
             _write_trip_row(ws, current_row, trip, category_labels, prev_km_row=prev_km_row)
             if trip.category not in informational:
                 prev_km_row = current_row
-            total_business += trip.km_business
-            total_private += trip.km_private
+                if first_trip_row is None:
+                    first_trip_row = current_row
+                last_trip_row = current_row
             current_row += 1
 
-    # Gesamtsumme
+    # Gesamtsumme: bei Monats-Gruppierung werden die Monats-Summen-Zeilen
+    # aufaddiert (keine doppelten Werte), sonst der gesamte Trip-Bereich.
     current_row += 1
-    _write_total_row(ws, current_row, "Gesamt:", total_business, total_private)
+    if monthly_sum_rows:
+        business_formula = "+".join(f"G{r}" for r in monthly_sum_rows)
+        private_formula = "+".join(f"I{r}" for r in monthly_sum_rows)
+    elif first_trip_row is not None and last_trip_row is not None:
+        business_formula = f"SUM(G{first_trip_row}:G{last_trip_row})"
+        private_formula = f"SUM(I{first_trip_row}:I{last_trip_row})"
+    else:
+        business_formula = "0"
+        private_formula = "0"
+    _write_total_row(
+        ws,
+        current_row,
+        "Gesamt:",
+        business_formula,
+        private_formula,
+        end_km_row=last_trip_row,
+    )
 
     wb.save(out_path)
 
