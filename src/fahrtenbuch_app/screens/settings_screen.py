@@ -184,6 +184,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._journal_mode = database.get_setting("db_journal_mode", "DELETE").upper()
         self._show_id_column = database.get_setting("show_id_column", "0") == "1"
         self._show_code_column = database.get_setting("show_code_column", "0") == "1"
+        self._check_ghost_trips = database.get_setting("check_ghost_trips", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -467,6 +468,13 @@ class SettingsScreen(ModalScreen[bool | None]):
                 value=self._show_code_column,
                 id="check-show-code-column",
             )
+        with Horizontal(classes="form-row"):
+            yield Label("Plausi-Checks:")
+            yield Checkbox(
+                "Ghost-Trips pruefen (gleiche Strecke/km innerhalb 30 Tage)",
+                value=self._check_ghost_trips,
+                id="check-ghost-trips",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -598,6 +606,10 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Kategorie-Code in Listen
         show_code = self._get_checkbox("check-show-code-column")
         self._database.set_setting("show_code_column", "1" if show_code else "0")
+
+        # Ghost-Trips Plausi-Check
+        ghost = self._get_checkbox("check-ghost-trips")
+        self._database.set_setting("check_ghost_trips", "1" if ghost else "0")
 
         # Wohnadresse speichern
         self._database.set_setting(

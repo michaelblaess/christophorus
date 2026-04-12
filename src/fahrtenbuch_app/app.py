@@ -297,10 +297,12 @@ class FahrtenbuchApp(App):
         summary.update_data(month_data, lease_km)
 
         # Warnungen nur fuer reine Business-Fahrten an Feiertagen/Wochenenden
-        # (Tanken/Service duerfen auch am Wochenende stattfinden).
+        # (Tanken/Service/Geschaeftsessen duerfen auch am Wochenende stattfinden).
         warnings = 0
         for trip in month_data.trips:
             if trip.category != "business":
+                continue
+            if "geschaeftsessen" in trip.purpose.lower():
                 continue
             try:
                 parts = trip.date.split("-")
@@ -969,13 +971,17 @@ class FahrtenbuchApp(App):
 
         from fahrtenbuch_app.services.plausibility import (
             run_all_checks,
+            CAT_GHOST_BUSINESS_TRIP,
             SEVERITY_ERROR,
             SEVERITY_WARNING,
         )
 
         db = self._fahrtenbuch.database
         holidays_map = self._holiday_service.get_holidays_in_year(self._year)
-        report = run_all_checks(db, holidays_by_date=holidays_map)
+        skip: set[str] = set()
+        if db.get_setting("check_ghost_trips", "0") != "1":
+            skip.add(CAT_GHOST_BUSINESS_TRIP)
+        report = run_all_checks(db, holidays_by_date=holidays_map, skip_checks=skip)
 
         # Problem-Trip-IDs fuer die Liste neu setzen
         new_problem_ids: set[int] = set()

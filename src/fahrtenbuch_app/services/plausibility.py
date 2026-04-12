@@ -944,11 +944,14 @@ _MONTH_NAMES_DE = [
 def run_all_checks(
     database: Database,
     holidays_by_date: dict[date, str] | None = None,
+    skip_checks: set[str] | None = None,
 ) -> PlausibilityReport:
     """Fuehrt alle Plausi-Checks aus und liefert einen Report.
 
     Das ist der Einstiegspunkt fuer den "p"-Button in der UI.
+    skip_checks: Menge von Check-Kategorie-Namen die uebersprungen werden.
     """
+    skip = skip_checks or set()
     report = PlausibilityReport()
     report.issues.extend(check_chain_ascending(database))
     report.issues.extend(check_distance_matches_columns(database))
@@ -964,7 +967,8 @@ def run_all_checks(
     report.issues.extend(check_fuel_tank_capacity(database))
     report.issues.extend(check_fuel_consumption_range(database))
     report.issues.extend(check_fuel_range_exceeded(database))
-    report.issues.extend(check_ghost_business_trips(database))
+    if CAT_GHOST_BUSINESS_TRIP not in skip:
+        report.issues.extend(check_ghost_business_trips(database))
     return report
 
 
