@@ -202,7 +202,7 @@ class TripScreen(ModalScreen[Trip | None]):
         self._category_labels = {code: label for label, code in category_options}
         self._current_category = trip.category if self._is_edit else "business"
 
-        default_date_iso = trip.date if self._is_edit else ""
+        default_date_iso = trip.date if self._is_edit else self._default_date
         default_date_de = _iso_to_de(default_date_iso) if default_date_iso else ""
 
         # km_start IMMER aus dem chronologischen Vorgaenger bestimmen
