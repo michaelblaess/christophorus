@@ -63,6 +63,8 @@ class TripTable(Vertical):
         self._year_mode: bool = False
         self._problem_trip_ids: set[int] = set()
         self._show_id: bool = False
+        self._show_code: bool = False
+        self._category_codes: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
@@ -80,6 +82,8 @@ class TripTable(Vertical):
         table = self.query_one("#trip-data", DataTable)
         if self._show_id:
             table.add_column("ID", key="id", width=5)
+        if self._show_code:
+            table.add_column("Kat", key="code", width=4)
         table.add_column("Datum", key="date")
         table.add_column("Tag", key="weekday")
         table.add_column("Fahrzeit", key="time")
@@ -103,6 +107,24 @@ class TripTable(Vertical):
         self._setup_columns()
         if self._last_month_data is not None:
             self._build_rows()
+
+    def set_show_code(self, value: bool) -> None:
+        """Schaltet die Kategorie-Code-Spalte ein/aus."""
+        if self._show_code == value:
+            return
+        self._show_code = value
+        try:
+            table = self.query_one("#trip-data", DataTable)
+        except Exception:
+            return
+        table.clear(columns=True)
+        self._setup_columns()
+        if self._last_month_data is not None:
+            self._build_rows()
+
+    def set_category_codes(self, codes: dict[str, str]) -> None:
+        """Setzt das Mapping Kategorie-Name -> Code (G/P/T)."""
+        self._category_codes = codes
 
     def load_data(
         self,
@@ -213,6 +235,8 @@ class TripTable(Vertical):
                 cells: list[Text] = []
                 if self._show_id:
                     cells.append(Text("", style=_STYLE_MUTED))
+                if self._show_code:
+                    cells.append(Text("", style=_STYLE_MUTED))
                 cells.extend([
                     Text(date_de, style=_STYLE_ERROR),
                     Text(weekday, style=_STYLE_ERROR),
@@ -286,6 +310,10 @@ class TripTable(Vertical):
                 cells = []
                 if self._show_id:
                     cells.append(Text(str(trip.id) if trip.id else "", style=_STYLE_MUTED))
+                if self._show_code:
+                    code = self._category_codes.get(trip.category, "")
+                    code_style = "bold yellow" if code == "T" else _STYLE_MUTED
+                    cells.append(Text(code, style=code_style))
                 cells.extend([
                     Text(date_de, style=row_style),
                     Text(weekday, style=_STYLE_ERROR if warning else _STYLE_MUTED),

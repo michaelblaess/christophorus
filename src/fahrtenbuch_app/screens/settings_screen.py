@@ -183,6 +183,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._federal_state = database.get_setting("federal_state", "BB")
         self._journal_mode = database.get_setting("db_journal_mode", "DELETE").upper()
         self._show_id_column = database.get_setting("show_id_column", "0") == "1"
+        self._show_code_column = database.get_setting("show_code_column", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -459,6 +460,13 @@ class SettingsScreen(ModalScreen[bool | None]):
                 value=self._show_id_column,
                 id="check-show-id-column",
             )
+        with Horizontal(classes="form-row"):
+            yield Label("")
+            yield Checkbox(
+                "Kategorie-Code in Listen (G/P/T)",
+                value=self._show_code_column,
+                id="check-show-code-column",
+            )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
@@ -586,6 +594,10 @@ class SettingsScreen(ModalScreen[bool | None]):
         # ID-Spalte in Tabellen
         show_id = self._get_checkbox("check-show-id-column")
         self._database.set_setting("show_id_column", "1" if show_id else "0")
+
+        # Kategorie-Code in Listen
+        show_code = self._get_checkbox("check-show-code-column")
+        self._database.set_setting("show_code_column", "1" if show_code else "0")
 
         # Wohnadresse speichern
         self._database.set_setting(

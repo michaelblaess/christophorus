@@ -230,9 +230,8 @@ class FahrtenbuchApp(App):
         """
         if self._fahrtenbuch is None:
             return
-        show_id = (
-            self._fahrtenbuch.database.get_setting("show_id_column", "0") == "1"
-        )
+        db = self._fahrtenbuch.database
+        show_id = db.get_setting("show_id_column", "0") == "1"
         for widget_id, cls in (
             ("#trip-table", TripTable),
             ("#trip-table-year", TripTable),
@@ -241,6 +240,17 @@ class FahrtenbuchApp(App):
         ):
             try:
                 self.query_one(widget_id, cls).set_show_id(show_id)
+            except Exception:
+                pass
+
+        # Kategorie-Code-Spalte (nur TripTable)
+        show_code = db.get_setting("show_code_column", "0") == "1"
+        category_codes = db.get_category_codes()
+        for widget_id in ("#trip-table", "#trip-table-year"):
+            try:
+                tt = self.query_one(widget_id, TripTable)
+                tt.set_category_codes(category_codes)
+                tt.set_show_code(show_code)
             except Exception:
                 pass
 

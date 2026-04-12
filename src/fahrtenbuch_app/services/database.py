@@ -218,6 +218,7 @@ class Database:
         self._migrate_add_fuel_columns()
         self._migrate_add_vehicle_tank_columns()
         self._migrate_add_audit_columns()
+        self._migrate_add_category_code()
 
     def _migrate_add_audit_columns(self) -> None:
         """Fuegt created_at/created_by/changed_at/changed_by als NULL-Spalten
@@ -245,6 +246,27 @@ class Database:
             if col in existing:
                 continue
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+
+    def _migrate_add_category_code(self) -> None:
+        """Fuegt die Spalte 'code' in categories ein und setzt Defaults."""
+        conn = self._get_conn()
+        rows = conn.execute("PRAGMA table_info(categories)").fetchall()
+        existing = {str(row[1]) for row in rows}
+        if "code" in existing:
+            return
+        conn.execute("ALTER TABLE categories ADD COLUMN code TEXT")
+        code_map = {
+            "business": "G",
+            "private": "P",
+            "fuel": "T",
+            "fuel_private": "T",
+        }
+        for name, code in code_map.items():
+            conn.execute(
+                "UPDATE categories SET code = ? WHERE name = ?",
+                (code, name),
+            )
+        conn.commit()
 
     def _migrate_trips_check_constraint(self) -> None:
         """Entfernt die CHECK-Constraint auf trips.category falls vorhanden.
@@ -495,6 +517,14 @@ class Database:
             "SELECT name, color FROM categories ORDER BY id"
         ).fetchall()
         return {row["name"]: row["color"] for row in rows}
+
+    def get_category_codes(self) -> dict[str, str]:
+        """Gibt ein Mapping von Kategorie-Name zu Code (G/P/T/...) zurueck."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT name, code FROM categories WHERE code IS NOT NULL ORDER BY id"
+        ).fetchall()
+        return {row["name"]: row["code"] for row in rows}
 
     def get_category_options(self) -> list[tuple[str, str]]:
         """Gibt Kategorien als (display_name, name)-Tupel fuer Select-Widgets zurueck."""
