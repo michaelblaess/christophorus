@@ -689,6 +689,14 @@ class FahrtenbuchApp(App):
         )
         year_table.set_problem_trip_ids(self._problem_trip_ids)
 
+        # SummaryPanel mit Jahresdaten aktualisieren
+        lease_km = 1500
+        vehicle = self._fahrtenbuch.vehicle
+        if vehicle:
+            lease_km = vehicle.lease_km_per_month
+        summary = self.query_one("#summary-panel", SummaryPanel)
+        summary.update_data(year_data, lease_km * 12)
+
     def _refresh_documents_view(self) -> None:
         """Laedt alle Belege in die DocumentsView."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
