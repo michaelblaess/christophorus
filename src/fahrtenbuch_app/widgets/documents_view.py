@@ -48,7 +48,7 @@ class DocumentsView(Vertical):
         table = self.query_one("#docs-data", DataTable)
         if self._show_id:
             table.add_column("ID", key="id", width=5)
-        table.add_columns("Typ", "Datum", "Bezug", "Datei")
+        table.add_columns("Typ", "Datum", "Uhrzeit", "Bezug", "Bemerkung", "Datei")
 
     def set_show_id(self, value: bool) -> None:
         """Schaltet die ID-Spalte ein/aus."""
@@ -90,12 +90,23 @@ class DocumentsView(Vertical):
             trip_id = doc.get("trip_id")
             bl_id = doc.get("blacklist_id")
 
+            uhrzeit = ""
+            bemerkung = ""
+
             if trip_id:
                 typ = "Fahrt"
                 trip_date = str(doc.get("trip_date", ""))
                 purpose = str(doc.get("trip_purpose", ""))
                 date_de = self._format_date(trip_date)
                 bezug = purpose
+                uhrzeit = str(doc.get("trip_time_from") or "")[:5]
+                category = str(doc.get("trip_category") or "")
+                fuel_liters = doc.get("trip_fuel_liters")
+                if category in ("fuel", "fuel_private") and fuel_liters:
+                    try:
+                        bemerkung = f"{float(fuel_liters):.2f} L"
+                    except (TypeError, ValueError):
+                        bemerkung = ""
             elif bl_id:
                 typ = "Blacklist"
                 bl_date = str(doc.get("bl_date", ""))
@@ -113,7 +124,9 @@ class DocumentsView(Vertical):
             cells.extend([
                 Text(typ, style="green" if typ == "Fahrt" else "red" if typ == "Blacklist" else "dim"),
                 Text(date_de),
+                Text(uhrzeit, style="dim"),
                 Text(bezug),
+                Text(bemerkung, style="cyan" if bemerkung else "dim"),
                 Text(filename, style="dim"),
             ])
             table.add_row(*cells, key=str(idx))

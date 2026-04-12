@@ -734,6 +734,13 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
     if len(full_tanks) < 2:
         return issues
 
+    partial_fills: list[Trip] = [
+        t for t in trips
+        if t.category in ("fuel", "fuel_private")
+        and not t.fuel_full_tank
+        and t.fuel_liters > 0
+    ]
+
     target = vehicle.consumption_l_100km
     low = target * (1 - FUEL_TOLERANCE)
     high = target * (1 + FUEL_TOLERANCE)
@@ -744,9 +751,14 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
             continue
         if distance_km <= 0:
             continue
-        # Liter, die zwischen zwei Volltankungen nachgefuellt wurden, ent-
-        # sprechen dem Verbrauch auf dem Intervall = curr.fuel_liters.
-        consumption = curr.fuel_liters * 100.0 / distance_km
+        # Zwischen zwei Volltankungen nachgefuellte Liter (inkl. Teilbetankungen
+        # im Intervall) entsprechen dem Gesamtverbrauch auf der Strecke.
+        mid_liters = sum(
+            p.fuel_liters for p in partial_fills
+            if prev.km_end < p.km_end <= curr.km_end
+        )
+        total_liters = curr.fuel_liters + mid_liters
+        consumption = total_liters * 100.0 / distance_km
         if low <= consumption <= high:
             continue
         d = _parse_trip_date(curr)
@@ -757,7 +769,7 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
             message=(
                 f"Verbrauch {consumption:.1f} l/100km zwischen Volltank "
                 f"{prev.date} und {curr.date} ({distance_km} km, "
-                f"{curr.fuel_liters:.2f} l) — erwartet "
+                f"{total_liters:.2f} l) — erwartet "
                 f"{target:.1f} l/100km +/- {int(FUEL_TOLERANCE * 100)} %"
             ),
             trip_id=curr.id,
@@ -804,9 +816,24 @@ def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
     if len(full_tanks) < 2:
         return issues
 
+    partial_fills: list[Trip] = [
+        t for t in trips
+        if t.category in ("fuel", "fuel_private")
+        and not t.fuel_full_tank
+        and t.fuel_liters > 0
+    ]
+
     for prev, curr in zip(full_tanks, full_tanks[1:]):
         distance_km = curr.km_end - prev.km_end
-        if distance_km <= max_range_km:
+        # Teilbetankungen im Intervall erweitern die effektive Reichweite:
+        # eine Volltankfuellung plus jede Teilbetankung = zusaetzliche Liter,
+        # jeweils bei minimalem Verbrauch in km umgerechnet.
+        mid_liters = sum(
+            p.fuel_liters for p in partial_fills
+            if prev.km_end < p.km_end <= curr.km_end
+        )
+        effective_max_km = (vehicle.tank_capacity_l + mid_liters) * 100.0 / min_consumption
+        if distance_km <= effective_max_km:
             continue
         d = _parse_trip_date(curr)
         issues.append(PlausibilityIssue(
@@ -815,9 +842,10 @@ def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
             message=(
                 f"Zwischen Volltank {prev.date} und {curr.date} wurden "
                 f"{distance_km} km gefahren — Tank "
-                f"({vehicle.tank_capacity_l:.0f} l) reicht maximal ca. "
-                f"{max_range_km:.0f} km. Eine Tankung fehlt oder ein Trip "
-                f"im Intervall ist ueberzaehlig."
+                f"({vehicle.tank_capacity_l:.0f} l"
+                + (f" + {mid_liters:.2f} l Teilbetankung" if mid_liters > 0 else "")
+                + f") reicht maximal ca. {effective_max_km:.0f} km. "
+                f"Eine Tankung fehlt oder ein Trip im Intervall ist ueberzaehlig."
             ),
             trip_id=curr.id,
             trip_date=curr.date,

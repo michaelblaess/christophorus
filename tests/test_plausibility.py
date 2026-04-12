@@ -589,6 +589,24 @@ def _add_full_tank(
     conn.commit()
 
 
+def _add_partial_fill(
+    database: Database, date_iso: str, km_end: int, liters: float
+) -> None:
+    """Legt eine Teilbetankung (fuel_full_tank=False) am km-Stand an."""
+    trip = make_trip(date_iso, 0, business=False)
+    trip.category = "fuel_private"
+    trip.fuel_liters = liters
+    trip.fuel_full_tank = False
+    database.add_trip(trip)
+    fetched = database.get_all_trips_ordered()[-1]
+    conn = database._get_conn()  # type: ignore[reportPrivateUsage]
+    conn.execute(
+        "UPDATE trips SET km_start=?, km_end=? WHERE id=?",
+        (km_end, km_end, fetched.id),
+    )
+    conn.commit()
+
+
 class TestCheckFuelRangeExceeded:
     def test_no_vehicle_tank_data_no_issues(self, database: Database) -> None:
         """Ohne gepflegte Tank-/Verbrauchs-Daten wird der Check uebersprungen."""
@@ -635,6 +653,70 @@ class TestCheckFuelRangeExceeded:
         _vehicle_with_tank(database)
         _add_full_tank(database, "2024-01-01", 10000)
         assert check_fuel_range_exceeded(database) == []
+
+    def test_partial_fill_extends_range(self, database: Database) -> None:
+        """Teilbetankung zwischen zwei Volltanks erweitert die max. Reichweite."""
+        _vehicle_with_tank(database)  # 54 l / 6 L/100km = 900 km max
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_partial_fill(database, "2024-01-10", 10500, 36.0)  # +36 l -> +600 km
+        _add_full_tank(database, "2024-01-20", 11100)  # 1100 km insgesamt
+        # Ohne Fix: 1100 > 900 -> ERROR. Mit Fix: (54+36)/6*100 = 1500 km -> OK.
+        errors = [
+            i for i in check_fuel_range_exceeded(database)
+            if i.category == CAT_FUEL_RANGE_EXCEEDED
+        ]
+        assert errors == []
+
+    def test_partial_fill_still_too_far(self, database: Database) -> None:
+        """Auch mit Teilbetankung kann die physikalische Grenze ueberschritten werden."""
+        _vehicle_with_tank(database)  # 54 l -> 900 km
+        _add_full_tank(database, "2024-01-01", 10000)
+        _add_partial_fill(database, "2024-01-10", 10500, 10.0)  # +10 l -> +167 km
+        _add_full_tank(database, "2024-01-20", 12000)  # 2000 km -- zu weit
+        errors = [
+            i for i in check_fuel_range_exceeded(database)
+            if i.category == CAT_FUEL_RANGE_EXCEEDED
+        ]
+        assert len(errors) == 1
+        assert "2000 km" in errors[0].message
+        assert "10.00 l Teilbetankung" in errors[0].message
+
+
+class TestCheckFuelConsumptionPartialFills:
+    def test_partial_fill_counted_in_consumption(self, database: Database) -> None:
+        """Teilbetankungen zaehlen zum Gesamtverbrauch zwischen zwei Volltanks."""
+        from fahrtenbuch_app.services.plausibility import (
+            check_fuel_consumption_range,
+            CAT_FUEL_CONSUMPTION,
+        )
+        _vehicle_with_tank(database)  # target 7.5 +/- 20% -> 6..9
+        _add_full_tank(database, "2024-01-01", 10000, liters=50.0)
+        _add_partial_fill(database, "2024-01-10", 10500, 36.0)
+        # 1200 km total, 36 + 54 = 90 l insgesamt -> 7.5 l/100km (perfekt)
+        _add_full_tank(database, "2024-01-20", 11200, liters=54.0)
+        issues = [
+            i for i in check_fuel_consumption_range(database)
+            if i.category == CAT_FUEL_CONSUMPTION
+        ]
+        assert issues == []
+
+    def test_partial_fill_ignored_would_falsely_warn(self, database: Database) -> None:
+        """Ohne Fix wuerde der Check hier faelschlich warnen."""
+        from fahrtenbuch_app.services.plausibility import (
+            check_fuel_consumption_range,
+            CAT_FUEL_CONSUMPTION,
+        )
+        _vehicle_with_tank(database)
+        _add_full_tank(database, "2024-01-01", 10000, liters=50.0)
+        _add_partial_fill(database, "2024-01-10", 10500, 36.0)
+        _add_full_tank(database, "2024-01-20", 11200, liters=54.0)
+        # Kontrollrechnung: naive Rechnung (ohne Teilbetankung) = 54 l / 1200 km
+        # = 4.5 l/100km -> das waere die falsche Warnung ohne Fix.
+        issues = check_fuel_consumption_range(database)
+        # Mit Fix darf keine Warnung kommen:
+        assert all(
+            "4.5 l/100km" not in i.message for i in issues
+        )
 
 
 # ---------------------------------------------------------------------------

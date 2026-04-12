@@ -1390,7 +1390,9 @@ class Database:
         rows = conn.execute("""
             SELECT d.id, d.trip_id, d.blacklist_id, d.path, d.description,
                    d.created_at,
-                   t.date AS trip_date, t.purpose AS trip_purpose,
+                   t.date AS trip_date, t.time_from AS trip_time_from,
+                   t.purpose AS trip_purpose, t.category AS trip_category,
+                   t.fuel_liters AS trip_fuel_liters,
                    b.date AS bl_date, b.reason AS bl_reason
             FROM documents d
             LEFT JOIN trips t ON d.trip_id = t.id
