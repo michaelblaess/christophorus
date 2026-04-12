@@ -110,16 +110,9 @@ class TripScreen(ModalScreen[Trip | None]):
         height: 4;
     }
     TripScreen #btn-date-picker {
+        width: 5;
         min-width: 5;
-        height: 1;
-        border: none;
-        background: transparent;
-        color: $accent;
         margin-left: 1;
-        padding: 0 1;
-    }
-    TripScreen #btn-date-picker:hover {
-        background: $accent 30%;
     }
     TripScreen .button-row {
         height: auto;
@@ -233,7 +226,7 @@ class TripScreen(ModalScreen[Trip | None]):
                     placeholder="TT.MM.JJJJ",
                     id="input-date",
                 )
-                yield Button("\u25a6", id="btn-date-picker")
+                yield Button("...", id="btn-date-picker")
 
             with Horizontal(classes="form-row"):
                 yield Label("Fahrzeit von:")
@@ -714,6 +707,7 @@ class TripScreen(ModalScreen[Trip | None]):
             label = f"{cat_label}: {addr.name} ({addr.km:.0f} km)"
             options.append((label, f"addr_{addr.id}"))
 
+        options.sort(key=lambda o: o[0].casefold())
         return options
 
     def _find_address_entry(self, key: str) -> AddressEntry | None:

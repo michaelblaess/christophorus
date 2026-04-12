@@ -49,12 +49,12 @@ class FahrtenbuchApp(App):
         Binding("d", "delete_trip", "Loeschen"),
         Binding("e", "export_excel", "Excel"),
         Binding("s", "show_settings", "Settings"),
-        Binding("j", "show_year", "Jahr"),
         Binding("o", "open_fahrtenbuch", "Oeffnen"),
         Binding("v", "toggle_view", "View"),
         Binding("b", "toggle_blacklist", "Blacklist"),
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
+        Binding("f5", "refresh_view", "Aktualisieren"),
         Binding("p", "check_plausibility", "Plausibilitaet"),
         Binding("r", "rebuild_km", "km reparieren"),
         Binding("l", "toggle_log", "Log"),
@@ -922,6 +922,20 @@ class FahrtenbuchApp(App):
         """Wechselt direkt zur Jahresuebersicht."""
         tabs = self.query_one("#view-tabs", Tabs)
         tabs.active = "tab-year"
+
+    def action_refresh_view(self) -> None:
+        """Aktualisiert die aktuelle Ansicht (F5)."""
+        self._refresh_data()
+        view = self._current_view
+        if view == "tab-list-year":
+            self._refresh_year_trip_table()
+        elif view == "tab-year":
+            self._refresh_year_view()
+        elif view == "tab-documents":
+            self._refresh_documents_view()
+        elif view == "tab-worktimes":
+            self._refresh_worktimes_view()
+        self.notify("Ansicht aktualisiert", severity="information")
 
     def action_check_plausibility(self) -> None:
         """Fuehrt die Plausibilitaetspruefung durch.

@@ -103,9 +103,8 @@ class QuarterRow(Horizontal):
 
     DEFAULT_CSS = """
     QuarterRow {
-        height: 11;
+        height: auto;
         width: 1fr;
-        margin-bottom: 1;
     }
     QuarterRow .quarter-label {
         width: 4;
@@ -142,6 +141,8 @@ class YearView(VerticalScroll):
         self._title_widget = Static("", classes="year-title")
         self._summary_widget = Static("", classes="year-summary")
         self._loaded_year: int = 0
+        self._month_data: dict[int, MonthData] = {}
+        self._lease_km: int = 1500
 
     def compose(self) -> ComposeResult:
         """Erstellt das statische Layout einmalig."""
@@ -162,6 +163,8 @@ class YearView(VerticalScroll):
     ) -> None:
         """Aktualisiert die Jahresuebersicht mit neuen Daten."""
         self._loaded_year = year
+        self._month_data = month_data
+        self._lease_km = lease_km
         self._title_widget.update(f"Jahresuebersicht {year}")
         problems = problem_months or {}
 
@@ -177,14 +180,16 @@ class YearView(VerticalScroll):
             tile._problem_count = problems.get(tile._month, 0)
             tile.refresh()
 
+        # Jahres-Zusammenfassung aktualisieren
+        self._summary_widget.update(
+            self._build_summary_text(month_data, lease_km, year)
+        )
+
     def set_problem_months(self, problem_months: dict[int, int]) -> None:
         """Setzt die Plausi-Befunde pro Monat und aktualisiert die Kacheln."""
         for tile in self.query(MonthTile):
             tile._problem_count = problem_months.get(tile._month, 0)
             tile.refresh()
-
-        # Summary aktualisieren
-        self._summary_widget.update(self._build_summary_text(month_data, lease_km, year))
 
     def _build_summary_text(
         self,

@@ -254,16 +254,17 @@ class TestFuelConsumptionRangeCheck:
         self._build_chain(database, distance_km=30, liters_second_tank=45.0)
         assert check_fuel_consumption_range(database) == []
 
-    def test_partial_refill_ignored(self, database: Database) -> None:
-        """Nur full_tank=True-Tankungen spannen ein Intervall auf."""
+    def test_partial_refill_included_in_consumption(self, database: Database) -> None:
+        """Teilbetankungen werden im Verbrauch mitgezaehlt, spannen aber kein
+        eigenes Intervall auf (nur full_tank=True definiert Fenstergrenzen)."""
         set_fuel_vehicle(database, consumption_l_100km=9.0)
         database.add_trip(fuel_trip("2024-01-01", 45.0, full_tank=True))
         database.add_trip(make_trip("2024-01-02", 300))
-        # Zwischendrin Teil-Tankung — muss ignoriert werden
-        database.add_trip(fuel_trip("2024-01-03", 10.0, full_tank=False))
+        # Zwischendrin Teil-Tankung — wird mitgezaehlt
+        database.add_trip(fuel_trip("2024-01-03", 5.0, full_tank=False))
         database.add_trip(make_trip("2024-01-04", 200))
-        database.add_trip(fuel_trip("2024-01-05", 45.0, full_tank=True))
-        # 500 km, 45 L -> 9.0 l/100km (prev=Tag 01, curr=Tag 05)
+        database.add_trip(fuel_trip("2024-01-05", 40.0, full_tank=True))
+        # 500 km, 40 + 5 = 45 L -> 9.0 l/100km (prev=Tag 01, curr=Tag 05)
         assert check_fuel_consumption_range(database) == []
 
     def test_single_full_tank_no_issue(self, database: Database) -> None:
@@ -281,9 +282,9 @@ class TestFuelConsumptionRangeCheck:
         database.add_trip(fuel_trip("2024-01-03", 45.0, full_tank=True))
         assert check_fuel_consumption_range(database) == []
 
-    def test_tolerance_constant_is_15_percent(self) -> None:
+    def test_tolerance_constant_is_20_percent(self) -> None:
         """Dokumentiert die feste Toleranz als Teil des Contracts."""
-        assert FUEL_TOLERANCE == 0.15
+        assert FUEL_TOLERANCE == 0.20
 
 
 # ---------------------------------------------------------------------------
