@@ -138,12 +138,16 @@ class DayTile(Widget):
             text.append(f"\n{self._holiday_name[:22]}", style=_STYLE_HOLIDAY)
             if self._trip_day and self._trip_day.trips:
                 text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
+                if self._trip_day.fuel_liters > 0:
+                    text.append(f"  {self._trip_day.fuel_liters:.0f}L", style="bold yellow")
             return text
 
         if is_weekend:
             text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
             if self._trip_day and self._trip_day.trips:
                 text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
+                if self._trip_day.fuel_liters > 0:
+                    text.append(f"  {self._trip_day.fuel_liters:.0f}L", style="bold yellow")
             return text
 
         if self._trip_day and self._trip_day.trips:
