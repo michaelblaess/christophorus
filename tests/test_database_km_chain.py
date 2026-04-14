@@ -211,6 +211,92 @@ class TestUpdateTrip:
         assert ordered[0].id == id_b
         assert ordered[1].id == id_a
 
+    def test_update_time_to_only_keeps_chain_stable(
+        self, database: Database
+    ) -> None:
+        """Regression: Editieren eines Non-km-Feldes (time_to) darf die
+        km-Kette nicht verschieben — auch wenn das Trip-Objekt vom UI mit
+        einem veralteten/falschen km_start uebergeben wird.
+        """
+        database.add_trip(make_trip("2024-03-01", 100))
+        id_b = database.add_trip(make_trip("2024-03-02", 50))
+        database.add_trip(make_trip("2024-03-03", 200))
+
+        b = database.get_trip_by_id(id_b)
+        assert b is not None
+        # Simuliert den UI-Save: nur time_to wird gesetzt, alles andere
+        # bleibt auf den DB-Werten.
+        b.time_to = "18:00"
+        database.update_trip(id_b, b)
+
+        assert_chain_intact(database, 10000)
+        assert database.get_all_trips_ordered()[-1].km_end == 10350
+
+    def test_update_time_from_later_same_day_keeps_chain(
+        self, database: Database
+    ) -> None:
+        """Regression: Trip auf dem gleichen Tag zeitlich nach hinten
+        verschieben darf die Kette nicht verschieben. Der alte Bug war,
+        dass get_km_end_before() mit exclude_trip_id den eigenen Trip an
+        seiner ALTEN Position als Vorgaenger der NEUEN Position gefunden
+        hat — und dann seinen eigenen km_end als predecessor_km geliefert.
+        """
+        # Szenario aus der echten DB: #136 16:00 service 60km, #127 18:00
+        # private 36km auf dem gleichen Tag. User verschiebt #127 auf 20:00
+        # um die Zeitueberschneidung aufzuloesen.
+        t136 = make_trip("2024-05-28", 60)
+        t136.time_from = "16:00"
+        t136.time_to = "19:00"
+        id_136 = database.add_trip(t136)
+        t127 = make_trip("2024-05-28", 36, business=False)
+        t127.time_from = "18:00"
+        t127.time_to = "21:00"
+        id_127 = database.add_trip(t127)
+        database.add_trip(make_trip("2024-05-30", 4, business=False))
+        database.add_trip(make_trip("2024-05-31", 36, business=False))
+
+        # #127 zeitlich nach 20:00 verschieben, alles andere bleibt gleich
+        t127_update = database.get_trip_by_id(id_127)
+        assert t127_update is not None
+        t127_update.time_from = "20:00"
+        database.update_trip(id_127, t127_update)
+
+        assert_chain_intact(database, 10000)
+        # #136 unveraendert
+        t136_after = database.get_trip_by_id(id_136)
+        assert t136_after is not None
+        assert t136_after.km_start == 10000
+        assert t136_after.km_end == 10060
+        # #127 darf nicht seinen eigenen alten km_end als Vorgaenger sehen
+        t127_after = database.get_trip_by_id(id_127)
+        assert t127_after is not None
+        assert t127_after.km_start == 10060
+        assert t127_after.km_end == 10096
+
+    def test_update_time_to_heals_corrupted_km_start(
+        self, database: Database
+    ) -> None:
+        """Regression: Trip mit falschem km_start im Input heilt sich beim
+        Save selbst, weil der fast-path den km_start frisch aus dem
+        Vorgaenger liest statt aus old.km_start.
+        """
+        database.add_trip(make_trip("2024-03-01", 100))
+        id_b = database.add_trip(make_trip("2024-03-02", 50))
+        database.add_trip(make_trip("2024-03-03", 200))
+
+        b = database.get_trip_by_id(id_b)
+        assert b is not None
+        # UI uebergibt einen falschen km_start (-36) mit passendem km_end,
+        # so dass die Distanz korrekt bleibt. Der Bug verschob frueher die
+        # komplette Nachfolger-Kette um 36 km nach unten.
+        b.km_start = b.km_start - 36
+        b.km_end = b.km_end - 36
+        b.time_to = "18:00"
+        database.update_trip(id_b, b)
+
+        assert_chain_intact(database, 10000)
+        assert database.get_all_trips_ordered()[-1].km_end == 10350
+
     def test_update_unknown_trip_raises(self, database: Database) -> None:
         with pytest.raises(ValueError):
             database.update_trip(99999, make_trip("2024-03-01", 10))

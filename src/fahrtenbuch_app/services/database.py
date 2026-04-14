@@ -696,6 +696,11 @@ class Database:
         conn = self._get_conn()
         excl = self._SQL_EXCLUDE_INFORMATIONAL
         if exclude_trip_id is not None:
+            # exclude_trip_id muss den Trip komplett rausfiltern — sonst
+            # kann der Trip an seiner ALTEN Position (die noch im DB steht,
+            # bevor der Slow-Path ihn verschiebt) faelschlich als Vorgaenger
+            # seines NEUEN Platzes matchen und seinen eigenen km_end als
+            # predecessor_km zurueckliefern.
             row = conn.execute(
                 f"""
                 SELECT km_end FROM trips
@@ -704,11 +709,15 @@ class Database:
                     OR (date = ? AND time_from < ?)
                     OR (date = ? AND time_from = ? AND id < ?)
                 )
+                  AND id != ?
                   AND {excl}
                 ORDER BY date DESC, time_from DESC, id DESC
                 LIMIT 1
                 """,
-                (date_iso, date_iso, time_from, date_iso, time_from, exclude_trip_id),
+                (
+                    date_iso, date_iso, time_from, date_iso, time_from,
+                    exclude_trip_id, exclude_trip_id,
+                ),
             ).fetchone()
         else:
             row = conn.execute(
@@ -900,13 +909,21 @@ class Database:
         try:
             conn.execute("BEGIN")
             if position_unchanged:
-                delta = new_distance - old_distance
                 if new_is_info:
                     upd_km_start = 0
                     upd_km_end = 0
+                    delta = new_distance - old_distance
                 else:
-                    upd_km_start = old.km_start
-                    upd_km_end = old.km_start + new_distance
+                    # km_start frisch aus dem Vorgaenger holen statt aus dem
+                    # alten DB-Stand — so heilt ein Edit auch dann die Kette,
+                    # wenn der Trip vorher falsche km hatte. Die Kette dahinter
+                    # wird um die Differenz zum ALTEN km_end verschoben.
+                    predecessor_km = self.get_km_end_before(
+                        trip.date, trip.time_from, exclude_trip_id=trip_id
+                    )
+                    upd_km_start = predecessor_km
+                    upd_km_end = upd_km_start + new_distance
+                    delta = upd_km_end - old.km_end
                 conn.execute(
                     """
                     UPDATE trips SET

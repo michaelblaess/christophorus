@@ -26,6 +26,9 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_NEGATIVE_DISTANCE,
     CAT_OVER_LIMIT,
     CAT_END_MISMATCH,
+    CAT_TIME_INCOMPLETE,
+    CAT_TIME_OVERLAP,
+    CAT_TIME_REVERSED,
     CAT_WEEKEND_BUSINESS,
     CAT_WORKTIME_RATIO,
     GHOST_TRIP_MIN_KM,
@@ -39,6 +42,8 @@ from fahrtenbuch_app.services.plausibility import (
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,
+    check_time_overlap,
+    check_time_range_valid,
     check_fuel_range_exceeded,
     check_ghost_business_trips,
     check_holiday_business,
@@ -296,6 +301,162 @@ class TestCheckEmptyTrips:
         assert issues[0].severity == SEVERITY_ERROR
         assert issues[0].year == 2024
         assert issues[0].month == 11
+
+
+# ---------------------------------------------------------------------------
+# check_time_range_valid
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTimeRangeValid:
+    def test_valid_time_range_no_issue(self, database: Database) -> None:
+        trip = make_trip("2024-03-01", 100)
+        trip.time_from = "08:00"
+        trip.time_to = "09:30"
+        database.add_trip(trip)
+        assert check_time_range_valid(database) == []
+
+    def test_equal_time_no_issue(self, database: Database) -> None:
+        trip = make_trip("2024-03-01", 100)
+        trip.time_from = "10:00"
+        trip.time_to = "10:00"
+        database.add_trip(trip)
+        assert check_time_range_valid(database) == []
+
+    def test_empty_times_no_issue(self, database: Database) -> None:
+        database.add_trip(make_trip("2024-03-01", 100))
+        assert check_time_range_valid(database) == []
+
+    def test_reversed_time_is_warning(self, database: Database) -> None:
+        # Der echte Trip #20 Bug: 15:45 - 15:30
+        trip = make_trip("2024-02-28", 50)
+        trip.time_from = "15:45"
+        trip.time_to = "15:30"
+        database.add_trip(trip)
+        issues = check_time_range_valid(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_TIME_REVERSED
+        assert issues[0].severity == SEVERITY_WARNING
+        assert issues[0].year == 2024
+        assert issues[0].month == 2
+        assert "15:45" in issues[0].message
+        assert "15:30" in issues[0].message
+
+    def test_invalid_time_string_no_issue(self, database: Database) -> None:
+        trip = make_trip("2024-03-01", 100)
+        trip.time_from = "kaputt"
+        trip.time_to = "08:00"
+        database.add_trip(trip)
+        assert check_time_range_valid(database) == []
+
+    def test_start_without_end_is_warning(self, database: Database) -> None:
+        # Der echte Trip #34 Bug: Startzeit ohne Endzeit
+        trip = make_trip("2024-03-01", 50)
+        trip.time_from = "08:00"
+        trip.time_to = ""
+        database.add_trip(trip)
+        issues = check_time_range_valid(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_TIME_INCOMPLETE
+        assert issues[0].severity == SEVERITY_WARNING
+        assert "08:00" in issues[0].message
+        assert "ohne Endzeit" in issues[0].message
+
+    def test_end_without_start_is_warning(self, database: Database) -> None:
+        trip = make_trip("2024-03-01", 50)
+        trip.time_from = ""
+        trip.time_to = "09:30"
+        database.add_trip(trip)
+        issues = check_time_range_valid(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_TIME_INCOMPLETE
+        assert "09:30" in issues[0].message
+        assert "ohne Startzeit" in issues[0].message
+
+
+# ---------------------------------------------------------------------------
+# check_time_overlap
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTimeOverlap:
+    def test_non_overlapping_no_issue(self, database: Database) -> None:
+        t1 = make_trip("2024-03-01", 50)
+        t1.time_from = "08:00"
+        t1.time_to = "10:00"
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-01", 50)
+        t2.time_from = "10:00"
+        t2.time_to = "12:00"
+        database.add_trip(t2)
+        assert check_time_overlap(database) == []
+
+    def test_different_days_no_issue(self, database: Database) -> None:
+        t1 = make_trip("2024-03-01", 50)
+        t1.time_from = "16:00"
+        t1.time_to = "19:00"
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-02", 50)
+        t2.time_from = "18:00"
+        t2.time_to = "21:00"
+        database.add_trip(t2)
+        assert check_time_overlap(database) == []
+
+    def test_overlap_same_day_is_error(self, database: Database) -> None:
+        # Der echte Bug: ID 136 16:00-19:00, ID 127 18:00-21:00 gleicher Tag
+        t1 = make_trip("2024-03-01", 50)
+        t1.time_from = "16:00"
+        t1.time_to = "19:00"
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-01", 50)
+        t2.time_from = "18:00"
+        t2.time_to = "21:00"
+        database.add_trip(t2)
+        issues = check_time_overlap(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_TIME_OVERLAP
+        assert issues[0].severity == SEVERITY_ERROR
+        # Gemeldet wird am spaeter startenden Trip
+        assert issues[0].trip_id is not None
+        assert "18:00" in issues[0].message
+        assert "19:00" in issues[0].message
+
+    def test_full_containment_is_error(self, database: Database) -> None:
+        # Ein Trip komplett in einem anderen enthalten
+        t1 = make_trip("2024-03-01", 50)
+        t1.time_from = "08:00"
+        t1.time_to = "18:00"
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-01", 50)
+        t2.time_from = "10:00"
+        t2.time_to = "12:00"
+        database.add_trip(t2)
+        issues = check_time_overlap(database)
+        assert len(issues) == 1
+        assert issues[0].category == CAT_TIME_OVERLAP
+
+    def test_touching_boundary_no_issue(self, database: Database) -> None:
+        # Trip A endet 10:00, Trip B startet 10:00 — das ist erlaubt
+        t1 = make_trip("2024-03-01", 50)
+        t1.time_from = "08:00"
+        t1.time_to = "10:00"
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-01", 50)
+        t2.time_from = "10:00"
+        t2.time_to = "12:00"
+        database.add_trip(t2)
+        assert check_time_overlap(database) == []
+
+    def test_missing_times_skipped(self, database: Database) -> None:
+        # Ein Trip ohne Zeiten wird uebersprungen — Overlap mit dem anderen
+        # kann nicht festgestellt werden.
+        t1 = make_trip("2024-03-01", 50)
+        database.add_trip(t1)
+        t2 = make_trip("2024-03-01", 50)
+        t2.time_from = "10:00"
+        t2.time_to = "12:00"
+        database.add_trip(t2)
+        assert check_time_overlap(database) == []
 
 
 # ---------------------------------------------------------------------------

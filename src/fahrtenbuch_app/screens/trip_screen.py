@@ -210,11 +210,16 @@ class TripScreen(ModalScreen[Trip | None]):
 
         # km_start IMMER aus dem chronologischen Vorgaenger bestimmen
         # (statt wie frueher vom User eintragbar). Beim Edit den eigenen Trip
-        # ausschliessen, damit wir nicht auf uns selbst schauen.
+        # ausschliessen, damit wir nicht auf uns selbst schauen. time_from
+        # ist wichtig, sonst wird die Position innerhalb des Tages ignoriert
+        # und get_km_end_before liefert faelschlich den km_end des Vortags.
         if default_date_iso:
             exclude_id = trip.id if self._is_edit else None
+            default_time_from = trip.time_from if self._is_edit else ""
             default_km_start = self._database.get_km_end_before(
-                default_date_iso, exclude_trip_id=exclude_id
+                default_date_iso,
+                time_from=default_time_from,
+                exclude_trip_id=exclude_id,
             )
         else:
             default_km_start = self._last_km_end
@@ -429,8 +434,15 @@ class TripScreen(ModalScreen[Trip | None]):
             return
         exclude_id = self._trip.id if (self._is_edit and self._trip) else None
         try:
+            time_from_input = self.query_one("#input-time-from", Input)
+            current_time_from = time_from_input.value.strip()
+        except Exception:
+            current_time_from = ""
+        try:
             predecessor_km = self._database.get_km_end_before(
-                iso, exclude_trip_id=exclude_id
+                iso,
+                time_from=current_time_from,
+                exclude_trip_id=exclude_id,
             )
         except Exception:
             return
@@ -643,8 +655,15 @@ class TripScreen(ModalScreen[Trip | None]):
                         self._trip.id if (self._is_edit and self._trip) else None
                     )
                     try:
+                        tf_input = self.query_one("#input-time-from", Input)
+                        current_tf = tf_input.value.strip()
+                    except Exception:
+                        current_tf = ""
+                    try:
                         pred = self._database.get_km_end_before(
-                            iso, exclude_trip_id=exclude_id
+                            iso,
+                            time_from=current_tf,
+                            exclude_trip_id=exclude_id,
                         )
                     except Exception:
                         pred = 0

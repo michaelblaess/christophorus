@@ -42,6 +42,9 @@ __all__ = [
     "CAT_FUEL_CONSUMPTION",
     "CAT_FUEL_RANGE_EXCEEDED",
     "CAT_GHOST_BUSINESS_TRIP",
+    "CAT_TIME_REVERSED",
+    "CAT_TIME_INCOMPLETE",
+    "CAT_TIME_OVERLAP",
     "BUSINESS_QUOTA_MIN",
     "WORKTIME_RATIO_FACTOR",
     "FUEL_TOLERANCE",
@@ -53,6 +56,8 @@ __all__ = [
     "check_vehicle_end_limit",
     "check_vehicle_end_reached",
     "check_empty_trips",
+    "check_time_range_valid",
+    "check_time_overlap",
     "check_category_column_match",
     "check_weekend_business",
     "check_holiday_business",
@@ -90,6 +95,9 @@ CAT_FUEL_OVER_TANK = "fuel_over_tank"
 CAT_FUEL_CONSUMPTION = "fuel_consumption"
 CAT_FUEL_RANGE_EXCEEDED = "fuel_range_exceeded"
 CAT_GHOST_BUSINESS_TRIP = "ghost_business_trip"
+CAT_TIME_REVERSED = "time_reversed"
+CAT_TIME_INCOMPLETE = "time_incomplete"
+CAT_TIME_OVERLAP = "time_overlap"
 
 # Schwellen: 50% Business-Quote pro Jahr (Finanzamt-Regel), 1.3x der
 # Jahres-Durchschnittsrate bei Fahrten pro Arbeitsstunde.
@@ -447,6 +455,138 @@ def check_empty_trips(database: Database) -> list[PlausibilityIssue]:
                 year=d.year if d else None,
                 month=d.month if d else None,
             ))
+    return issues
+
+
+def _parse_hhmm(value: str) -> tuple[int, int] | None:
+    """Parst 'HH:MM' in (stunden, minuten). None bei ungueltiger Eingabe."""
+    if not value:
+        return None
+    parts = value.strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        h = int(parts[0])
+        m = int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= h < 24 and 0 <= m < 60):
+        return None
+    return (h, m)
+
+
+def check_time_range_valid(database: Database) -> list[PlausibilityIssue]:
+    """Prueft Zeit-Plausibilitaet einer Fahrt.
+
+    - Verdrehtes Zeitfenster: time_to vor time_from (Beispiel Trip #20
+      28.02.2024 '15:45 - 15:30'). Da eine Fahrt immer an einem einzigen
+      Tag stattfindet, ist time_to immer >= time_from. Mitternachts-
+      Fahrten werden als zwei Trips eingetragen.
+    - Unvollstaendige Uhrzeit: genau eine Seite gesetzt. Beide leer ist
+      ok (z.B. reine Tankbuchung), beide gesetzt ist der Normalfall.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    for trip in trips:
+        has_from = bool(trip.time_from and trip.time_from.strip())
+        has_to = bool(trip.time_to and trip.time_to.strip())
+        d = _parse_trip_date(trip)
+        if has_from != has_to:
+            if has_from:
+                msg = (
+                    f"Uhrzeit unvollstaendig: Startzeit {trip.time_from} "
+                    f"ohne Endzeit"
+                )
+            else:
+                msg = (
+                    f"Uhrzeit unvollstaendig: Endzeit {trip.time_to} "
+                    f"ohne Startzeit"
+                )
+            issues.append(PlausibilityIssue(
+                severity=SEVERITY_WARNING,
+                category=CAT_TIME_INCOMPLETE,
+                message=msg,
+                trip_id=trip.id,
+                trip_date=trip.date,
+                year=d.year if d else None,
+                month=d.month if d else None,
+            ))
+            continue
+        if not has_from:
+            continue
+        t_from = _parse_hhmm(trip.time_from)
+        t_to = _parse_hhmm(trip.time_to)
+        if t_from is None or t_to is None:
+            continue
+        if t_to < t_from:
+            issues.append(PlausibilityIssue(
+                severity=SEVERITY_WARNING,
+                category=CAT_TIME_REVERSED,
+                message=(
+                    f"Uhrzeit verdreht: {trip.time_from} - {trip.time_to} "
+                    f"(Ende liegt vor Start)"
+                ),
+                trip_id=trip.id,
+                trip_date=trip.date,
+                year=d.year if d else None,
+                month=d.month if d else None,
+            ))
+    return issues
+
+
+def check_time_overlap(database: Database) -> list[PlausibilityIssue]:
+    """Findet Fahrten am gleichen Tag mit ueberlappenden Zeitfenstern.
+
+    Beispiel: Trip #136 16:00-19:00 und Trip #127 18:00-21:00 am gleichen
+    Tag — zwei Fahrten koennen nicht gleichzeitig stattfinden. Der Fehler
+    wird am spaeter startenden Trip gemeldet und referenziert den
+    Vorgaenger. Trips mit unvollstaendigen oder ungueltigen Zeiten werden
+    uebersprungen (die werden schon von check_time_range_valid erfasst).
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+
+    # Nach Datum gruppieren, dabei nur Trips mit vollstaendigen gueltigen
+    # Zeiten mitnehmen.
+    by_date: dict[str, list[tuple[Trip, tuple[int, int], tuple[int, int]]]] = {}
+    for trip in trips:
+        t_from = _parse_hhmm(trip.time_from)
+        t_to = _parse_hhmm(trip.time_to)
+        if t_from is None or t_to is None:
+            continue
+        if t_to < t_from:
+            continue
+        by_date.setdefault(trip.date, []).append((trip, t_from, t_to))
+
+    for date_iso, entries in by_date.items():
+        if len(entries) < 2:
+            continue
+        # Nach Startzeit sortieren — bei Gleichstand nach id.
+        entries.sort(key=lambda e: (e[1], e[0].id))
+        for i in range(1, len(entries)):
+            curr_trip, curr_from, _curr_to = entries[i]
+            # Gegen alle vorherigen Trips am gleichen Tag pruefen, nicht nur
+            # den direkten Vorgaenger — so erwischen wir auch mehrfache
+            # Ueberlappungen sauber.
+            for j in range(i):
+                prev_trip, prev_from, prev_to = entries[j]
+                if curr_from < prev_to:
+                    d = _parse_trip_date(curr_trip)
+                    issues.append(PlausibilityIssue(
+                        severity=SEVERITY_ERROR,
+                        category=CAT_TIME_OVERLAP,
+                        message=(
+                            f"Ueberschneidung mit Trip #{prev_trip.id} "
+                            f"({prev_trip.time_from}-{prev_trip.time_to}): "
+                            f"diese Fahrt startet um {curr_trip.time_from}, "
+                            f"der Vorgaenger endet erst um {prev_trip.time_to}"
+                        ),
+                        trip_id=curr_trip.id,
+                        trip_date=curr_trip.date,
+                        year=d.year if d else None,
+                        month=d.month if d else None,
+                    ))
+                    break
     return issues
 
 
@@ -1032,6 +1172,8 @@ def run_all_checks(
     report.issues.extend(check_chain_ascending(database))
     report.issues.extend(check_distance_matches_columns(database))
     report.issues.extend(check_empty_trips(database))
+    report.issues.extend(check_time_range_valid(database))
+    report.issues.extend(check_time_overlap(database))
     report.issues.extend(check_category_column_match(database))
     report.issues.extend(check_vehicle_end_limit(database))
     report.issues.extend(check_vehicle_end_reached(database))
