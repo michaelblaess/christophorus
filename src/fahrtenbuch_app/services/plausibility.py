@@ -39,6 +39,7 @@ __all__ = [
     "CAT_WORKTIME_RATIO",
     "CAT_BUSINESS_QUOTA_LOW",
     "CAT_FUEL_OVER_TANK",
+    "CAT_FUEL_MISSING_LITERS",
     "CAT_FUEL_CONSUMPTION",
     "CAT_FUEL_RANGE_EXCEEDED",
     "CAT_GHOST_BUSINESS_TRIP",
@@ -65,6 +66,7 @@ __all__ = [
     "check_worktime_trip_ratio",
     "check_business_quota",
     "check_fuel_tank_capacity",
+    "check_fuel_missing_liters",
     "check_fuel_consumption_range",
     "check_fuel_range_exceeded",
     "check_ghost_business_trips",
@@ -92,6 +94,7 @@ CAT_CATEGORY_COLUMN_MISMATCH = "category_column_mismatch"
 CAT_WORKTIME_RATIO = "worktime_ratio"
 CAT_BUSINESS_QUOTA_LOW = "business_quota_low"
 CAT_FUEL_OVER_TANK = "fuel_over_tank"
+CAT_FUEL_MISSING_LITERS = "fuel_missing_liters"
 CAT_FUEL_CONSUMPTION = "fuel_consumption"
 CAT_FUEL_RANGE_EXCEEDED = "fuel_range_exceeded"
 CAT_GHOST_BUSINESS_TRIP = "ghost_business_trip"
@@ -913,6 +916,43 @@ def check_fuel_tank_capacity(database: Database) -> list[PlausibilityIssue]:
     return issues
 
 
+def check_fuel_missing_liters(database: Database) -> list[PlausibilityIssue]:
+    """Fehler bei Tank-Trips ohne Literangabe.
+
+    Ein Trip mit Kategorie fuel/fuel_private muss `fuel_liters > 0` haben.
+    Ohne Literangabe faellt der Trip aus Verbrauchs- und Reichweiten-Checks
+    raus — die Nachfolger-Volltankung landet dann als vermeintlicher
+    Reichweiten-Ueberschreiter im Report, ohne dass der eigentliche Fehler
+    (fehlende Liter) sichtbar waere. Darum hart als ERROR flaggen.
+    """
+    issues: list[PlausibilityIssue] = []
+    trips = _load_all_trips_ordered(database)
+    for trip in trips:
+        if trip.category not in ("fuel", "fuel_private"):
+            continue
+        if trip.fuel_liters > 0:
+            continue
+        d = _parse_trip_date(trip)
+        if trip.fuel_full_tank:
+            msg = (
+                "Volltank ohne Literangabe: fuel_full_tank gesetzt, aber "
+                "fuel_liters = 0 — der Verbrauchs-Check ueberspringt diesen "
+                "Trip und meldet stattdessen den naechsten Volltank."
+            )
+        else:
+            msg = "Tank-Trip ohne Literangabe: fuel_liters = 0"
+        issues.append(PlausibilityIssue(
+            severity=SEVERITY_ERROR,
+            category=CAT_FUEL_MISSING_LITERS,
+            message=msg,
+            trip_id=trip.id,
+            trip_date=trip.date,
+            year=d.year if d else None,
+            month=d.month if d else None,
+        ))
+    return issues
+
+
 def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
     """Prueft den Verbrauch zwischen zwei Volltank-Events.
 
@@ -1184,6 +1224,7 @@ def run_all_checks(
     report.issues.extend(check_worktime_trip_ratio(database))
     report.issues.extend(check_business_quota(database))
     report.issues.extend(check_fuel_tank_capacity(database))
+    report.issues.extend(check_fuel_missing_liters(database))
     report.issues.extend(check_fuel_consumption_range(database))
     report.issues.extend(check_fuel_range_exceeded(database))
     if CAT_GHOST_BUSINESS_TRIP not in skip:

@@ -273,29 +273,43 @@ class TestUpdateTrip:
         assert t127_after.km_start == 10060
         assert t127_after.km_end == 10096
 
-    def test_update_time_to_heals_corrupted_km_start(
+    def test_update_time_to_preserves_chain_gap(
         self, database: Database
     ) -> None:
-        """Regression: Trip mit falschem km_start im Input heilt sich beim
-        Save selbst, weil der fast-path den km_start frisch aus dem
-        Vorgaenger liest statt aus old.km_start.
+        """Regression: Edits ohne Positions- oder Distanzaenderung duerfen
+        einen bestehenden Gap zwischen Vorgaenger und Trip NICHT "heilen",
+        weil ein Gap z.B. eine nicht geloggte Privatfahrt repraesentieren
+        kann. Wuerde der fast-path den km_start aus dem Vorgaenger ziehen,
+        verschoeben sich saemtliche Nachfolger um die Luecke.
         """
         database.add_trip(make_trip("2024-03-01", 100))
         id_b = database.add_trip(make_trip("2024-03-02", 50))
         database.add_trip(make_trip("2024-03-03", 200))
 
+        # Gap kuenstlich einfuegen: B und alle Nachfolger um 30 km nach oben
+        # schieben (simuliert eine nicht geloggte Privatfahrt zwischen A und B).
         b = database.get_trip_by_id(id_b)
         assert b is not None
-        # UI uebergibt einen falschen km_start (-36) mit passendem km_end,
-        # so dass die Distanz korrekt bleibt. Der Bug verschob frueher die
-        # komplette Nachfolger-Kette um 36 km nach unten.
-        b.km_start = b.km_start - 36
-        b.km_end = b.km_end - 36
+        original_km_start = b.km_start + 30
+        original_km_end = b.km_end + 30
+        conn = database._get_conn()
+        conn.execute(
+            "UPDATE trips SET km_start = km_start + 30, km_end = km_end + 30 "
+            "WHERE date >= '2024-03-02'"
+        )
+        conn.commit()
+
+        # Jetzt nur time_to editieren — km muessen exakt so bleiben.
+        b = database.get_trip_by_id(id_b)
+        assert b is not None
         b.time_to = "18:00"
         database.update_trip(id_b, b)
 
-        assert_chain_intact(database, 10000)
-        assert database.get_all_trips_ordered()[-1].km_end == 10350
+        b_after = database.get_trip_by_id(id_b)
+        assert b_after is not None
+        assert b_after.km_start == original_km_start
+        assert b_after.km_end == original_km_end
+        assert database.get_all_trips_ordered()[-1].km_end == 10380
 
     def test_update_unknown_trip_raises(self, database: Database) -> None:
         with pytest.raises(ValueError):

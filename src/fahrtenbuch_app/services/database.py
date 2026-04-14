@@ -914,16 +914,15 @@ class Database:
                     upd_km_end = 0
                     delta = new_distance - old_distance
                 else:
-                    # km_start frisch aus dem Vorgaenger holen statt aus dem
-                    # alten DB-Stand — so heilt ein Edit auch dann die Kette,
-                    # wenn der Trip vorher falsche km hatte. Die Kette dahinter
-                    # wird um die Differenz zum ALTEN km_end verschoben.
-                    predecessor_km = self.get_km_end_before(
-                        trip.date, trip.time_from, exclude_trip_id=trip_id
-                    )
-                    upd_km_start = predecessor_km
+                    # Position und Info-Status unveraendert: km_start des Trips
+                    # bleibt, wie er ist. Nur wenn sich die Distanz aendert,
+                    # verschieben wir die Nachfolger um das Delta. Ein eventueller
+                    # Gap zum Vorgaenger (z.B. nicht geloggte Privatfahrt) bleibt
+                    # dabei bewusst erhalten — automatisches "Heilen" wuerde
+                    # legitime Luecken schliessen und die ganze Kette verschieben.
+                    upd_km_start = old.km_start
                     upd_km_end = upd_km_start + new_distance
-                    delta = upd_km_end - old.km_end
+                    delta = new_distance - old_distance
                 conn.execute(
                     """
                     UPDATE trips SET

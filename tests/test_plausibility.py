@@ -20,6 +20,7 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_CHAIN_BREAK,
     CAT_DISTANCE_MISMATCH,
     CAT_EMPTY_TRIP,
+    CAT_FUEL_MISSING_LITERS,
     CAT_FUEL_RANGE_EXCEEDED,
     CAT_GHOST_BUSINESS_TRIP,
     CAT_HOLIDAY_BUSINESS,
@@ -44,6 +45,7 @@ from fahrtenbuch_app.services.plausibility import (
     check_empty_trips,
     check_time_overlap,
     check_time_range_valid,
+    check_fuel_missing_liters,
     check_fuel_range_exceeded,
     check_ghost_business_trips,
     check_holiday_business,
@@ -818,6 +820,47 @@ def _add_partial_fill(
         (km_end, km_end, fetched.id),
     )
     conn.commit()
+
+
+class TestCheckFuelMissingLiters:
+    def test_fuel_trip_with_liters_ok(self, database: Database) -> None:
+        """fuel_private mit Liter > 0 loest nichts aus."""
+        _add_full_tank(database, "2024-01-01", 10000, liters=50.0)
+        assert check_fuel_missing_liters(database) == []
+
+    def test_fuel_trip_zero_liters_error(self, database: Database) -> None:
+        """fuel_private mit fuel_liters = 0 ist ein Fehler (Regression Trip #82)."""
+        trip = make_trip("2024-01-01", 30, business=False)
+        trip.category = "fuel_private"
+        trip.fuel_liters = 0.0
+        trip.fuel_full_tank = True
+        database.add_trip(trip)
+
+        issues = check_fuel_missing_liters(database)
+        errors = [i for i in issues if i.category == CAT_FUEL_MISSING_LITERS]
+        assert len(errors) == 1
+        assert errors[0].severity == SEVERITY_ERROR
+        assert "Volltank" in errors[0].message
+
+    def test_non_fuel_trip_ignored(self, database: Database) -> None:
+        """Nicht-Tank-Trips werden nicht geprueft."""
+        database.add_trip(make_trip("2024-01-01", 30))
+        assert check_fuel_missing_liters(database) == []
+
+    def test_partial_fill_zero_liters_error(self, database: Database) -> None:
+        """Auch Teilbetankung (fuel_full_tank=False) ohne Liter ist ein Fehler."""
+        trip = make_trip("2024-01-01", 30, business=False)
+        trip.category = "fuel_private"
+        trip.fuel_liters = 0.0
+        trip.fuel_full_tank = False
+        database.add_trip(trip)
+
+        errors = [
+            i for i in check_fuel_missing_liters(database)
+            if i.category == CAT_FUEL_MISSING_LITERS
+        ]
+        assert len(errors) == 1
+        assert "ohne Literangabe" in errors[0].message
 
 
 class TestCheckFuelRangeExceeded:

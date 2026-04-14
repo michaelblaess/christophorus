@@ -495,6 +495,15 @@ class TripScreen(ModalScreen[Trip | None]):
             self._recalculate_km()
             return
 
+        # Zuhause als Ziel: Adresse aus Settings laden, km unveraendert lassen
+        # (Distanz zum Heimatort haengt vom Startpunkt ab).
+        if key == "__home__":
+            home_address = self._database.get_setting("home_address", "").strip()
+            self._selected_entry_km = 0.0
+            dest_area = self.query_one("#input-destination", TextArea)
+            dest_area.load_text(f"Zuhause\n{home_address}" if home_address else "Zuhause")
+            return
+
         entry = self._find_address_entry(key)
         if entry is None:
             return
@@ -680,7 +689,15 @@ class TripScreen(ModalScreen[Trip | None]):
         round_trip.disabled = is_info
 
     def _apply_fuel_visibility(self, category: str) -> None:
-        """Blendet die Tankfelder nur bei fuel/fuel_private ein."""
+        """Blendet die Tankfelder nur bei fuel/fuel_private ein.
+
+        Der Wert im Liter-Input bleibt beim Verstecken stehen — wenn der
+        User die Kategorie zurueck auf fuel* dreht, soll der vorher
+        eingetragene Wert noch da sein. action_save liest den Liter-Input
+        ohnehin nur, wenn die finale Kategorie fuel* ist, also koennen
+        "eingeschleppte" Restwerte gar nicht in eine falsche Kategorie
+        gelangen.
+        """
         is_fuel_cat = category in ("fuel", "fuel_private")
         try:
             row_liters = self.query_one("#row-fuel-liters", Horizontal)
@@ -689,13 +706,6 @@ class TripScreen(ModalScreen[Trip | None]):
             return
         row_liters.display = is_fuel_cat
         row_full.display = is_fuel_cat
-        if not is_fuel_cat:
-            # Eingaben leeren, damit sie bei action_save nicht wieder
-            # eingeschleppt werden, wenn der User die Kategorie wechselt.
-            try:
-                self.query_one("#input-fuel-liters", Input).value = ""
-            except Exception:
-                pass
 
     def _rebalance_km_for_category(self, new_category: str) -> None:
         """Verschiebt km zwischen business und private, wenn die Kategorie
@@ -747,6 +757,11 @@ class TripScreen(ModalScreen[Trip | None]):
 
         options.sort(key=lambda o: o[0].casefold())
         options.insert(0, ("(leer)", "__clear__"))
+
+        home_address = self._database.get_setting("home_address", "").strip()
+        if home_address:
+            options.insert(1, (f"Zuhause: {home_address}", "__home__"))
+
         return options
 
     def _find_address_entry(self, key: str) -> AddressEntry | None:
