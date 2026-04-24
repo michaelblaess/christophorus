@@ -22,20 +22,28 @@ def format_km(value: int | float | None) -> str:
 def parse_km(raw: str | None, default: int = 0) -> int:
     """Wandelt einen Anwender-String in einen int-km-Wert um.
 
-    Akzeptiert Leerstring, reine Zahlen und deutsche Tausender-Trennzeichen.
+    Akzeptiert Leerstring, reine Zahlen, deutsche Tausender-Trennzeichen
+    (Punkt) und deutsches Dezimal-Komma — Kommastellen werden auf ganze
+    km gerundet (das Modell speichert nur int, Tachos zeigen ganze km).
+
     Beispiele:
       * "19.444"  → 19444
       * "19444"   → 19444
+      * "758,2"   → 758     (gerundet)
+      * "758,6"   → 759     (gerundet)
+      * "1.234,5" → 1235    (gerundet, deutsches Format)
       * ""        → default
       * " 1.234 " → 1234
       * "abc"     → default
     """
     if raw is None:
         return default
-    cleaned = raw.strip().replace(".", "").replace(" ", "")
+    # Punkte als Tausender-Trenner weg, Komma als Dezimal-Separator auf
+    # Punkt umstellen, damit float() das parsen kann.
+    cleaned = raw.strip().replace(".", "").replace(" ", "").replace(",", ".")
     if not cleaned:
         return default
     try:
-        return int(cleaned)
+        return int(round(float(cleaned)))
     except ValueError:
         return default
