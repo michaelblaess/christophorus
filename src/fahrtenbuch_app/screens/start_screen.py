@@ -106,6 +106,10 @@ class StartScreen(ModalScreen[StartResult | None]):
         self._config = config
         self._current_path = current_path
         self._on_backup = on_backup
+        # Map Button-ID → Recent-Pfad. Wird in compose() gefuellt. Noetig
+        # weil Pfade selbst Klammern enthalten koennen (z.B. "Audi A5 (2024)")
+        # und Label-Parsing daran scheitert.
+        self._recent_path_by_id: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         """Erstellt den Startbildschirm."""
@@ -139,10 +143,12 @@ class StartScreen(ModalScreen[StartResult | None]):
                     yield Static("Zuletzt geoeffnet:", classes="section-title")
                     for path_str in self._config.recent_paths[:5]:
                         p = Path(path_str)
+                        btn_id = f"btn-recent-{hash(path_str) & 0xFFFFFFFF}"
+                        self._recent_path_by_id[btn_id] = path_str
                         yield Button(
                             f"  {p.name}  ({path_str})",
                             variant="default",
-                            id=f"btn-recent-{hash(path_str) & 0xFFFFFFFF}",
+                            id=btn_id,
                             classes="recent-item",
                         )
 
@@ -287,20 +293,17 @@ class StartScreen(ModalScreen[StartResult | None]):
 
     def _open_recent(self, button: Button) -> None:
         """Oeffnet ein zuletzt verwendetes Fahrtenbuch."""
-        label = button.label
-        label_text = str(label)
-        # Pfad steht in Klammern am Ende
-        start = label_text.rfind("(")
-        end = label_text.rfind(")")
-        if start >= 0 and end > start:
-            path_str = label_text[start + 1:end]
-            if Path(path_str).exists():
-                self.dismiss((path_str, None))
-            else:
-                self.notify(
-                    f"Verzeichnis existiert nicht mehr: {path_str}",
-                    severity="warning",
-                )
+        btn_id = button.id or ""
+        path_str = self._recent_path_by_id.get(btn_id, "")
+        if not path_str:
+            return
+        if not Path(path_str).exists():
+            self.notify(
+                f"Verzeichnis existiert nicht mehr: {path_str}",
+                severity="warning",
+            )
+            return
+        self.dismiss((path_str, None))
 
     def _run_backup(self) -> None:
         """Fuehrt das Backup des aktuellen Fahrtenbuchs durch."""
