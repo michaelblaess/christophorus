@@ -1,20 +1,30 @@
-"""Start-Screen — Fahrtenbuch oeffnen oder neu anlegen."""
+"""Start-Screen — Fahrtenbuch oeffnen, neu anlegen oder sichern."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Checkbox, Input, Label, Static
 
 from fahrtenbuch_app.models.settings import GlobalConfig
 
 
-class StartScreen(ModalScreen[str | None]):
-    """Startbildschirm zum Oeffnen oder Erstellen eines Fahrtenbuchs.
+# Rueckgabe-Typ des StartScreen:
+# - None           → Dialog abgebrochen
+# - (path, None)   → Oeffnen oder leeres Neu-Anlegen
+# - (path, source) → Neu-Anlegen mit Clone aus 'source'
+StartResult = tuple[str, str | None]
 
-    Gibt den gewaehlten Pfad zurueck oder None bei Abbruch.
+
+class StartScreen(ModalScreen[StartResult | None]):
+    """Startbildschirm zum Oeffnen, Erstellen oder Sichern eines Fahrtenbuchs.
+
+    Gibt ein Tupel (ziel_pfad, clone_source_pfad_oder_None) zurueck, oder
+    None bei Abbruch. Die Backup-Aktion wird ueber den on_backup-Callback
+    direkt im Screen ausgefuehrt und schliesst den Dialog nicht.
     """
 
     DEFAULT_CSS = """
@@ -22,9 +32,9 @@ class StartScreen(ModalScreen[str | None]):
         align: center middle;
     }
     StartScreen > Vertical {
-        width: 70;
+        width: 80;
         height: auto;
-        max-height: 30;
+        max-height: 36;
         background: $surface;
         border: thick $accent;
         padding: 1 2;
@@ -45,6 +55,11 @@ class StartScreen(ModalScreen[str | None]):
         margin-bottom: 0;
         padding: 0 1;
     }
+    StartScreen .current-info {
+        color: $text-muted;
+        padding: 0 1;
+        margin-bottom: 0;
+    }
     StartScreen .form-row {
         height: auto;
         margin-bottom: 1;
@@ -55,6 +70,11 @@ class StartScreen(ModalScreen[str | None]):
     }
     StartScreen Input {
         width: 1fr;
+    }
+    StartScreen Checkbox {
+        margin-top: 0;
+        margin-bottom: 0;
+        padding: 0 1;
     }
     StartScreen .button-row {
         height: auto;
@@ -75,22 +95,45 @@ class StartScreen(ModalScreen[str | None]):
         Binding("escape", "cancel", "Abbrechen"),
     ]
 
-    def __init__(self, config: GlobalConfig, **kwargs: object) -> None:
+    def __init__(
+        self,
+        config: GlobalConfig,
+        current_path: str | None = None,
+        on_backup: Callable[[], Path] | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self._config = config
+        self._current_path = current_path
+        self._on_backup = on_backup
 
     def compose(self) -> ComposeResult:
         """Erstellt den Startbildschirm."""
         default_base = str(Path.home() / "Fahrtenbuecher")
 
         with Vertical():
-            yield Static("Fahrtenbuch", id="title")
+            yield Static("Fahrtenbuch verwalten", id="title")
             yield Static(
                 "Finanzamt-konforme Fahrtenbuecher fuer Leasing-Fahrzeuge",
                 id="subtitle",
             )
 
             with VerticalScroll():
+                # Aktuelles Fahrtenbuch + Sichern
+                if self._current_path:
+                    yield Static("Aktuell geoeffnet:", classes="section-title")
+                    current_name = Path(self._current_path).name
+                    yield Static(
+                        f"  {current_name}  ({self._current_path})",
+                        classes="current-info",
+                    )
+                    with Horizontal(classes="button-row"):
+                        yield Button(
+                            "Datenbank sichern",
+                            variant="warning",
+                            id="btn-backup",
+                        )
+
                 # Zuletzt geoeffnet
                 if self._config.recent_paths:
                     yield Static("Zuletzt geoeffnet:", classes="section-title")
@@ -116,8 +159,21 @@ class StartScreen(ModalScreen[str | None]):
                     yield Label("Name:")
                     yield Input(
                         value="",
-                        placeholder="z.B. Audi A5 2024",
+                        placeholder="z.B. Mazda CX-5 2024",
                         id="input-fb-name",
+                    )
+                yield Checkbox(
+                    "Einstellungen aus bestehendem Fahrtenbuch uebernehmen",
+                    value=False,
+                    id="check-clone",
+                )
+                with Horizontal(classes="form-row"):
+                    yield Label("Quellpfad:")
+                    yield Input(
+                        value=self._current_path or "",
+                        placeholder="Pfad zum Quell-Fahrtenbuch (nur bei 'uebernehmen')",
+                        id="input-clone-source",
+                        disabled=True,
                     )
 
             with Horizontal(classes="button-row"):
@@ -131,6 +187,12 @@ class StartScreen(ModalScreen[str | None]):
                     "Abbrechen (Esc)", variant="default", id="btn-cancel"
                 )
 
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        """Aktiviert/Deaktiviert das Quellpfad-Feld abhaengig von der Checkbox."""
+        if event.checkbox.id == "check-clone":
+            source_input = self.query_one("#input-clone-source", Input)
+            source_input.disabled = not event.value
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Button-Klicks."""
         btn_id = event.button.id or ""
@@ -139,13 +201,15 @@ class StartScreen(ModalScreen[str | None]):
             self._create_new()
         elif btn_id == "btn-open":
             self._open_existing()
+        elif btn_id == "btn-backup":
+            self._run_backup()
         elif btn_id == "btn-cancel":
             self.action_cancel()
         elif btn_id.startswith("btn-recent-"):
             self._open_recent(event.button)
 
     def _create_new(self) -> None:
-        """Erstellt ein neues Fahrtenbuch."""
+        """Erstellt ein neues Fahrtenbuch, optional mit Clone aus Quelle."""
         base_dir = self.query_one("#input-base-dir", Input).value.strip()
         fb_name = self.query_one("#input-fb-name", Input).value.strip()
 
@@ -156,8 +220,44 @@ class StartScreen(ModalScreen[str | None]):
             self.notify("Name ist erforderlich", severity="error")
             return
 
-        path = Path(base_dir) / fb_name
-        self.dismiss(str(path))
+        target_path = Path(base_dir) / fb_name
+
+        # Verhindern, dass "Neu anlegen" still ein bestehendes Fahrtenbuch
+        # oeffnet — der User hat NEU gedrueckt, das ist eindeutig.
+        if (target_path / "fahrtenbuch.db").exists():
+            self.notify(
+                f"Am Zielpfad existiert bereits ein Fahrtenbuch: {target_path}. "
+                "Waehle 'Pfad oeffnen...' oder einen anderen Namen.",
+                severity="error",
+            )
+            return
+
+        clone_source: str | None = None
+        clone_enabled = self.query_one("#check-clone", Checkbox).value
+        if clone_enabled:
+            source_str = self.query_one("#input-clone-source", Input).value.strip()
+            if not source_str:
+                self.notify(
+                    "Quellpfad ist erforderlich bei 'Einstellungen uebernehmen'",
+                    severity="error",
+                )
+                return
+            source_path = Path(source_str)
+            if not (source_path / "fahrtenbuch.db").exists():
+                self.notify(
+                    f"Keine fahrtenbuch.db im Quellpfad: {source_path}",
+                    severity="error",
+                )
+                return
+            if source_path.resolve() == target_path.resolve():
+                self.notify(
+                    "Quelle und Ziel duerfen nicht identisch sein",
+                    severity="error",
+                )
+                return
+            clone_source = str(source_path)
+
+        self.dismiss((str(target_path), clone_source))
 
     def _open_existing(self) -> None:
         """Oeffnet ein bestehendes Fahrtenbuch ueber Pfadeingabe."""
@@ -175,8 +275,15 @@ class StartScreen(ModalScreen[str | None]):
                 f"Verzeichnis existiert nicht: {path}", severity="error"
             )
             return
+        if not (path / "fahrtenbuch.db").exists():
+            self.notify(
+                f"Keine fahrtenbuch.db im Pfad: {path}. "
+                "Nutze 'Neu anlegen' zum Erstellen.",
+                severity="error",
+            )
+            return
 
-        self.dismiss(str(path))
+        self.dismiss((str(path), None))
 
     def _open_recent(self, button: Button) -> None:
         """Oeffnet ein zuletzt verwendetes Fahrtenbuch."""
@@ -188,12 +295,28 @@ class StartScreen(ModalScreen[str | None]):
         if start >= 0 and end > start:
             path_str = label_text[start + 1:end]
             if Path(path_str).exists():
-                self.dismiss(path_str)
+                self.dismiss((path_str, None))
             else:
                 self.notify(
                     f"Verzeichnis existiert nicht mehr: {path_str}",
                     severity="warning",
                 )
+
+    def _run_backup(self) -> None:
+        """Fuehrt das Backup des aktuellen Fahrtenbuchs durch."""
+        if self._on_backup is None:
+            self.notify("Kein Fahrtenbuch zum Sichern", severity="warning")
+            return
+        try:
+            backup_path = self._on_backup()
+            self.notify(
+                f"Sicherung erstellt: {backup_path.name}",
+                severity="information",
+            )
+        except Exception as e:
+            self.notify(
+                f"Sicherung fehlgeschlagen: {e}", severity="error"
+            )
 
     def action_cancel(self) -> None:
         """Bricht ab."""

@@ -44,25 +44,24 @@ class FahrtenbuchApp(App):
     TITLE = f"Death Proof v{__version__} ({__year__})"
 
     BINDINGS = [
-        Binding("q", "quit", "Beenden"),
-        Binding("n", "new_trip", "Neue Fahrt"),
-        Binding("d", "delete_trip", "Loeschen"),
-        Binding("e", "export_excel", "Excel"),
-        Binding("s", "show_settings", "Settings"),
-        Binding("o", "open_fahrtenbuch", "Oeffnen"),
-        Binding("v", "toggle_view", "View"),
-        Binding("b", "toggle_blacklist", "Blacklist"),
+        Binding("q,Q", "quit", "Beenden", key_display="q"),
+        Binding("n,N", "new_trip", "Neue Fahrt", key_display="n"),
+        Binding("d,D", "delete_trip", "Loeschen", key_display="d"),
+        Binding("e,E", "export_excel", "Excel", key_display="e"),
+        Binding("s,S", "show_settings", "Settings", key_display="s"),
+        Binding("v,V", "open_fahrtenbuch", "Verwalten", key_display="v"),
+        Binding("b,B", "toggle_blacklist", "Blacklist", key_display="b"),
         Binding("comma", "prev_month", "Monat", key_display="<"),
         Binding("full_stop", "next_month", "Monat", key_display=">"),
         Binding("f5", "refresh_view", "Aktualisieren"),
-        Binding("p", "check_plausibility", "Plausibilitaet"),
-        Binding("r", "rebuild_km", "km reparieren"),
-        Binding("l", "toggle_log", "Log"),
+        Binding("p,P", "check_plausibility", "Plausibilitaet", key_display="p"),
+        Binding("r,R", "rebuild_km", "km reparieren", key_display="r"),
+        Binding("l,L", "toggle_log", "Log", key_display="l"),
         Binding("plus", "log_bigger", "Log +", key_display="+"),
         Binding("minus", "log_smaller", "Log -", key_display="-"),
-        Binding("c", "copy_log", "Log kopieren"),
+        Binding("c,C", "copy_log", "Log kopieren", key_display="c"),
         Binding("ctrl+l", "clear_log", "Log leeren"),
-        Binding("i", "show_info", "Info"),
+        Binding("i,I", "show_info", "Info", key_display="i"),
     ]
 
     def __init__(self, year_override: int | None = None, **kwargs: object) -> None:
@@ -140,27 +139,58 @@ class FahrtenbuchApp(App):
             self._show_start_screen()
 
     def _show_start_screen(self) -> None:
-        """Zeigt den Start-Screen zum Oeffnen/Erstellen eines Fahrtenbuchs."""
+        """Zeigt den Start-Screen zum Oeffnen/Erstellen/Sichern eines Fahrtenbuchs."""
         from fahrtenbuch_app.screens.start_screen import StartScreen
 
+        current_path: str | None = None
+        on_backup = None
+        if self._fahrtenbuch is not None and self._fahrtenbuch.is_open:
+            current_path = str(self._fahrtenbuch.path)
+            on_backup = self._backup_current_db
+
         self.push_screen(
-            StartScreen(self._config),
+            StartScreen(
+                self._config,
+                current_path=current_path,
+                on_backup=on_backup,
+            ),
             callback=self._on_start_screen_closed,
         )
 
-    def _on_start_screen_closed(self, path: str | None) -> None:
-        """Callback nach dem StartScreen."""
-        if path is None:
+    def _backup_current_db(self) -> Path:
+        """Sichert die aktuell geoeffnete Datenbank mit Timestamp."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            raise RuntimeError("Kein Fahrtenbuch geoeffnet")
+        backup_path = self._fahrtenbuch.database.backup_to_file()
+        self._write_log(f"[green]Datenbank gesichert: {backup_path}[/green]")
+        return backup_path
+
+    def _on_start_screen_closed(
+        self, result: tuple[str, str | None] | None
+    ) -> None:
+        """Callback nach dem StartScreen.
+
+        result ist None bei Abbruch, sonst (ziel_pfad, clone_source_oder_None).
+        """
+        if result is None:
             if self._fahrtenbuch is None:
                 self._write_log(
                     "[yellow]Kein Fahrtenbuch geoeffnet. "
-                    "Druecke [O] zum Oeffnen.[/yellow]"
+                    "Druecke [V] zum Verwalten.[/yellow]"
                 )
             return
-        self._open_fahrtenbuch(path)
+        target_path, clone_source = result
+        self._open_fahrtenbuch(target_path, clone_source=clone_source)
 
-    def _open_fahrtenbuch(self, path_str: str) -> None:
-        """Oeffnet oder erstellt ein Fahrtenbuch am angegebenen Pfad."""
+    def _open_fahrtenbuch(
+        self, path_str: str, clone_source: str | None = None
+    ) -> None:
+        """Oeffnet oder erstellt ein Fahrtenbuch am angegebenen Pfad.
+
+        Wenn clone_source gesetzt ist und ein neues Fahrtenbuch angelegt
+        wird, werden Einstellungen/Adressen/Kategorien/Blacklist/
+        Arbeitszeit aus der Quelle uebernommen.
+        """
         path = Path(path_str)
 
         # Altes Fahrtenbuch schliessen
@@ -177,6 +207,21 @@ class FahrtenbuchApp(App):
                 # Neues Fahrtenbuch anlegen — Fahrzeug wird spaeter ueber Settings konfiguriert
                 self._fahrtenbuch = Fahrtenbuch.create(path, Vehicle())
                 self._write_log(f"[green]Neues Fahrtenbuch erstellt: {path}[/green]")
+                if clone_source is not None:
+                    try:
+                        self._fahrtenbuch.database.clone_settings_from(
+                            Path(clone_source)
+                        )
+                        self._write_log(
+                            f"[green]Einstellungen uebernommen aus: {clone_source}[/green]"
+                        )
+                    except Exception as exc:
+                        self._write_log(
+                            f"[red]Clone fehlgeschlagen: {exc}[/red]"
+                        )
+                        self.notify(
+                            f"Clone fehlgeschlagen: {exc}", severity="error"
+                        )
                 self._write_log(
                     "[yellow]Druecke [S] um das Fahrzeug zu konfigurieren.[/yellow]"
                 )
@@ -694,11 +739,6 @@ class FahrtenbuchApp(App):
             self._refresh_documents_view()
         elif view_id == "worktimes-view":
             self._refresh_worktimes_view()
-
-    def action_toggle_view(self) -> None:
-        """Wechselt zum naechsten Tab."""
-        tabs = self.query_one("#view-tabs", Tabs)
-        tabs.action_next_tab()
 
     def action_toggle_blacklist(self) -> None:
         """Schaltet Blacklist-Markierung in Liste und Kalender ein/aus."""

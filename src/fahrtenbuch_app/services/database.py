@@ -1501,3 +1501,91 @@ class Database:
             (year, month),
         )
         conn.commit()
+
+    def clone_settings_from(self, source_path: Path) -> None:
+        """Uebernimmt fahrer-bezogene Daten aus einem anderen Fahrtenbuch.
+
+        Kopiert settings, addresses, categories, blacklist und worktimes aus
+        der Quell-Datenbank in die aktuell geoeffnete. vehicle, trips und
+        documents bleiben unveraendert (typischerweise leer beim Klonen).
+        Session-spezifische Settings (last_viewed_year/month) werden
+        ausgelassen, damit der Start-Zustand des neuen Fahrtenbuchs sauber
+        ist.
+
+        Das Ziel muss vorher geoeffnet sein (Schema ist dann vorhanden).
+        Die Quelle wird kurz geoeffnet und wieder geschlossen, damit ihre
+        Migration laeuft und das Schema kompatibel ist.
+        """
+        conn = self._get_conn()
+        source_db_file = source_path / self.DB_FILENAME
+        if not source_db_file.exists():
+            raise FileNotFoundError(
+                f"Quell-Datenbank nicht gefunden: {source_db_file}"
+            )
+
+        # Quelle kurz oeffnen, damit Migrationen laufen. Danach ist das
+        # Schema garantiert identisch zum Ziel, sodass SELECT * sicher ist.
+        src_fb = Database(source_path)
+        src_fb.open()
+        src_fb.close()
+
+        # ATTACH erlaubt keinen ?-Parameter fuer den Pfad, daher SQL-Literal
+        # mit doppeltem Einzel-Quote als Escape.
+        escaped_path = str(source_db_file).replace("'", "''")
+        conn.execute(f"ATTACH DATABASE '{escaped_path}' AS src")
+        try:
+            conn.execute("BEGIN")
+
+            conn.execute("DELETE FROM settings")
+            conn.execute(
+                """
+                INSERT INTO settings
+                SELECT * FROM src.settings
+                WHERE key NOT IN ('last_viewed_year', 'last_viewed_month')
+                """
+            )
+
+            # categories wird in _init_schema mit Defaults befuellt — die
+            # raeumen wir weg, damit die Quell-Kategorien (ggf. angepasst)
+            # 1:1 uebernommen werden.
+            conn.execute("DELETE FROM categories")
+            conn.execute("INSERT INTO categories SELECT * FROM src.categories")
+
+            conn.execute("DELETE FROM addresses")
+            conn.execute("INSERT INTO addresses SELECT * FROM src.addresses")
+
+            conn.execute("DELETE FROM blacklist")
+            conn.execute("INSERT INTO blacklist SELECT * FROM src.blacklist")
+
+            conn.execute("DELETE FROM worktimes")
+            conn.execute("INSERT INTO worktimes SELECT * FROM src.worktimes")
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            try:
+                conn.execute("DETACH DATABASE src")
+            except sqlite3.Error:
+                pass
+
+    def backup_to_file(self, timestamp: datetime | None = None) -> Path:
+        """Erstellt eine Sicherungskopie der DB-Datei mit Timestamp.
+
+        Verwendet sqlite3.Connection.backup() — die offizielle SQLite-API
+        fuer Hot-Backups. Safe auch bei aktiven Transaktionen und beliebigem
+        journal_mode. Ziel: <db_file>.backup_YYYYMMDD_HHMMSS im gleichen
+        Verzeichnis. Gibt den Pfad der Backup-Datei zurueck.
+        """
+        conn = self._get_conn()
+        ts = (timestamp or datetime.now()).strftime("%Y%m%d_%H%M%S")
+        backup_file = self._db_file.with_name(
+            f"{self._db_file.name}.backup_{ts}"
+        )
+        target = sqlite3.connect(str(backup_file))
+        try:
+            conn.backup(target)
+        finally:
+            target.close()
+        return backup_file
