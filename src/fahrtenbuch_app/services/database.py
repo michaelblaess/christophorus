@@ -1536,29 +1536,20 @@ class Database:
         try:
             conn.execute("BEGIN")
 
-            conn.execute("DELETE FROM settings")
-            conn.execute(
-                """
-                INSERT INTO settings
-                SELECT * FROM src.settings
-                WHERE key NOT IN ('last_viewed_year', 'last_viewed_month')
-                """
+            # settings hat keinen AUTOINCREMENT-Key und wird per WHERE
+            # gefiltert — hier reicht der explizite Column-Copy.
+            self._copy_table(
+                conn, "settings",
+                where="key NOT IN ('last_viewed_year', 'last_viewed_month')",
             )
 
             # categories wird in _init_schema mit Defaults befuellt — die
             # raeumen wir weg, damit die Quell-Kategorien (ggf. angepasst)
             # 1:1 uebernommen werden.
-            conn.execute("DELETE FROM categories")
-            conn.execute("INSERT INTO categories SELECT * FROM src.categories")
-
-            conn.execute("DELETE FROM addresses")
-            conn.execute("INSERT INTO addresses SELECT * FROM src.addresses")
-
-            conn.execute("DELETE FROM blacklist")
-            conn.execute("INSERT INTO blacklist SELECT * FROM src.blacklist")
-
-            conn.execute("DELETE FROM worktimes")
-            conn.execute("INSERT INTO worktimes SELECT * FROM src.worktimes")
+            self._copy_table(conn, "categories")
+            self._copy_table(conn, "addresses")
+            self._copy_table(conn, "blacklist")
+            self._copy_table(conn, "worktimes")
 
             conn.commit()
         except Exception:
@@ -1569,6 +1560,41 @@ class Database:
                 conn.execute("DETACH DATABASE src")
             except sqlite3.Error:
                 pass
+
+    def _copy_table(
+        self,
+        conn: sqlite3.Connection,
+        table: str,
+        where: str | None = None,
+    ) -> None:
+        """Kopiert Zeilen aus src.<table> in die Ziel-<table>.
+
+        Ermittelt die in beiden Schemas vorhandenen Spalten und listet sie
+        explizit im INSERT auf. Das ist noetig, weil migrierte DBs
+        (ALTER TABLE ADD COLUMN) Spalten am Ende der Tabelle haben, waehrend
+        frisch angelegte DBs sie in der Reihenfolge aus _init_schema haben.
+        'SELECT *' macht positionales Column-Mapping und crasht dann z.B.
+        mit NOT NULL constraint failed, weil ein TEXT-Wert in eine INTEGER-
+        Spalte geschoben wird.
+        """
+        src_cols = {
+            str(row[1])
+            for row in conn.execute(f"PRAGMA src.table_info({table})")
+        }
+        dst_cols = [
+            str(row[1])
+            for row in conn.execute(f"PRAGMA table_info({table})")
+        ]
+        common = [c for c in dst_cols if c in src_cols]
+        if not common:
+            return
+        col_list = ", ".join(f'"{c}"' for c in common)
+        where_sql = f" WHERE {where}" if where else ""
+        conn.execute(f"DELETE FROM {table}")
+        conn.execute(
+            f"INSERT INTO {table} ({col_list}) "
+            f"SELECT {col_list} FROM src.{table}{where_sql}"
+        )
 
     def backup_to_file(self, timestamp: datetime | None = None) -> Path:
         """Erstellt eine Sicherungskopie der DB-Datei mit Timestamp.

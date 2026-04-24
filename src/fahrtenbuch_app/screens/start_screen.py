@@ -113,7 +113,11 @@ class StartScreen(ModalScreen[StartResult | None]):
 
     def compose(self) -> ComposeResult:
         """Erstellt den Startbildschirm."""
-        default_base = str(Path.home() / "Fahrtenbuecher")
+        # Basisverzeichnis: zuletzt verwendetes oder Fallback auf Home
+        default_base = (
+            self._config.last_base_dir
+            or str(Path.home() / "Fahrtenbuecher")
+        )
 
         with Vertical():
             yield Static("Fahrtenbuch verwalten", id="title")
@@ -238,6 +242,10 @@ class StartScreen(ModalScreen[StartResult | None]):
             )
             return
 
+        # Basisverzeichnis merken fuer den naechsten Aufruf
+        self._config.last_base_dir = base_dir
+        self._config.save()
+
         clone_source: str | None = None
         clone_enabled = self.query_one("#check-clone", Checkbox).value
         if clone_enabled:
@@ -288,6 +296,10 @@ class StartScreen(ModalScreen[StartResult | None]):
                 severity="error",
             )
             return
+
+        # Basisverzeichnis merken fuer den naechsten Aufruf
+        self._config.last_base_dir = base_dir
+        self._config.save()
 
         self.dismiss((str(path), None))
 

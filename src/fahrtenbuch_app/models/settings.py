@@ -31,6 +31,7 @@ class GlobalConfig:
     last_opened_path: str = ""
     recent_paths: list[str] = field(default_factory=list)
     log_visible: bool = True
+    last_base_dir: str = ""
 
     CONFIG_DIR: Path = Path.home() / ".fahrtenbuch"
     CONFIG_FILE: Path = CONFIG_DIR / "config.json"
@@ -53,6 +54,7 @@ class GlobalConfig:
             "last_opened_path": self.last_opened_path,
             "recent_paths": self.recent_paths,
             "log_visible": self.log_visible,
+            "last_base_dir": self.last_base_dir,
         }
         with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -70,6 +72,7 @@ class GlobalConfig:
             config.last_opened_path = data.get("last_opened_path", "")
             config.recent_paths = data.get("recent_paths", [])
             config.log_visible = data.get("log_visible", True)
+            config.last_base_dir = data.get("last_base_dir", "")
         except (json.JSONDecodeError, KeyError):
             pass
         return config
