@@ -5,6 +5,41 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+# textual-themes 0.5 hat 25 Themes umbenannt (trademark-safety pass).
+# Config-Files aelterer Versionen koennen alte Slugs gespeichert haben —
+# die werden beim Laden transparent gemappt.
+_LEGACY_THEME_MAP: dict[str, str] = {
+    "c64": "brotkasten",
+    "amiga": "boing",
+    "atari-st": "gemstone",
+    "ibm-terminal": "classic-terminal",
+    "nextstep": "next",
+    "beos": "bebox",
+    "ubuntu": "bunty",
+    "macos": "cupertino",
+    "windows-xp": "luna",
+    "msdos": "commandr",
+    "solaris-cde": "motif",
+    "os2-warp": "warp",
+    "opensuse": "geeko",
+    "linux-mint": "minty",
+    "red-hat": "crimson",
+    "raspberry-pi": "razzy",
+    "freebsd": "beastie",
+    "tudor": "fifty-eight",
+    "goldfinger": "goldfinder",
+    "hulk": "hulkula",
+    "batman": "flughund",
+    "gameboy": "brick",
+    "pan-am": "clipper",
+    "miami-vice": "miami",
+    "martini-racing": "racing",
+    "superman": "metropolis",
+    "spiderman": "spiderized",
+    "gulf-racing": "textual-dark",  # entferntes Theme -> Textual Default
+}
+
+
 @dataclass
 class AddressEntry:
     """Adresse mit Name und Entfernung.
@@ -61,7 +96,11 @@ class GlobalConfig:
 
     @staticmethod
     def load() -> "GlobalConfig":
-        """Laedt die globale Konfiguration aus JSON oder erstellt Default."""
+        """Laedt die globale Konfiguration aus JSON oder erstellt Default.
+
+        Migriert dabei alte Theme-Slugs aus textual-themes < 0.5 auf
+        ihre aktuellen Namen und persistiert die Migration.
+        """
         config = GlobalConfig()
         if not config.CONFIG_FILE.exists():
             return config
@@ -75,4 +114,13 @@ class GlobalConfig:
             config.last_base_dir = data.get("last_base_dir", "")
         except (json.JSONDecodeError, KeyError):
             pass
+
+        # Legacy-Theme-Slug migrieren
+        if config.theme in _LEGACY_THEME_MAP:
+            config.theme = _LEGACY_THEME_MAP[config.theme]
+            try:
+                config.save()
+            except Exception:
+                pass
+
         return config

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fahrtenbuch"
-version = "1.0.0"
+version = "1.1.0"
 description = "Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher"
 requires-python = ">=3.12"
 dependencies = [
