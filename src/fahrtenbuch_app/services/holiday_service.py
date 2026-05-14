@@ -76,7 +76,7 @@ class HolidayService:
 
         count = 0
         cal = calendar.Calendar()
-        for day_num, weekday in cal.itermonthdays2(year, month):
+        for day_num, _weekday in cal.itermonthdays2(year, month):
             if day_num == 0:
                 continue
             d = date(year, month, day_num)

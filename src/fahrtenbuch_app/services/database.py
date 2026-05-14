@@ -1,5 +1,6 @@
 """SQLite-basierte Datenhaltung fuer ein einzelnes Fahrtenbuch."""
 
+import contextlib
 import getpass
 import sqlite3
 from datetime import datetime
@@ -996,10 +997,7 @@ class Database:
         old = self.get_trip_by_id(trip_id)
         if old is None:
             return
-        if self._is_informational_category(old.category):
-            old_distance = 0
-        else:
-            old_distance = max(0, old.km_end - old.km_start)
+        old_distance = 0 if self._is_informational_category(old.category) else max(0, old.km_end - old.km_start)
         try:
             conn.execute("BEGIN")
             conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
@@ -1526,10 +1524,8 @@ class Database:
             conn.rollback()
             raise
         finally:
-            try:
+            with contextlib.suppress(sqlite3.Error):
                 conn.execute("DETACH DATABASE src")
-            except sqlite3.Error:
-                pass
 
     def _copy_table(
         self,

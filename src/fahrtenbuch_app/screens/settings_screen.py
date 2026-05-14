@@ -396,7 +396,7 @@ class SettingsScreen(ModalScreen[bool | None]):
     def _category_fields(self) -> ComposeResult:
         """Felder fuer das Kategorien-Tab."""
         for i, cat in enumerate(self._categories):
-            cat_id = int(cat.get("id", 0))
+            int(cat.get("id", 0))
             name = str(cat.get("name", ""))
             display_name = str(cat.get("display_name", ""))
             counts_biz = bool(cat.get("counts_as_business", 1))

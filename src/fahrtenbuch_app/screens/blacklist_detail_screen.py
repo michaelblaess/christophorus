@@ -1,5 +1,6 @@
 """Detail-Ansicht fuer einen Blacklist-Eintrag: bearbeiten, neu anlegen, loeschen."""
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -177,16 +178,12 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
         if self._is_new or self._entry_id <= 0:
             docs_list.mount(Static("  (erst nach Speichern moeglich)", classes="doc-name"))
             # Beleg-Button deaktivieren bis gespeichert
-            try:
+            with contextlib.suppress(Exception):
                 self.query_one("#btn-add-doc", Button).disabled = True
-            except Exception:
-                pass
             return
 
-        try:
+        with contextlib.suppress(Exception):
             self.query_one("#btn-add-doc", Button).disabled = False
-        except Exception:
-            pass
 
         docs = self._database.get_documents(blacklist_id=self._entry_id)
         for doc in docs:

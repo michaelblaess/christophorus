@@ -26,7 +26,7 @@ def assert_chain_intact(database: Database, expected_start_km: int) -> None:
         assert trip.km_end >= trip.km_start, (
             f"Trip {trip.id} hat negative Distanz: km_start={trip.km_start}, km_end={trip.km_end}"
         )
-    for prev, curr in zip(trips, trips[1:]):
+    for prev, curr in zip(trips, trips[1:], strict=False):
         assert curr.km_start == prev.km_end, (
             f"Kettenbruch zwischen Trip {prev.id} (Ende {prev.km_end}) und Trip {curr.id} (Start {curr.km_start})"
         )
@@ -483,7 +483,6 @@ class TestRebuildAllKm:
         database.add_trip(make_trip("2024-03-03", 80))
 
         # Zerschiesse den mittleren Trip per direktem SQL
-        conn = database.get_all_trips_ordered  # silence unused
         ordered = database.get_all_trips_ordered()
         mid = ordered[1]
         # Direkten DB-Zugriff via _get_conn (Test darf das)

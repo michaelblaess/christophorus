@@ -271,7 +271,7 @@ def check_chain_ascending(database: Database) -> list[PlausibilityIssue]:
             )
 
     # Paarweise pruefen
-    for prev, curr in zip(trips, trips[1:]):
+    for prev, curr in zip(trips, trips[1:], strict=False):
         delta = curr.km_start - prev.km_end
         if delta == 0:
             continue
@@ -564,7 +564,7 @@ def check_time_overlap(database: Database) -> list[PlausibilityIssue]:
             continue
         by_date.setdefault(trip.date, []).append((trip, t_from, t_to))
 
-    for date_iso, entries in by_date.items():
+    for _date_iso, entries in by_date.items():
         if len(entries) < 2:
             continue
         # Nach Startzeit sortieren — bei Gleichstand nach id.
@@ -1003,7 +1003,7 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
     target = vehicle.consumption_l_100km
     winter_enabled = database.get_setting("fuel_winter_tolerance", "1") == "1"
 
-    for prev, curr in zip(full_tanks, full_tanks[1:]):
+    for prev, curr in zip(full_tanks, full_tanks[1:], strict=False):
         distance_km = curr.km_end - prev.km_end
         if distance_km < FUEL_MIN_INTERVAL_KM:
             continue
@@ -1066,7 +1066,7 @@ def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
     min_consumption = vehicle.consumption_l_100km * (1 - FUEL_TOLERANCE)
     if min_consumption <= 0:
         return issues
-    max_range_km = vehicle.tank_capacity_l * 100.0 / min_consumption
+    vehicle.tank_capacity_l * 100.0 / min_consumption
 
     trips = _load_all_trips_ordered(database)
     full_tanks: list[Trip] = [
@@ -1079,7 +1079,7 @@ def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
         t for t in trips if t.category in ("fuel", "fuel_private") and not t.fuel_full_tank and t.fuel_liters > 0
     ]
 
-    for prev, curr in zip(full_tanks, full_tanks[1:]):
+    for prev, curr in zip(full_tanks, full_tanks[1:], strict=False):
         distance_km = curr.km_end - prev.km_end
         # Teilbetankungen im Intervall erweitern die effektive Reichweite:
         # eine Volltankfuellung plus jede Teilbetankung = zusaetzliche Liter,
@@ -1131,7 +1131,7 @@ def check_ghost_business_trips(database: Database) -> list[PlausibilityIssue]:
     """
     issues: list[PlausibilityIssue] = []
     trips = _load_all_trips_ordered(database)
-    business_cats = get_business_categories()
+    get_business_categories()
 
     # Nur echte business-Fahrten (ohne fuel/service) mit signifikanten km
     candidates: list[tuple[Trip, date]] = []
@@ -1153,11 +1153,11 @@ def check_ghost_business_trips(database: Database) -> list[PlausibilityIssue]:
 
     # Fuer jede Gruppe: aufeinanderfolgende Paare im Fenster melden
     reported_ids: set[int] = set()
-    for key, entries in groups.items():
+    for entries in groups.values():
         if len(entries) < 2:
             continue
         entries_sorted = sorted(entries, key=lambda x: (x[1], x[0].id))
-        for (prev_trip, prev_d), (curr_trip, curr_d) in zip(entries_sorted, entries_sorted[1:]):
+        for (prev_trip, prev_d), (curr_trip, curr_d) in zip(entries_sorted, entries_sorted[1:], strict=False):
             delta_days = (curr_d - prev_d).days
             if delta_days <= 0 or delta_days > GHOST_TRIP_WINDOW_DAYS:
                 continue

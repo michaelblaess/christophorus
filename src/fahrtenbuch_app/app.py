@@ -1,5 +1,6 @@
 """Fahrtenbuch TUI — Hauptanwendung."""
 
+import contextlib
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -267,10 +268,8 @@ class FahrtenbuchApp(App):
             ("#blacklist-view", BlacklistView),
             ("#documents-view", DocumentsView),
         ):
-            try:
+            with contextlib.suppress(Exception):
                 self.query_one(widget_id, cls).set_show_id(show_id)
-            except Exception:
-                pass
 
         # Kategorie-Code- und Tankliter-Spalte (nur TripTable)
         show_code = db.get_setting("show_code_column", "0") == "1"
@@ -600,10 +599,7 @@ class FahrtenbuchApp(App):
 
         purpose = trip.purpose.strip() or "(kein Reisezweck)"
         destination = trip.destination.split("\n")[0].strip() if trip.destination else ""
-        if destination:
-            trip_label = f"{date_de}\n{purpose}\nZiel: {destination}"
-        else:
-            trip_label = f"{date_de}\n{purpose}"
+        trip_label = f"{date_de}\n{purpose}\nZiel: {destination}" if destination else f"{date_de}\n{purpose}"
 
         documents = db.get_documents(trip_id=trip.id)
         if documents:

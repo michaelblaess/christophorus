@@ -1,5 +1,6 @@
 """Globale Konfiguration und Adress-Modell fuer das Fahrtenbuch."""
 
+import contextlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,9 +118,7 @@ class GlobalConfig:
         # Legacy-Theme-Slug migrieren
         if config.theme in _LEGACY_THEME_MAP:
             config.theme = _LEGACY_THEME_MAP[config.theme]
-            try:
+            with contextlib.suppress(Exception):
                 config.save()
-            except Exception:
-                pass
 
         return config

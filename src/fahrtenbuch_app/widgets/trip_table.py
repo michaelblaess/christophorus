@@ -239,8 +239,7 @@ class TripTable(Vertical):
             combined.append((d, str(entry.get("date", "")), "blacklist", None, -1, entry))
         combined.sort(key=lambda x: x[0])
 
-        row_idx = 0
-        for d, date_str, row_type, trip, orig_idx, entry in combined:
+        for row_idx, (d, date_str, row_type, trip, orig_idx, entry) in enumerate(combined):
             date_de = d.strftime("%d.%m.%Y") if d.year != 9999 else date_str
             weekday = _WEEKDAYS[d.weekday()] if d.year != 9999 else ""
             row_key = str(row_idx)
@@ -368,8 +367,6 @@ class TripTable(Vertical):
                 )
                 table.add_row(*cells, key=row_key)
                 self._row_trips[row_key] = (trip, orig_idx)
-
-            row_idx += 1
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Sendet TripSelected oder BlacklistEntryActivated je nach Zeilentyp."""
