@@ -5,23 +5,21 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from fahrtenbuch_app.models.trip import Trip, get_informational_categories
 
-
 # Layout orientiert am Vorlage-Fahrtenbuch
 _COLUMN_WIDTHS = {
-    "A": 12,   # Datum
-    "B": 14,   # Fahrzeit von-bis
-    "C": 36,   # Route / Ziel
-    "D": 32,   # Reisezweck
-    "E": 12,   # km Anfang
-    "F": 12,   # km Ende
-    "G": 12,   # km geschaeftlich
-    "H": 14,   # Wohnung/Arbeit (leer — historisch)
-    "I": 12,   # km privat
+    "A": 12,  # Datum
+    "B": 14,  # Fahrzeit von-bis
+    "C": 36,  # Route / Ziel
+    "D": 32,  # Reisezweck
+    "E": 12,  # km Anfang
+    "F": 12,  # km Ende
+    "G": 12,  # km geschaeftlich
+    "H": 14,  # Wohnung/Arbeit (leer — historisch)
+    "I": 12,  # km privat
 }
 
 _HEADER_FILL = PatternFill(start_color="FFCCCCCC", end_color="FFCCCCCC", fill_type="solid")
@@ -100,11 +98,7 @@ def _is_untimed_private(trip: Trip) -> bool:
     ist. Privatfahrten mit konkretem Ziel (z.B. Supermarkt) behalten ihr
     Datum, auch wenn die Uhrzeit fehlt.
     """
-    return (
-        trip.category == "private"
-        and not trip.time_from.strip()
-        and not trip.destination.strip()
-    )
+    return trip.category == "private" and not trip.time_from.strip() and not trip.destination.strip()
 
 
 def _write_trip_row(
@@ -335,8 +329,19 @@ def export_trips(
 
 
 _MONTH_NAMES_DE = [
-    "", "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+    "",
+    "Januar",
+    "Februar",
+    "Maerz",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
 ]
 
 

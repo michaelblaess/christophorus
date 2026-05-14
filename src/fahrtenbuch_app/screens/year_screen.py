@@ -3,7 +3,7 @@
 from rich.text import Text
 from textual.app import ComposeResult, RenderResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Static
@@ -12,8 +12,18 @@ from fahrtenbuch_app.models.trip import MonthData
 from fahrtenbuch_app.services.formatting import format_km
 
 _MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+    "Januar",
+    "Februar",
+    "Maerz",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
 ]
 _QUARTER_NAMES = ["Q1", "Q2", "Q3", "Q4"]
 
@@ -154,15 +164,11 @@ class YearScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Erstellt die Jahresuebersicht."""
         with VerticalScroll():
-            yield Static(
-                f"Jahresuebersicht {self._year}", id="title"
-            )
+            yield Static(f"Jahresuebersicht {self._year}", id="title")
 
             for q in range(4):
                 with QuarterRow():
-                    yield Static(
-                        _QUARTER_NAMES[q], classes="quarter-label"
-                    )
+                    yield Static(_QUARTER_NAMES[q], classes="quarter-label")
                     for m_offset in range(3):
                         month = q * 3 + m_offset + 1
                         md = self._month_data.get(month)

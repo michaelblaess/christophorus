@@ -13,8 +13,18 @@ from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.formatting import format_km
 
 _MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+    "Januar",
+    "Februar",
+    "Maerz",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
 ]
 
 
@@ -113,7 +123,9 @@ class ConfigPanel(Vertical):
 
         # Zeile 2: Leasing
         lease_dates = self._format_lease_dates(vehicle)
-        km_str = f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
+        km_str = (
+            f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
+        )
         with Horizontal(classes="config-row"):
             yield Static("  Leasing:    ", classes="config-label")
             yield Static(lease_dates, classes="config-value", id="lease-dates-display")
@@ -162,7 +174,9 @@ class ConfigPanel(Vertical):
 
             self.query_one("#lease-dates-display", Static).update(self._format_lease_dates(vehicle))
 
-            km_str = f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
+            km_str = (
+                f"{format_km(vehicle.lease_km_per_month)} km/Monat  |  {vehicle.lease_months} Monate" if vehicle else ""
+            )
             self.query_one("#lease-km-display", Static).update(km_str)
 
             self.query_one("#km-range-display", Static).update(self._format_km_range(vehicle))

@@ -20,6 +20,29 @@ from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
 from fahrtenbuch_app.services.formatting import format_km, parse_km
 
+
+def _iso_to_de(iso: str) -> str:
+    """Konvertiert ISO-Datum (YYYY-MM-DD) zu deutschem Format (DD.MM.YYYY)."""
+    try:
+        parts = iso.split("-")
+        if len(parts) == 3 and len(parts[2]) > 0:
+            return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    except (ValueError, IndexError):
+        pass
+    return iso
+
+
+def _de_to_iso(de: str) -> str:
+    """Konvertiert deutsches Datum (DD.MM.YYYY) zu ISO-Format (YYYY-MM-DD)."""
+    try:
+        parts = de.split(".")
+        if len(parts) == 3:
+            return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    except (ValueError, IndexError):
+        pass
+    return de
+
+
 _COLOR_OPTIONS: list[tuple[str, str]] = [
     ("Gruen", "green"),
     ("Blau", "blue"),
@@ -70,6 +93,7 @@ def _parse_float(raw: str) -> float:
         return float(s)
     except ValueError:
         return 0.0
+
 
 _JOURNAL_MODE_OPTIONS: list[tuple[str, str]] = [
     ("DELETE (Dropbox-sicher, Standard)", "DELETE"),
@@ -187,9 +211,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._check_ghost_trips = database.get_setting("check_ghost_trips", "0") == "1"
         self._fuel_winter_tolerance = database.get_setting("fuel_winter_tolerance", "1") == "1"
         self._show_fuel_column = database.get_setting("show_fuel_column", "0") == "1"
-        self._export_include_prev_december = database.get_setting(
-            "export_include_prev_december", "0"
-        ) == "1"
+        self._export_include_prev_december = database.get_setting("export_include_prev_december", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
         self._categories: list[dict[str, object]] = database.get_categories()
@@ -197,8 +219,12 @@ class SettingsScreen(ModalScreen[bool | None]):
     def _load_addresses(self) -> None:
         """Laedt alle Adressen aus der Datenbank gruppiert nach Kategorie."""
         categories = [
-            "customer", "gas_station", "shopping",
-            "steuerberaterin", "restaurant", "other",
+            "customer",
+            "gas_station",
+            "shopping",
+            "steuerberaterin",
+            "restaurant",
+            "other",
         ]
         for cat in categories:
             rows = self._database.get_addresses(cat)
@@ -222,63 +248,39 @@ class SettingsScreen(ModalScreen[bool | None]):
             yield Static("Einstellungen", id="title")
 
             with TabbedContent():
-                with TabPane("Fahrzeug", id="tab-vehicle"):
-                    with VerticalScroll():
-                        yield from self._vehicle_fields(v)
+                with TabPane("Fahrzeug", id="tab-vehicle"), VerticalScroll():
+                    yield from self._vehicle_fields(v)
 
-                with TabPane("Wohnung", id="tab-home"):
-                    with VerticalScroll():
-                        yield from self._home_fields(home_address)
+                with TabPane("Wohnung", id="tab-home"), VerticalScroll():
+                    yield from self._home_fields(home_address)
 
-                with TabPane("Kunden", id="tab-customers"):
-                    with VerticalScroll():
-                        yield from self._address_list_fields(
-                            self._addresses.get("customer", []), "cust"
-                        )
+                with TabPane("Kunden", id="tab-customers"), VerticalScroll():
+                    yield from self._address_list_fields(self._addresses.get("customer", []), "cust")
 
-                with TabPane("Tankstellen", id="tab-gas"):
-                    with VerticalScroll():
-                        yield from self._address_list_fields(
-                            self._addresses.get("gas_station", []), "gas"
-                        )
+                with TabPane("Tankstellen", id="tab-gas"), VerticalScroll():
+                    yield from self._address_list_fields(self._addresses.get("gas_station", []), "gas")
 
-                with TabPane("Einkaufen", id="tab-shopping"):
-                    with VerticalScroll():
-                        yield from self._address_list_fields(
-                            self._addresses.get("shopping", []), "shop"
-                        )
+                with TabPane("Einkaufen", id="tab-shopping"), VerticalScroll():
+                    yield from self._address_list_fields(self._addresses.get("shopping", []), "shop")
 
-                with TabPane("Steuerberater", id="tab-steuerberater"):
-                    with VerticalScroll():
-                        yield from self._steuerberater_fields()
+                with TabPane("Steuerberater", id="tab-steuerberater"), VerticalScroll():
+                    yield from self._steuerberater_fields()
 
-                with TabPane("Restaurants", id="tab-restaurants"):
-                    with VerticalScroll():
-                        yield from self._address_list_fields(
-                            self._addresses.get("restaurant", []), "rest"
-                        )
+                with TabPane("Restaurants", id="tab-restaurants"), VerticalScroll():
+                    yield from self._address_list_fields(self._addresses.get("restaurant", []), "rest")
 
-                with TabPane("Sonstige", id="tab-other"):
-                    with VerticalScroll():
-                        yield from self._address_list_fields(
-                            self._addresses.get("other", []), "other"
-                        )
+                with TabPane("Sonstige", id="tab-other"), VerticalScroll():
+                    yield from self._address_list_fields(self._addresses.get("other", []), "other")
 
-                with TabPane("Kategorien", id="tab-categories"):
-                    with VerticalScroll():
-                        yield from self._category_fields()
+                with TabPane("Kategorien", id="tab-categories"), VerticalScroll():
+                    yield from self._category_fields()
 
-                with TabPane("Datenbank", id="tab-database"):
-                    with VerticalScroll():
-                        yield from self._database_fields()
+                with TabPane("Datenbank", id="tab-database"), VerticalScroll():
+                    yield from self._database_fields()
 
             with Horizontal(classes="button-row"):
-                yield Button(
-                    "Speichern (Ctrl+S)", variant="primary", id="btn-save"
-                )
-                yield Button(
-                    "Abbrechen (Esc)", variant="default", id="btn-cancel"
-                )
+                yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
+                yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
 
     def _vehicle_fields(self, v: Vehicle) -> ComposeResult:
         """Felder fuer das Fahrzeug-Tab."""
@@ -349,9 +351,7 @@ class SettingsScreen(ModalScreen[bool | None]):
                 id="home-address",
             )
 
-    def _address_list_fields(
-        self, entries: list[AddressEntry], prefix: str
-    ) -> ComposeResult:
+    def _address_list_fields(self, entries: list[AddressEntry], prefix: str) -> ComposeResult:
         """Felder fuer eine Adressliste."""
         for i, entry in enumerate(entries):
             with Vertical(classes="addr-block"):
@@ -591,9 +591,7 @@ class SettingsScreen(ModalScreen[bool | None]):
             self._database.delete_category(cat_id)
 
         self._categories.pop(idx)
-        self.notify(
-            f"Kategorie '{cat_name}' geloescht — bitte Speichern und neu oeffnen"
-        )
+        self.notify(f"Kategorie '{cat_name}' geloescht — bitte Speichern und neu oeffnen")
 
     def action_save(self) -> None:
         """Speichert alle Settings in die SQLite-Datenbank."""
@@ -621,9 +619,7 @@ class SettingsScreen(ModalScreen[bool | None]):
         # Journal-Modus speichern (wirkt beim naechsten Oeffnen)
         journal_select = self.query_one("#select-journal-mode", Select)
         if journal_select.value != Select.BLANK:
-            self._database.set_setting(
-                "db_journal_mode", str(journal_select.value)
-            )
+            self._database.set_setting("db_journal_mode", str(journal_select.value))
 
         # ID-Spalte in Tabellen
         show_id = self._get_checkbox("check-show-id-column")
@@ -647,14 +643,10 @@ class SettingsScreen(ModalScreen[bool | None]):
 
         # Dezember des Vorjahrs in Jahres-Export
         prev_dec = self._get_checkbox("check-export-include-prev-december")
-        self._database.set_setting(
-            "export_include_prev_december", "1" if prev_dec else "0"
-        )
+        self._database.set_setting("export_include_prev_december", "1" if prev_dec else "0")
 
         # Wohnadresse speichern
-        self._database.set_setting(
-            "home_address", self._get_input("home-address")
-        )
+        self._database.set_setting("home_address", self._get_input("home-address"))
 
         # Adressen speichern
         self._save_address_list("customer", "cust")
@@ -696,9 +688,7 @@ class SettingsScreen(ModalScreen[bool | None]):
             self._database.update_address(st_list[0].id, name, address, km)
         else:
             if name or address:
-                self._database.add_address(
-                    "steuerberaterin", name, address, km
-                )
+                self._database.add_address("steuerberaterin", name, address, km)
 
     def _save_categories(self) -> None:
         """Speichert alle Kategorien in die Datenbank."""
@@ -716,13 +706,9 @@ class SettingsScreen(ModalScreen[bool | None]):
                 continue
 
             if cat_id > 0:
-                self._database.update_category(
-                    cat_id, name, display_name, counts_biz, color
-                )
+                self._database.update_category(cat_id, name, display_name, counts_biz, color)
             else:
-                self._database.add_category(
-                    name, display_name, counts_biz, color
-                )
+                self._database.add_category(name, display_name, counts_biz, color)
 
     def _query_select(self, select_id: str) -> str:
         """Liest einen Select-Wert sicher aus."""

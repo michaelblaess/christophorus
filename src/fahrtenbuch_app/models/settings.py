@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # textual-themes 0.5 hat 25 Themes umbenannt (trademark-safety pass).
 # Config-Files aelterer Versionen koennen alte Slugs gespeichert haben —
 # die werden beim Laden transparent gemappt.
@@ -79,7 +78,7 @@ class GlobalConfig:
             self.recent_paths.remove(path)
         self.recent_paths.insert(0, path)
         if len(self.recent_paths) > self.MAX_RECENT:
-            self.recent_paths = self.recent_paths[:self.MAX_RECENT]
+            self.recent_paths = self.recent_paths[: self.MAX_RECENT]
 
     def save(self) -> None:
         """Speichert die globale Konfiguration als JSON."""
@@ -105,7 +104,7 @@ class GlobalConfig:
         if not config.CONFIG_FILE.exists():
             return config
         try:
-            with open(config.CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(config.CONFIG_FILE, encoding="utf-8") as f:
                 data = json.load(f)
             config.theme = data.get("theme", "textual-dark")
             config.last_opened_path = data.get("last_opened_path", "")

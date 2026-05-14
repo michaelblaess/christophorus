@@ -17,17 +17,16 @@ from fahrtenbuch_app.models.trip import (
     set_informational_categories,
 )
 from fahrtenbuch_app.models.vehicle import Vehicle
+from fahrtenbuch_app.services.formatting import format_km
+from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.blacklist_view import BlacklistView
 from fahrtenbuch_app.widgets.calendar_view import CalendarView
 from fahrtenbuch_app.widgets.config_panel import ConfigPanel
 from fahrtenbuch_app.widgets.documents_view import DocumentsView
 from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
-from fahrtenbuch_app.services.formatting import format_km
-from fahrtenbuch_app.services.holiday_service import HolidayService
 from fahrtenbuch_app.widgets.trip_table import TripTable
 from fahrtenbuch_app.widgets.worktimes_view import WorktimesView
 from fahrtenbuch_app.widgets.year_view import YearView
-
 
 _MARKUP_RE = re.compile(r"\[/?[^\]]*\]")
 
@@ -70,6 +69,7 @@ class FahrtenbuchApp(App):
 
         try:
             from textual_themes import register_all
+
             register_all(self)
         except ImportError:
             pass
@@ -165,26 +165,19 @@ class FahrtenbuchApp(App):
         self._write_log(f"[green]Datenbank gesichert: {backup_path}[/green]")
         return backup_path
 
-    def _on_start_screen_closed(
-        self, result: tuple[str, str | None] | None
-    ) -> None:
+    def _on_start_screen_closed(self, result: tuple[str, str | None] | None) -> None:
         """Callback nach dem StartScreen.
 
         result ist None bei Abbruch, sonst (ziel_pfad, clone_source_oder_None).
         """
         if result is None:
             if self._fahrtenbuch is None:
-                self._write_log(
-                    "[yellow]Kein Fahrtenbuch geoeffnet. "
-                    "Druecke [V] zum Verwalten.[/yellow]"
-                )
+                self._write_log("[yellow]Kein Fahrtenbuch geoeffnet. Druecke [V] zum Verwalten.[/yellow]")
             return
         target_path, clone_source = result
         self._open_fahrtenbuch(target_path, clone_source=clone_source)
 
-    def _open_fahrtenbuch(
-        self, path_str: str, clone_source: str | None = None
-    ) -> None:
+    def _open_fahrtenbuch(self, path_str: str, clone_source: str | None = None) -> None:
         """Oeffnet oder erstellt ein Fahrtenbuch am angegebenen Pfad.
 
         Wenn clone_source gesetzt ist und ein neues Fahrtenbuch angelegt
@@ -209,22 +202,12 @@ class FahrtenbuchApp(App):
                 self._write_log(f"[green]Neues Fahrtenbuch erstellt: {path}[/green]")
                 if clone_source is not None:
                     try:
-                        self._fahrtenbuch.database.clone_settings_from(
-                            Path(clone_source)
-                        )
-                        self._write_log(
-                            f"[green]Einstellungen uebernommen aus: {clone_source}[/green]"
-                        )
+                        self._fahrtenbuch.database.clone_settings_from(Path(clone_source))
+                        self._write_log(f"[green]Einstellungen uebernommen aus: {clone_source}[/green]")
                     except Exception as exc:
-                        self._write_log(
-                            f"[red]Clone fehlgeschlagen: {exc}[/red]"
-                        )
-                        self.notify(
-                            f"Clone fehlgeschlagen: {exc}", severity="error"
-                        )
-                self._write_log(
-                    "[yellow]Druecke [S] um das Fahrzeug zu konfigurieren.[/yellow]"
-                )
+                        self._write_log(f"[red]Clone fehlgeschlagen: {exc}[/red]")
+                        self.notify(f"Clone fehlgeschlagen: {exc}", severity="error")
+                self._write_log("[yellow]Druecke [S] um das Fahrzeug zu konfigurieren.[/yellow]")
         except Exception as exc:
             self._write_log(f"[red]Fehler beim Oeffnen: {exc}[/red]")
             self.notify(f"Fehler: {exc}", severity="error")
@@ -314,9 +297,7 @@ class FahrtenbuchApp(App):
         if vehicle:
             lease_km = vehicle.lease_km_per_month
 
-        holidays_map = self._holiday_service.get_holidays_in_month(
-            self._year, self._month
-        )
+        holidays_map = self._holiday_service.get_holidays_in_month(self._year, self._month)
 
         category_colors = db.get_category_colors()
 
@@ -433,6 +414,7 @@ class FahrtenbuchApp(App):
             self.notify("Datei nicht mehr verfuegbar", severity="warning")
             return
         from fahrtenbuch_app.services.os_utils import open_file_in_system
+
         try:
             open_file_in_system(path)
         except FileNotFoundError:
@@ -460,17 +442,13 @@ class FahrtenbuchApp(App):
         self._config.theme = theme_name
         self._config.save()
 
-    def on_config_panel_month_changed(
-        self, event: ConfigPanel.MonthChanged
-    ) -> None:
+    def on_config_panel_month_changed(self, event: ConfigPanel.MonthChanged) -> None:
         """Reagiert auf Monatswechsel."""
         self._year = event.year
         self._month = event.month
         self._refresh_data()
 
-    def on_trip_table_trip_selected(
-        self, event: TripTable.TripSelected
-    ) -> None:
+    def on_trip_table_trip_selected(self, event: TripTable.TripSelected) -> None:
         """Reagiert auf Auswahl einer Fahrt — oeffnet den Editor."""
         if event.trip is None or self._fahrtenbuch is None:
             return
@@ -487,9 +465,7 @@ class FahrtenbuchApp(App):
             callback=self._on_trip_edited,
         )
 
-    def on_calendar_view_trip_edit_requested(
-        self, event: CalendarView.TripEditRequested
-    ) -> None:
+    def on_calendar_view_trip_edit_requested(self, event: CalendarView.TripEditRequested) -> None:
         """Oeffnet den TripScreen bei Klick auf eine Kalender-Kachel.
 
         WICHTIG: _selected_trip_id wird gesetzt, damit ein anschliessendes
@@ -509,9 +485,7 @@ class FahrtenbuchApp(App):
             callback=self._on_trip_edited,
         )
 
-    def on_calendar_view_new_trip_requested(
-        self, event: CalendarView.NewTripRequested
-    ) -> None:
+    def on_calendar_view_new_trip_requested(self, event: CalendarView.NewTripRequested) -> None:
         """Oeffnet den TripScreen fuer eine neue Fahrt am angeklickten Tag."""
         if self._fahrtenbuch is None:
             return
@@ -535,6 +509,7 @@ class FahrtenbuchApp(App):
         # Loesch-Anforderung aus dem TripScreen → in den normalen
         # Loesch-Pfad mit Confirm-Alert umlenken.
         from fahrtenbuch_app.screens.trip_screen import DELETE_REQUESTED
+
         if trip is DELETE_REQUESTED:
             self.action_delete_trip()
             return
@@ -552,28 +527,20 @@ class FahrtenbuchApp(App):
                 self._write_log(f"[red]Fehler beim Aktualisieren: {exc}[/red]")
                 self.notify(f"Fehler: {exc}", severity="error")
                 return
-        self._write_log(
-            f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]"
-        )
+        self._write_log(f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]")
         self._refresh_data()
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
 
-    def on_blacklist_view_entry_selected(
-        self, event: "BlacklistView.EntrySelected"
-    ) -> None:
+    def on_blacklist_view_entry_selected(self, event: "BlacklistView.EntrySelected") -> None:
         """Oeffnet Blacklist-Detail beim Auswaehlen eines Eintrags im Blacklist-Tab."""
         self._show_blacklist_detail(event.entry_id, event.date_str, event.reason)
 
-    def on_trip_table_blacklist_entry_activated(
-        self, event: "TripTable.BlacklistEntryActivated"
-    ) -> None:
+    def on_trip_table_blacklist_entry_activated(self, event: "TripTable.BlacklistEntryActivated") -> None:
         """Oeffnet Blacklist-Detail beim Auswaehlen einer Blacklist-Zeile in der Liste."""
         self._show_blacklist_detail(event.entry_id, event.date_str, event.reason)
 
-    def _show_blacklist_detail(
-        self, entry_id: int, date_str: str, reason: str
-    ) -> None:
+    def _show_blacklist_detail(self, entry_id: int, date_str: str, reason: str) -> None:
         """Oeffnet den Blacklist-Detail-Screen."""
         if self._fahrtenbuch is None:
             return
@@ -660,9 +627,7 @@ class FahrtenbuchApp(App):
                 message=message,
                 confirm_label="Loeschen",
             ),
-            callback=lambda confirmed: self._finalize_delete_trip(
-                trip.id, bool(confirmed)
-            ),
+            callback=lambda confirmed: self._finalize_delete_trip(trip.id, bool(confirmed)),
         )
 
     def _finalize_delete_trip(self, trip_id: int, confirmed: bool) -> None:
@@ -682,9 +647,7 @@ class FahrtenbuchApp(App):
             self.notify("Fahrt nicht mehr vorhanden", severity="warning")
             return
         db.delete_trip(trip.id)
-        self._write_log(
-            f"[red]Fahrt geloescht: {trip.date} — {trip.purpose}[/red]"
-        )
+        self._write_log(f"[red]Fahrt geloescht: {trip.date} — {trip.purpose}[/red]")
         self._selected_trip_index = -1
         self._selected_trip_id = 0
         self._refresh_data()
@@ -771,9 +734,7 @@ class FahrtenbuchApp(App):
         if vehicle:
             lease_km = vehicle.lease_km_per_month
         year_view = self.query_one("#year-view", YearView)
-        year_view.load_data(
-            self._year, month_data, lease_km, self._problem_months
-        )
+        year_view.load_data(self._year, month_data, lease_km, self._problem_months)
 
     def _refresh_year_trip_table(self) -> None:
         """Laedt alle Fahrten des Jahres in die Jahres-Liste."""
@@ -785,9 +746,7 @@ class FahrtenbuchApp(App):
         # Feiertage fuers ganze Jahr sammeln
         holidays_map: dict[date, str] = {}
         for month in range(1, 13):
-            holidays_map.update(
-                self._holiday_service.get_holidays_in_month(self._year, month)
-            )
+            holidays_map.update(self._holiday_service.get_holidays_in_month(self._year, month))
 
         category_colors = db.get_category_colors()
 
@@ -830,10 +789,12 @@ class FahrtenbuchApp(App):
         docs_view.load_data(docs, Path(db.path))
 
     def on_documents_view_document_opened(
-        self, event: "DocumentsView.DocumentOpened",
+        self,
+        event: "DocumentsView.DocumentOpened",
     ) -> None:
         """Oeffnet den angeklickten Beleg im Standard-Programm."""
         from fahrtenbuch_app.services.os_utils import open_file_in_system
+
         try:
             open_file_in_system(event.path)
         except FileNotFoundError:
@@ -851,18 +812,17 @@ class FahrtenbuchApp(App):
         wt_view = self.query_one("#worktimes-view", WorktimesView)
         wt_view.load_data(self._year, worktimes)
 
-    def on_worktimes_view_worktime_changed(
-        self, event: "WorktimesView.WorktimeChanged"
-    ) -> None:
+    def on_worktimes_view_worktime_changed(self, event: "WorktimesView.WorktimeChanged") -> None:
         """Speichert geaenderte Arbeitsstunden in der DB."""
         if self._fahrtenbuch is None:
             return
         self._fahrtenbuch.database.save_worktime(
-            event.year, event.month, event.hours,
+            event.year,
+            event.month,
+            event.hours,
         )
         self._write_log(
-            f"[green]Arbeitszeit gespeichert: "
-            f"{event.month:02d}/{event.year} — {event.hours:.1f} Std[/green]"
+            f"[green]Arbeitszeit gespeichert: {event.month:02d}/{event.year} — {event.hours:.1f} Std[/green]"
         )
 
     def action_toggle_log(self) -> None:
@@ -934,9 +894,7 @@ class FahrtenbuchApp(App):
             self._write_log(f"[red]Fehler beim Anlegen: {exc}[/red]")
             self.notify(f"Fehler: {exc}", severity="error")
             return
-        self._write_log(
-            f"[green]Fahrt angelegt: {trip.date} — {trip.purpose}[/green]"
-        )
+        self._write_log(f"[green]Fahrt angelegt: {trip.date} — {trip.purpose}[/green]")
         self._refresh_data()
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
@@ -997,9 +955,7 @@ class FahrtenbuchApp(App):
             return
 
         # Anzeige-Labels der Kategorien fuer informationelle Trip-Zeilen
-        category_labels = {
-            code: label for label, code in db.get_category_options()
-        }
+        category_labels = {code: label for label, code in db.get_category_options()}
 
         out_path = Path(db.path) / filename
         try:
@@ -1101,10 +1057,10 @@ class FahrtenbuchApp(App):
             return
 
         from fahrtenbuch_app.services.plausibility import (
-            run_all_checks,
             CAT_GHOST_BUSINESS_TRIP,
             SEVERITY_ERROR,
             SEVERITY_WARNING,
+            run_all_checks,
         )
 
         db = self._fahrtenbuch.database
@@ -1154,8 +1110,7 @@ class FahrtenbuchApp(App):
                 id_part = f"Trip #{issue.trip_id}" if issue.trip_id else "Global"
                 self._write_log(f"  {prefix} {date_de} {id_part}: {issue.message}")
             self.notify(
-                f"Plausibilitaet: {report.error_count} Fehler, "
-                f"{report.warning_count} Warnungen",
+                f"Plausibilitaet: {report.error_count} Fehler, {report.warning_count} Warnungen",
                 severity="warning" if report.error_count == 0 else "error",
             )
 
@@ -1212,18 +1167,11 @@ class FahrtenbuchApp(App):
             self.notify("Rebuild fehlgeschlagen", severity="error")
             return
         vehicle = self._fahrtenbuch.vehicle
-        over_limit = (
-            vehicle.end_km > 0 and final_km > vehicle.end_km
-            if vehicle else False
-        )
-        self._write_log(
-            f"[green]km-Kette neu aufgebaut: {changed} Fahrten, "
-            f"Endstand {final_km} km[/green]"
-        )
+        over_limit = vehicle.end_km > 0 and final_km > vehicle.end_km if vehicle else False
+        self._write_log(f"[green]km-Kette neu aufgebaut: {changed} Fahrten, Endstand {final_km} km[/green]")
         if over_limit:
             self._write_log(
-                f"[yellow]Hinweis: Endstand {final_km} km liegt ueber dem "
-                f"Vertragslimit {vehicle.end_km} km[/yellow]"
+                f"[yellow]Hinweis: Endstand {final_km} km liegt ueber dem Vertragslimit {vehicle.end_km} km[/yellow]"
             )
         self.notify(
             f"{changed} Fahrten neu verkettet (Endstand {final_km} km)",

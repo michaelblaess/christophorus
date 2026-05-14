@@ -263,12 +263,14 @@ class TripTable(Vertical):
                 ]
                 if self._show_fuel:
                     bl_cells.append(Text("", style=_STYLE_MUTED))
-                bl_cells.extend([
-                    Text("", style=_STYLE_MUTED),
-                    Text("", style=_STYLE_MUTED),
-                    Text("", style=_STYLE_MUTED),
-                    Text("", style=_STYLE_MUTED),
-                ])
+                bl_cells.extend(
+                    [
+                        Text("", style=_STYLE_MUTED),
+                        Text("", style=_STYLE_MUTED),
+                        Text("", style=_STYLE_MUTED),
+                        Text("", style=_STYLE_MUTED),
+                    ]
+                )
                 cells.extend(bl_cells)
                 table.add_row(*cells, key=row_key)
                 self._bl_only_rows[row_key] = (entry_id, date_str, reason)
@@ -327,9 +329,7 @@ class TripTable(Vertical):
                 else:
                     row_style = _STYLE_DEFAULT
                 purpose_style = row_style
-                km_business_style = (
-                    _STYLE_ERROR if warning else _STYLE_BUSINESS
-                )
+                km_business_style = _STYLE_ERROR if warning else _STYLE_BUSINESS
 
                 cells = []
                 if self._show_id:
@@ -338,30 +338,34 @@ class TripTable(Vertical):
                     code = self._category_codes.get(trip.category, "")
                     code_style = "bold yellow" if code == "T" else _STYLE_MUTED
                     cells.append(Text(code, style=code_style))
-                cells.extend([
-                    Text(date_de, style=row_style),
-                    Text(weekday, style=_STYLE_ERROR if warning else _STYLE_MUTED),
-                    Text(time_str, style=_STYLE_MUTED),
-                    Text(dest_short, style=row_style),
-                    Text(purpose_text, style=purpose_style),
-                ])
+                cells.extend(
+                    [
+                        Text(date_de, style=row_style),
+                        Text(weekday, style=_STYLE_ERROR if warning else _STYLE_MUTED),
+                        Text(time_str, style=_STYLE_MUTED),
+                        Text(dest_short, style=row_style),
+                        Text(purpose_text, style=purpose_style),
+                    ]
+                )
                 if self._show_fuel:
                     fuel_text = ""
                     if trip.category in ("fuel", "fuel_private") and trip.fuel_liters > 0:
                         fuel_text = f"{trip.fuel_liters:.1f} L"
                     cells.append(Text(fuel_text, style="bold yellow" if fuel_text else _STYLE_MUTED))
-                cells.extend([
-                    Text(format_km(trip.km_start), style=_STYLE_MUTED),
-                    Text(format_km(trip.km_end), style=_STYLE_MUTED),
-                    Text(
-                        format_km(trip.km_business) if trip.km_business > 0 else "",
-                        style=km_business_style,
-                    ),
-                    Text(
-                        format_km(trip.km_private) if trip.km_private > 0 else "",
-                        style=_STYLE_MUTED,
-                    ),
-                ])
+                cells.extend(
+                    [
+                        Text(format_km(trip.km_start), style=_STYLE_MUTED),
+                        Text(format_km(trip.km_end), style=_STYLE_MUTED),
+                        Text(
+                            format_km(trip.km_business) if trip.km_business > 0 else "",
+                            style=km_business_style,
+                        ),
+                        Text(
+                            format_km(trip.km_private) if trip.km_private > 0 else "",
+                            style=_STYLE_MUTED,
+                        ),
+                    ]
+                )
                 table.add_row(*cells, key=row_key)
                 self._row_trips[row_key] = (trip, orig_idx)
 

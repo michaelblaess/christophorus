@@ -71,6 +71,7 @@ class DocumentsView(Vertical):
     ) -> None:
         """Laedt die Dokumente in die Tabelle, sortiert nach Datum (aufsteigend)."""
         self._base_path = base_path
+
         # Nach Datum sortieren: Trip-Datum oder Blacklist-Datum, ISO-Form sortiert lexikographisch
         def sort_key(doc: dict[str, object]) -> str:
             trip_date = str(doc.get("trip_date") or "")
@@ -121,14 +122,16 @@ class DocumentsView(Vertical):
             cells: list[Text] = []
             if self._show_id:
                 cells.append(Text(doc_id, style="dim"))
-            cells.extend([
-                Text(typ, style="green" if typ == "Fahrt" else "red" if typ == "Blacklist" else "dim"),
-                Text(date_de),
-                Text(uhrzeit, style="dim"),
-                Text(bezug),
-                Text(bemerkung, style="cyan" if bemerkung else "dim"),
-                Text(filename, style="dim"),
-            ])
+            cells.extend(
+                [
+                    Text(typ, style="green" if typ == "Fahrt" else "red" if typ == "Blacklist" else "dim"),
+                    Text(date_de),
+                    Text(uhrzeit, style="dim"),
+                    Text(bezug),
+                    Text(bemerkung, style="cyan" if bemerkung else "dim"),
+                    Text(filename, style="dim"),
+                ]
+            )
             table.add_row(*cells, key=str(idx))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:

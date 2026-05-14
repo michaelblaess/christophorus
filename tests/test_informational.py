@@ -17,7 +17,6 @@ from fahrtenbuch_app.services.plausibility import (
     check_empty_trips,
     run_all_checks,
 )
-
 from tests.conftest import make_trip
 
 
@@ -62,9 +61,7 @@ class TestAddTripInformational:
         assert stored.km_business == 0
         assert stored.km_private == 0
 
-    def test_informational_does_not_shift_successors(
-        self, database: Database
-    ) -> None:
+    def test_informational_does_not_shift_successors(self, database: Database) -> None:
         # Erst ein normaler Trip, der die km-Kette startet
         first_id = database.add_trip(make_trip("2024-12-21", 100))
         before = database.get_trip_by_id(first_id)
@@ -80,9 +77,7 @@ class TestAddTripInformational:
         assert after.km_start == before_start
         assert after.km_end == before_end
 
-    def test_predecessor_lookup_skips_informational(
-        self, database: Database
-    ) -> None:
+    def test_predecessor_lookup_skips_informational(self, database: Database) -> None:
         # Vehicle.start_km = 10000 aus der Fixture
         database.add_trip(_make_info_trip("2024-12-18", "return"))
         database.add_trip(_make_info_trip("2024-12-20", "delivery"))
@@ -96,9 +91,7 @@ class TestAddTripInformational:
 
 
 class TestUpdateTripInformationalTransition:
-    def test_business_to_informational_undoes_cascade(
-        self, database: Database
-    ) -> None:
+    def test_business_to_informational_undoes_cascade(self, database: Database) -> None:
         trip_a = database.add_trip(make_trip("2024-06-01", 100))
         trip_b = database.add_trip(make_trip("2024-06-02", 40))
 
@@ -133,9 +126,7 @@ class TestUpdateTripInformationalTransition:
 
 
 class TestDeleteTripInformational:
-    def test_delete_informational_leaves_chain_untouched(
-        self, database: Database
-    ) -> None:
+    def test_delete_informational_leaves_chain_untouched(self, database: Database) -> None:
         info_id = database.add_trip(_make_info_trip("2024-12-20", "delivery"))
         real_id = database.add_trip(make_trip("2024-12-21", 75))
 
@@ -153,17 +144,13 @@ class TestDeleteTripInformational:
 
 
 class TestPlausiSkipsInformational:
-    def test_chain_ascending_ignores_info_trip(
-        self, database: Database
-    ) -> None:
+    def test_chain_ascending_ignores_info_trip(self, database: Database) -> None:
         database.add_trip(_make_info_trip("2024-12-18", "return"))
         database.add_trip(_make_info_trip("2024-12-20", "delivery"))
         database.add_trip(make_trip("2024-12-21", 50))
         assert check_chain_ascending(database) == []
 
-    def test_distance_match_ignores_info_trip(
-        self, database: Database
-    ) -> None:
+    def test_distance_match_ignores_info_trip(self, database: Database) -> None:
         # Informational trip hat 0/0 — ohne Skip wuerde er als distance=0
         # columns=0 sauber laufen, wir wollen aber sicher sein, dass er
         # gar nicht erst betrachtet wird.
@@ -171,9 +158,7 @@ class TestPlausiSkipsInformational:
         database.add_trip(make_trip("2024-12-21", 50))
         assert check_distance_matches_columns(database) == []
 
-    def test_empty_trip_check_ignores_info(
-        self, database: Database
-    ) -> None:
+    def test_empty_trip_check_ignores_info(self, database: Database) -> None:
         database.add_trip(_make_info_trip("2024-12-20", "delivery"))
         assert check_empty_trips(database) == []
 

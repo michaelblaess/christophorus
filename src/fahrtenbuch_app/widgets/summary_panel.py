@@ -33,9 +33,7 @@ class SummaryPanel(Widget):
     def render(self) -> RenderResult:
         """Rendert die Zusammenfassung."""
         if self._month_data is None or not self._month_data.trips:
-            return Text(
-                "  Druecke [N] um eine neue Fahrt anzulegen", style="dim"
-            )
+            return Text("  Druecke [N] um eine neue Fahrt anzulegen", style="dim")
 
         md = self._month_data
         text = Text()

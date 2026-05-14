@@ -13,8 +13,18 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Static
 
 _MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+    "Januar",
+    "Februar",
+    "Maerz",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
 ]
 
 
@@ -68,11 +78,10 @@ class _CalendarGrid(Static):
             text.append(f" {wd} ", style=style)
         text.append("\n")
 
-        is_today_month = (self._year == self._today.year
-                          and self._month == self._today.month)
-        show_selected = (self._selected_day > 0
-                         and self._year == self._selected_year
-                         and self._month == self._selected_month)
+        is_today_month = self._year == self._today.year and self._month == self._today.month
+        show_selected = (
+            self._selected_day > 0 and self._year == self._selected_year and self._month == self._selected_month
+        )
 
         for week in self._weeks:
             for i, day in enumerate(week):
@@ -193,7 +202,8 @@ class DatePickerScreen(ModalScreen[str | None]):
                 yield Button(">", id="btn-next-month", classes="nav-btn")
                 yield Button(">>", id="btn-next-year", classes="nav-btn")
             yield _CalendarGrid(
-                self._year, self._month,
+                self._year,
+                self._month,
                 selected_day=self._selected_day,
                 id="cal-grid",
             )
@@ -241,7 +251,8 @@ class DatePickerScreen(ModalScreen[str | None]):
         """Aktualisiert Kalender und Monatslabel."""
         self.query_one("#month-label", Static).update(self._format_month())
         self.query_one("#cal-grid", _CalendarGrid).set_month(
-            self._year, self._month,
+            self._year,
+            self._month,
         )
 
     def on__calendar_grid_day_clicked(self, event: _CalendarGrid.DayClicked) -> None:

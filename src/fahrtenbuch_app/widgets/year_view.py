@@ -10,8 +10,18 @@ from fahrtenbuch_app.models.trip import MonthData
 from fahrtenbuch_app.services.formatting import format_km
 
 _MONTH_NAMES = [
-    "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
+    "Januar",
+    "Februar",
+    "Maerz",
+    "April",
+    "Mai",
+    "Juni",
+    "Juli",
+    "August",
+    "September",
+    "Oktober",
+    "November",
+    "Dezember",
 ]
 _QUARTER_NAMES = ["Q1", "Q2", "Q3", "Q4"]
 
@@ -181,9 +191,7 @@ class YearView(VerticalScroll):
             tile.refresh()
 
         # Jahres-Zusammenfassung aktualisieren
-        self._summary_widget.update(
-            self._build_summary_text(month_data, lease_km, year)
-        )
+        self._summary_widget.update(self._build_summary_text(month_data, lease_km, year))
 
     def set_problem_months(self, problem_months: dict[int, int]) -> None:
         """Setzt die Plausi-Befunde pro Monat und aktualisiert die Kacheln."""

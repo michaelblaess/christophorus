@@ -95,9 +95,7 @@ class TripDay:
     @property
     def km_private(self) -> int:
         """Private Kilometer an diesem Tag."""
-        return sum(t.km_private for t in self.trips) + sum(
-            t.km_business for t in self.trips if not t.is_business_km
-        )
+        return sum(t.km_private for t in self.trips) + sum(t.km_business for t in self.trips if not t.is_business_km)
 
     @property
     def km_total(self) -> int:
@@ -117,10 +115,7 @@ class TripDay:
     @property
     def fuel_liters(self) -> float:
         """Gesamte getankte Liter an diesem Tag."""
-        return sum(
-            t.fuel_liters for t in self.trips
-            if t.category in ("fuel", "fuel_private") and t.fuel_liters > 0
-        )
+        return sum(t.fuel_liters for t in self.trips if t.category in ("fuel", "fuel_private") and t.fuel_liters > 0)
 
     @property
     def has_service(self) -> bool:
@@ -155,9 +150,7 @@ class MonthData:
     @property
     def km_private(self) -> int:
         """Private Kilometer im Monat."""
-        return sum(t.km_private for t in self.trips) + sum(
-            t.km_business for t in self.trips if not t.is_business_km
-        )
+        return sum(t.km_private for t in self.trips) + sum(t.km_business for t in self.trips if not t.is_business_km)
 
     @property
     def km_total(self) -> int:

@@ -53,12 +53,7 @@ class InfoScreen(ModalScreen[None]):
         with VerticalScroll():
             yield Static(f"Death Proof v{__version__}", id="title")
             yield Static(
-                f"von {__author__}\n"
-                f"\n"
-                f"Finanzamt-konforme Fahrtenbuecher\n"
-                f"fuer Leasing-Fahrzeuge\n"
-                f"\n"
-                f"(c) {__year__}",
+                f"von {__author__}\n\nFinanzamt-konforme Fahrtenbuecher\nfuer Leasing-Fahrzeuge\n\n(c) {__year__}",
                 id="info-text",
             )
             yield Static(

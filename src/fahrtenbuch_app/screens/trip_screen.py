@@ -391,14 +391,8 @@ class TripScreen(ModalScreen[Trip | None]):
         def fmt_who(user: str) -> str:
             return user if user else "\u2014"
 
-        created = (
-            f"Erstellt: {fmt_when(info['created_at'])} "
-            f"von {fmt_who(info['created_by'])}"
-        )
-        changed = (
-            f"Geaendert: {fmt_when(info['changed_at'])} "
-            f"von {fmt_who(info['changed_by'])}"
-        )
+        created = f"Erstellt: {fmt_when(info['created_at'])} von {fmt_who(info['created_by'])}"
+        changed = f"Geaendert: {fmt_when(info['changed_at'])} von {fmt_who(info['changed_by'])}"
         return f"{created}\n{changed}"
 
     def _load_addresses(self) -> None:
@@ -407,13 +401,15 @@ class TripScreen(ModalScreen[Trip | None]):
         try:
             rows = self._database.get_addresses()
             for row in rows:
-                self._addresses.append(AddressEntry(
-                    id=int(row.get("id", 0)),
-                    category=str(row.get("category", "")),
-                    name=str(row.get("name", "")),
-                    address=str(row.get("address", "")),
-                    km=float(row.get("km", 0.0)),
-                ))
+                self._addresses.append(
+                    AddressEntry(
+                        id=int(row.get("id", 0)),
+                        category=str(row.get("category", "")),
+                        name=str(row.get("name", "")),
+                        address=str(row.get("address", "")),
+                        km=float(row.get("km", 0.0)),
+                    )
+                )
         except Exception:
             pass
 
@@ -660,9 +656,7 @@ class TripScreen(ModalScreen[Trip | None]):
                 date_de = self.query_one("#input-date", Input).value.strip()
                 iso = _de_to_iso(date_de) if date_de else ""
                 if iso:
-                    exclude_id = (
-                        self._trip.id if (self._is_edit and self._trip) else None
-                    )
+                    exclude_id = self._trip.id if (self._is_edit and self._trip) else None
                     try:
                         tf_input = self.query_one("#input-time-from", Input)
                         current_tf = tf_input.value.strip()
@@ -893,6 +887,7 @@ class TripScreen(ModalScreen[Trip | None]):
                 file_path = Path(self._database.path) / file_path
             try:
                 from fahrtenbuch_app.services.os_utils import open_file_in_system
+
                 open_file_in_system(file_path)
             except FileNotFoundError:
                 self.notify(f"Datei nicht gefunden: {file_path}", severity="error")
@@ -954,12 +949,8 @@ class TripScreen(ModalScreen[Trip | None]):
         fuel_full_tank = False
         if category in ("fuel", "fuel_private"):
             try:
-                fuel_liters = _parse_liters(
-                    self.query_one("#input-fuel-liters", Input).value
-                )
-                fuel_full_tank = bool(
-                    self.query_one("#check-fuel-full-tank", Checkbox).value
-                )
+                fuel_liters = _parse_liters(self.query_one("#input-fuel-liters", Input).value)
+                fuel_full_tank = bool(self.query_one("#check-fuel-full-tank", Checkbox).value)
             except Exception:
                 pass
 

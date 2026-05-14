@@ -99,11 +99,13 @@ class BlacklistView(Vertical):
             cells: list[Text] = []
             if self._show_id:
                 cells.append(Text(entry_id, style="dim"))
-            cells.extend([
-                Text(date_de, style=date_style),
-                Text(weekday, style="dim"),
-                Text(reason, style="bold" if not is_weekend else "dim"),
-            ])
+            cells.extend(
+                [
+                    Text(date_de, style=date_style),
+                    Text(weekday, style="dim"),
+                    Text(reason, style="bold" if not is_weekend else "dim"),
+                ]
+            )
             table.add_row(*cells, key=row_key)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -112,8 +114,10 @@ class BlacklistView(Vertical):
         entry = self._row_entries.get(row_key)
         if entry is None:
             return
-        self.post_message(self.EntrySelected(
-            entry_id=int(entry.get("id", 0)),
-            date_str=str(entry.get("date", "")),
-            reason=str(entry.get("reason", "")),
-        ))
+        self.post_message(
+            self.EntrySelected(
+                entry_id=int(entry.get("id", 0)),
+                date_str=str(entry.get("date", "")),
+                reason=str(entry.get("reason", "")),
+            )
+        )

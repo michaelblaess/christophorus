@@ -4,7 +4,7 @@ import calendar
 from datetime import date
 
 from rich.text import Text
-from textual.app import ComposeResult, RenderResult
+from textual.app import RenderResult
 from textual.containers import Horizontal, Vertical
 from textual.events import Click
 from textual.message import Message
@@ -125,8 +125,7 @@ class DayTile(Widget):
         has_warnable_business = False
         if self._trip_day and self._trip_day.has_business:
             has_warnable_business = any(
-                t.category == "business"
-                and "geschaeftsessen" not in (t.purpose or "").lower()
+                t.category == "business" and "geschaeftsessen" not in (t.purpose or "").lower()
                 for t in self._trip_day.trips
             )
 

@@ -8,7 +8,6 @@ from pathlib import Path
 from fahrtenbuch_app.models.trip import MonthData, Trip
 from fahrtenbuch_app.models.vehicle import Vehicle
 
-
 # Tabellen, die Audit-Spalten bekommen (siehe _migrate_add_audit_columns).
 # documents hat bereits created_at — deshalb separate Liste.
 _AUDIT_TABLES_FULL: tuple[str, ...] = (
@@ -232,9 +231,7 @@ class Database:
             self._add_missing_columns(table, _AUDIT_COLUMNS_NO_CREATED_AT)
         conn.commit()
 
-    def _add_missing_columns(
-        self, table: str, columns: tuple[str, ...]
-    ) -> None:
+    def _add_missing_columns(self, table: str, columns: tuple[str, ...]) -> None:
         """Fuegt die angegebenen Audit-Spalten als TEXT NULL hinzu, sofern
         sie noch nicht existieren. Idempotent — ueberspringt vorhandene.
         """
@@ -275,9 +272,7 @@ class Database:
         Tabelle neu erstellt falls die alte Constraint noch existiert.
         """
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'"
-        ).fetchone()
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'").fetchone()
         if row is None:
             return
 
@@ -312,25 +307,19 @@ class Database:
     def _migrate_trips_add_round_trip(self) -> None:
         """Fuegt die round_trip-Spalte zur trips-Tabelle hinzu falls noch nicht vorhanden."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'"
-        ).fetchone()
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='trips'").fetchone()
         if row is None:
             return
         create_sql = row[0] or ""
         if "round_trip" in create_sql.lower():
             return
-        conn.execute(
-            "ALTER TABLE trips ADD COLUMN round_trip INTEGER NOT NULL DEFAULT 0"
-        )
+        conn.execute("ALTER TABLE trips ADD COLUMN round_trip INTEGER NOT NULL DEFAULT 0")
         conn.commit()
 
     def _migrate_blacklist_remove_allow_private(self) -> None:
         """Entfernt die allow_private-Spalte aus der blacklist-Tabelle falls vorhanden."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='blacklist'"
-        ).fetchone()
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='blacklist'").fetchone()
         if row is None:
             return
         create_sql = row[0] or ""
@@ -400,10 +389,7 @@ class Database:
         rows = conn.execute("PRAGMA table_info(categories)").fetchall()
         existing = {str(row[1]) for row in rows}
         if "is_informational" not in existing:
-            conn.execute(
-                "ALTER TABLE categories ADD COLUMN "
-                "is_informational INTEGER NOT NULL DEFAULT 0"
-            )
+            conn.execute("ALTER TABLE categories ADD COLUMN is_informational INTEGER NOT NULL DEFAULT 0")
             conn.commit()
 
     def _migrate_add_fuel_columns(self) -> None:
@@ -417,15 +403,9 @@ class Database:
         rows = conn.execute("PRAGMA table_info(trips)").fetchall()
         existing = {str(row[1]) for row in rows}
         if "fuel_liters" not in existing:
-            conn.execute(
-                "ALTER TABLE trips ADD COLUMN "
-                "fuel_liters REAL NOT NULL DEFAULT 0"
-            )
+            conn.execute("ALTER TABLE trips ADD COLUMN fuel_liters REAL NOT NULL DEFAULT 0")
         if "fuel_full_tank" not in existing:
-            conn.execute(
-                "ALTER TABLE trips ADD COLUMN "
-                "fuel_full_tank INTEGER NOT NULL DEFAULT 0"
-            )
+            conn.execute("ALTER TABLE trips ADD COLUMN fuel_full_tank INTEGER NOT NULL DEFAULT 0")
         conn.commit()
 
     def _migrate_add_vehicle_tank_columns(self) -> None:
@@ -438,15 +418,9 @@ class Database:
         rows = conn.execute("PRAGMA table_info(vehicle)").fetchall()
         existing = {str(row[1]) for row in rows}
         if "tank_capacity_l" not in existing:
-            conn.execute(
-                "ALTER TABLE vehicle ADD COLUMN "
-                "tank_capacity_l REAL NOT NULL DEFAULT 0"
-            )
+            conn.execute("ALTER TABLE vehicle ADD COLUMN tank_capacity_l REAL NOT NULL DEFAULT 0")
         if "consumption_l_100km" not in existing:
-            conn.execute(
-                "ALTER TABLE vehicle ADD COLUMN "
-                "consumption_l_100km REAL NOT NULL DEFAULT 0"
-            )
+            conn.execute("ALTER TABLE vehicle ADD COLUMN consumption_l_100km REAL NOT NULL DEFAULT 0")
         conn.commit()
 
     def _migrate_add_informational_categories(self) -> None:
@@ -485,17 +459,13 @@ class Database:
     def get_categories(self) -> list[dict[str, object]]:
         """Gibt alle Kategorien zurueck."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT * FROM categories ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM categories ORDER BY id").fetchall()
         return [dict(row) for row in rows]
 
     def get_business_category_names(self) -> set[str]:
         """Gibt die Namen aller Kategorien zurueck, die als geschaeftlich zaehlen."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT name FROM categories WHERE counts_as_business = 1"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM categories WHERE counts_as_business = 1").fetchall()
         return {row["name"] for row in rows}
 
     def get_informational_category_names(self) -> set[str]:
@@ -505,33 +475,25 @@ class Database:
         Plausi-Checks und km-Kette-Pflegen uebersprungen.
         """
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT name FROM categories WHERE is_informational = 1"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM categories WHERE is_informational = 1").fetchall()
         return {row["name"] for row in rows}
 
     def get_category_colors(self) -> dict[str, str]:
         """Gibt ein Mapping von Kategorie-Name zu Farbe zurueck."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT name, color FROM categories ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT name, color FROM categories ORDER BY id").fetchall()
         return {row["name"]: row["color"] for row in rows}
 
     def get_category_codes(self) -> dict[str, str]:
         """Gibt ein Mapping von Kategorie-Name zu Code (G/P/T/...) zurueck."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT name, code FROM categories WHERE code IS NOT NULL ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT name, code FROM categories WHERE code IS NOT NULL ORDER BY id").fetchall()
         return {row["name"]: row["code"] for row in rows}
 
     def get_category_options(self) -> list[tuple[str, str]]:
         """Gibt Kategorien als (display_name, name)-Tupel fuer Select-Widgets zurueck."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT name, display_name FROM categories ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT name, display_name FROM categories ORDER BY id").fetchall()
         return [(row["display_name"], row["name"]) for row in rows]
 
     def add_category(
@@ -554,8 +516,12 @@ class Database:
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                name, display_name, 1 if counts_as_business else 0, color,
-                now, user,
+                name,
+                display_name,
+                1 if counts_as_business else 0,
+                color,
+                now,
+                user,
             ),
         )
         conn.commit()
@@ -580,8 +546,13 @@ class Database:
             WHERE id = ?
             """,
             (
-                name, display_name, 1 if counts_as_business else 0, color,
-                _audit_now(), _audit_user(), category_id,
+                name,
+                display_name,
+                1 if counts_as_business else 0,
+                color,
+                _audit_now(),
+                _audit_user(),
+                category_id,
             ),
         )
         conn.commit()
@@ -645,11 +616,19 @@ class Database:
                 changed_by = excluded.created_by
             """,
             (
-                vehicle.name, vehicle.plate, vehicle.contract_number,
-                vehicle.lease_km_per_month, vehicle.start_km, vehicle.end_km,
-                vehicle.start_date, vehicle.end_date, vehicle.lease_months,
-                vehicle.tank_capacity_l, vehicle.consumption_l_100km,
-                now, user,
+                vehicle.name,
+                vehicle.plate,
+                vehicle.contract_number,
+                vehicle.lease_km_per_month,
+                vehicle.start_km,
+                vehicle.end_km,
+                vehicle.start_date,
+                vehicle.end_date,
+                vehicle.lease_months,
+                vehicle.tank_capacity_l,
+                vehicle.consumption_l_100km,
+                now,
+                user,
             ),
         )
         conn.commit()
@@ -661,11 +640,7 @@ class Database:
     # Informationelle Trips (Anlieferung/Rueckgabe) nehmen nicht an der
     # km-Kette teil. Die SQL-Filter schliessen sie ueber die categories-Tabelle
     # aus, damit weder Vorgaenger-Lookup noch Shift-Cascades sie anfassen.
-    _SQL_EXCLUDE_INFORMATIONAL = (
-        "category NOT IN ("
-        "SELECT name FROM categories WHERE is_informational = 1"
-        ")"
-    )
+    _SQL_EXCLUDE_INFORMATIONAL = "category NOT IN (SELECT name FROM categories WHERE is_informational = 1)"
 
     def get_km_end_before(
         self,
@@ -715,8 +690,13 @@ class Database:
                 LIMIT 1
                 """,
                 (
-                    date_iso, date_iso, time_from, date_iso, time_from,
-                    exclude_trip_id, exclude_trip_id,
+                    date_iso,
+                    date_iso,
+                    time_from,
+                    date_iso,
+                    time_from,
+                    exclude_trip_id,
+                    exclude_trip_id,
                 ),
             ).fetchone()
         else:
@@ -772,10 +752,14 @@ class Database:
                   AND {excl}
                 """,
                 (
-                    delta, delta,
+                    delta,
+                    delta,
                     date_iso,
-                    date_iso, time_from,
-                    date_iso, time_from, exclude_trip_id,
+                    date_iso,
+                    time_from,
+                    date_iso,
+                    time_from,
+                    exclude_trip_id,
                 ),
             )
         else:
@@ -837,21 +821,27 @@ class Database:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    trip.date, trip.time_from, trip.time_to,
-                    trip.destination, trip.purpose,
-                    new_km_start, new_km_end,
-                    km_business, km_private, trip.category,
+                    trip.date,
+                    trip.time_from,
+                    trip.time_to,
+                    trip.destination,
+                    trip.purpose,
+                    new_km_start,
+                    new_km_end,
+                    km_business,
+                    km_private,
+                    trip.category,
                     1 if trip.round_trip else 0,
-                    fuel_liters, fuel_full_tank,
-                    _audit_now(), _audit_user(),
+                    fuel_liters,
+                    fuel_full_tank,
+                    _audit_now(),
+                    _audit_user(),
                 ),
             )
             new_id = cursor.lastrowid or 0
             # Alle Nachfolger um die Distanz dieser Fahrt nach oben verschieben
             # (entfaellt bei informationellen Trips — distance == 0)
-            self._shift_trips_after(
-                trip.date, trip.time_from, distance, exclude_trip_id=new_id
-            )
+            self._shift_trips_after(trip.date, trip.time_from, distance, exclude_trip_id=new_id)
             conn.commit()
             return new_id
         except Exception:
@@ -901,11 +891,7 @@ class Database:
         # bestehenden km_start behalten — die Chain-Position bleibt identisch.
         # Jede andere Aenderung (Datum, Uhrzeit, Typ) kann die Chain-Position
         # verschieben und muss ueber den "full re-place"-Pfad laufen.
-        position_unchanged = (
-            trip.date == old.date
-            and trip.time_from == old.time_from
-            and old_is_info == new_is_info
-        )
+        position_unchanged = trip.date == old.date and trip.time_from == old.time_from and old_is_info == new_is_info
         try:
             conn.execute("BEGIN")
             if position_unchanged:
@@ -936,33 +922,35 @@ class Database:
                     WHERE id = ?
                     """,
                     (
-                        trip.date, trip.time_from, trip.time_to,
-                        new_destination, new_purpose,
-                        upd_km_start, upd_km_end,
-                        new_km_business, new_km_private, trip.category,
+                        trip.date,
+                        trip.time_from,
+                        trip.time_to,
+                        new_destination,
+                        new_purpose,
+                        upd_km_start,
+                        upd_km_end,
+                        new_km_business,
+                        new_km_private,
+                        trip.category,
                         new_round_trip,
-                        new_fuel_liters, new_fuel_full_tank,
-                        _audit_now(), _audit_user(),
+                        new_fuel_liters,
+                        new_fuel_full_tank,
+                        _audit_now(),
+                        _audit_user(),
                         trip_id,
                     ),
                 )
-                self._shift_trips_after(
-                    trip.date, trip.time_from, delta, exclude_trip_id=trip_id
-                )
+                self._shift_trips_after(trip.date, trip.time_from, delta, exclude_trip_id=trip_id)
             else:
                 # Position in der Kette kann sich aendern: alte Nachfolger
                 # zurueckrollen, Trip an neuer Stelle einsetzen, neue Nachfolger
                 # verschieben.
-                self._shift_trips_after(
-                    old.date, old.time_from, -old_distance, exclude_trip_id=trip_id
-                )
+                self._shift_trips_after(old.date, old.time_from, -old_distance, exclude_trip_id=trip_id)
                 if new_is_info:
                     new_km_start = 0
                     new_km_end = 0
                 else:
-                    predecessor_km = self.get_km_end_before(
-                        trip.date, trip.time_from, exclude_trip_id=trip_id
-                    )
+                    predecessor_km = self.get_km_end_before(trip.date, trip.time_from, exclude_trip_id=trip_id)
                     new_km_start = predecessor_km
                     new_km_end = new_km_start + new_distance
                 conn.execute(
@@ -978,19 +966,25 @@ class Database:
                     WHERE id = ?
                     """,
                     (
-                        trip.date, trip.time_from, trip.time_to,
-                        new_destination, new_purpose,
-                        new_km_start, new_km_end,
-                        new_km_business, new_km_private, trip.category,
+                        trip.date,
+                        trip.time_from,
+                        trip.time_to,
+                        new_destination,
+                        new_purpose,
+                        new_km_start,
+                        new_km_end,
+                        new_km_business,
+                        new_km_private,
+                        trip.category,
                         new_round_trip,
-                        new_fuel_liters, new_fuel_full_tank,
-                        _audit_now(), _audit_user(),
+                        new_fuel_liters,
+                        new_fuel_full_tank,
+                        _audit_now(),
+                        _audit_user(),
                         trip_id,
                     ),
                 )
-                self._shift_trips_after(
-                    trip.date, trip.time_from, new_distance, exclude_trip_id=trip_id
-                )
+                self._shift_trips_after(trip.date, trip.time_from, new_distance, exclude_trip_id=trip_id)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1009,9 +1003,7 @@ class Database:
         try:
             conn.execute("BEGIN")
             conn.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
-            self._shift_trips_after(
-                old.date, old.time_from, -old_distance, exclude_trip_id=trip_id
-            )
+            self._shift_trips_after(old.date, old.time_from, -old_distance, exclude_trip_id=trip_id)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1039,8 +1031,7 @@ class Database:
         cursor_state = vehicle.start_km
         info_cats = self.get_informational_category_names()
         rows = conn.execute(
-            "SELECT id, km_start, km_end, km_business, km_private, category "
-            "FROM trips ORDER BY date, time_from, id"
+            "SELECT id, km_start, km_end, km_business, km_private, category FROM trips ORDER BY date, time_from, id"
         ).fetchall()
 
         changes: list[tuple[int, int, int]] = []  # (id, new_start, new_end)
@@ -1050,9 +1041,7 @@ class Database:
                 changes.append((int(row["id"]), 0, 0))
                 continue
             distance_chain = max(0, int(row["km_end"]) - int(row["km_start"]))
-            distance_cols = max(
-                0, int(row["km_business"] or 0) + int(row["km_private"] or 0)
-            )
+            distance_cols = max(0, int(row["km_business"] or 0) + int(row["km_private"] or 0))
             distance = max(distance_chain, distance_cols)
             new_start = cursor_state
             new_end = new_start + distance
@@ -1061,8 +1050,7 @@ class Database:
 
         if not force and vehicle.end_km > 0 and cursor_state > vehicle.end_km:
             raise ValueError(
-                f"Rebuild wuerde Endkilometerstand ueberschreiten: "
-                f"{cursor_state} km > {vehicle.end_km} km"
+                f"Rebuild wuerde Endkilometerstand ueberschreiten: {cursor_state} km > {vehicle.end_km} km"
             )
 
         changed_count = 0
@@ -1096,9 +1084,7 @@ class Database:
         ).fetchone()
         return self._row_to_trip(row) if row else None
 
-    def get_audit_info(
-        self, table: str, row_id: int, id_column: str = "id"
-    ) -> dict[str, str]:
+    def get_audit_info(self, table: str, row_id: int, id_column: str = "id") -> dict[str, str]:
         """Liest die Audit-Spalten einer Zeile und gibt sie als Dict zurueck.
 
         Fehlende/NULL-Werte kommen als leerer String zurueck. Der table- und
@@ -1108,14 +1094,15 @@ class Database:
         """
         conn = self._get_conn()
         row = conn.execute(
-            f"SELECT created_at, created_by, changed_at, changed_by "
-            f"FROM {table} WHERE {id_column} = ?",
+            f"SELECT created_at, created_by, changed_at, changed_by FROM {table} WHERE {id_column} = ?",
             (row_id,),
         ).fetchone()
         if row is None:
             return {
-                "created_at": "", "created_by": "",
-                "changed_at": "", "changed_by": "",
+                "created_at": "",
+                "created_by": "",
+                "changed_at": "",
+                "changed_by": "",
             }
         return {
             "created_at": str(row["created_at"] or ""),
@@ -1170,9 +1157,7 @@ class Database:
         Plausibilitaets-Checks und Tests verwendet.
         """
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT * FROM trips ORDER BY date, time_from, id"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM trips ORDER BY date, time_from, id").fetchall()
         return [self._row_to_trip(row) for row in rows]
 
     def get_first_trip_date(self) -> tuple[int, int] | None:
@@ -1212,9 +1197,7 @@ class Database:
         """Konvertiert eine Datenbankzeile in ein Trip-Objekt."""
         keys = row.keys() if hasattr(row, "keys") else []
         fuel_liters = float(row["fuel_liters"] or 0) if "fuel_liters" in keys else 0.0
-        fuel_full_tank = (
-            bool(row["fuel_full_tank"]) if "fuel_full_tank" in keys else False
-        )
+        fuel_full_tank = bool(row["fuel_full_tank"]) if "fuel_full_tank" in keys else False
         return Trip(
             id=row["id"],
             date=row["date"],
@@ -1245,14 +1228,10 @@ class Database:
                 (category,),
             ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM addresses ORDER BY category, name"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM addresses ORDER BY category, name").fetchall()
         return [dict(row) for row in rows]
 
-    def add_address(
-        self, category: str, name: str, address: str, km: float
-    ) -> int:
+    def add_address(self, category: str, name: str, address: str, km: float) -> int:
         """Fuegt eine neue Adresse hinzu und gibt die ID zurueck."""
         conn = self._get_conn()
         cursor = conn.execute(
@@ -1267,9 +1246,7 @@ class Database:
         conn.commit()
         return cursor.lastrowid or 0
 
-    def update_address(
-        self, address_id: int, name: str, address: str, km: float
-    ) -> None:
+    def update_address(self, address_id: int, name: str, address: str, km: float) -> None:
         """Aktualisiert eine bestehende Adresse."""
         conn = self._get_conn()
         conn.execute(
@@ -1296,9 +1273,7 @@ class Database:
     def get_setting(self, key: str, default: str = "") -> str:
         """Liest einen Einstellungswert aus der Datenbank."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT value FROM settings WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         return row["value"] if row else default
 
     def set_setting(self, key: str, value: str) -> None:
@@ -1326,9 +1301,7 @@ class Database:
     def get_blacklist(self) -> list[dict[str, object]]:
         """Gibt alle Blacklist-Eintraege zurueck."""
         conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT * FROM blacklist ORDER BY date"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM blacklist ORDER BY date").fetchall()
         return [dict(row) for row in rows]
 
     def add_blacklist_entry(self, date: str, reason: str) -> int:
@@ -1367,9 +1340,7 @@ class Database:
     def _migrate_addresses_remove_category_check(self) -> None:
         """Entfernt die CHECK-Constraint auf addresses.category (fehlte 'other')."""
         conn = self._get_conn()
-        row = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='addresses'"
-        ).fetchone()
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='addresses'").fetchone()
         if row is None:
             return
         create_sql = row[0] or ""
@@ -1519,9 +1490,7 @@ class Database:
         conn = self._get_conn()
         source_db_file = source_path / self.DB_FILENAME
         if not source_db_file.exists():
-            raise FileNotFoundError(
-                f"Quell-Datenbank nicht gefunden: {source_db_file}"
-            )
+            raise FileNotFoundError(f"Quell-Datenbank nicht gefunden: {source_db_file}")
 
         # Quelle kurz oeffnen, damit Migrationen laufen. Danach ist das
         # Schema garantiert identisch zum Ziel, sodass SELECT * sicher ist.
@@ -1539,7 +1508,8 @@ class Database:
             # settings hat keinen AUTOINCREMENT-Key und wird per WHERE
             # gefiltert — hier reicht der explizite Column-Copy.
             self._copy_table(
-                conn, "settings",
+                conn,
+                "settings",
                 where="key NOT IN ('last_viewed_year', 'last_viewed_month')",
             )
 
@@ -1577,24 +1547,15 @@ class Database:
         mit NOT NULL constraint failed, weil ein TEXT-Wert in eine INTEGER-
         Spalte geschoben wird.
         """
-        src_cols = {
-            str(row[1])
-            for row in conn.execute(f"PRAGMA src.table_info({table})")
-        }
-        dst_cols = [
-            str(row[1])
-            for row in conn.execute(f"PRAGMA table_info({table})")
-        ]
+        src_cols = {str(row[1]) for row in conn.execute(f"PRAGMA src.table_info({table})")}
+        dst_cols = [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
         common = [c for c in dst_cols if c in src_cols]
         if not common:
             return
         col_list = ", ".join(f'"{c}"' for c in common)
         where_sql = f" WHERE {where}" if where else ""
         conn.execute(f"DELETE FROM {table}")
-        conn.execute(
-            f"INSERT INTO {table} ({col_list}) "
-            f"SELECT {col_list} FROM src.{table}{where_sql}"
-        )
+        conn.execute(f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM src.{table}{where_sql}")
 
     def backup_to_file(self, timestamp: datetime | None = None) -> Path:
         """Erstellt eine Sicherungskopie der DB-Datei mit Timestamp.
@@ -1606,9 +1567,7 @@ class Database:
         """
         conn = self._get_conn()
         ts = (timestamp or datetime.now()).strftime("%Y%m%d_%H%M%S")
-        backup_file = self._db_file.with_name(
-            f"{self._db_file.name}.backup_{ts}"
-        )
+        backup_file = self._db_file.with_name(f"{self._db_file.name}.backup_{ts}")
         target = sqlite3.connect(str(backup_file))
         try:
             conn.backup(target)

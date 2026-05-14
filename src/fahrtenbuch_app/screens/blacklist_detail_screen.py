@@ -175,9 +175,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
             child.remove()
 
         if self._is_new or self._entry_id <= 0:
-            docs_list.mount(
-                Static("  (erst nach Speichern moeglich)", classes="doc-name")
-            )
+            docs_list.mount(Static("  (erst nach Speichern moeglich)", classes="doc-name"))
             # Beleg-Button deaktivieren bis gespeichert
             try:
                 self.query_one("#btn-add-doc", Button).disabled = True

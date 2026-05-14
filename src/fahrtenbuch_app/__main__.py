@@ -1,7 +1,6 @@
 """CLI Entry Point fuer die Fahrtenbuch TUI."""
 
 import argparse
-import sys
 
 
 def main() -> None:

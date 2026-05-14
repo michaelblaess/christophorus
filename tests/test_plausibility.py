@@ -20,13 +20,13 @@ from fahrtenbuch_app.services.plausibility import (
     CAT_CHAIN_BREAK,
     CAT_DISTANCE_MISMATCH,
     CAT_EMPTY_TRIP,
+    CAT_END_MISMATCH,
     CAT_FUEL_MISSING_LITERS,
     CAT_FUEL_RANGE_EXCEEDED,
     CAT_GHOST_BUSINESS_TRIP,
     CAT_HOLIDAY_BUSINESS,
     CAT_NEGATIVE_DISTANCE,
     CAT_OVER_LIMIT,
-    CAT_END_MISMATCH,
     CAT_TIME_INCOMPLETE,
     CAT_TIME_OVERLAP,
     CAT_TIME_REVERSED,
@@ -43,21 +43,19 @@ from fahrtenbuch_app.services.plausibility import (
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,
-    check_time_overlap,
-    check_time_range_valid,
     check_fuel_missing_liters,
     check_fuel_range_exceeded,
     check_ghost_business_trips,
     check_holiday_business,
+    check_time_overlap,
+    check_time_range_valid,
     check_vehicle_end_limit,
     check_vehicle_end_reached,
     check_weekend_business,
     check_worktime_trip_ratio,
     run_all_checks,
 )
-
 from tests.conftest import make_trip
-
 
 # ---------------------------------------------------------------------------
 # Helfer: direkter SQL-Insert ohne Cascade-Logik
@@ -108,9 +106,7 @@ class TestCheckChainAscending:
     def test_empty_db_no_issues(self, database: Database) -> None:
         assert check_chain_ascending(database) == []
 
-    def test_first_trip_below_vehicle_start_km(
-        self, database: Database
-    ) -> None:
+    def test_first_trip_below_vehicle_start_km(self, database: Database) -> None:
         raw_insert_trip(
             database,
             date_iso="2024-03-01",
@@ -125,13 +121,19 @@ class TestCheckChainAscending:
 
     def test_backward_jump_is_error(self, database: Database) -> None:
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10000, km_end=10100, km_business=100,
+            database,
+            date_iso="2024-03-01",
+            km_start=10000,
+            km_end=10100,
+            km_business=100,
         )
         # Naechster Trip springt zurueck
         raw_insert_trip(
-            database, date_iso="2024-03-02",
-            km_start=10050, km_end=10120, km_business=70,
+            database,
+            date_iso="2024-03-02",
+            km_start=10050,
+            km_end=10120,
+            km_business=70,
         )
         issues = check_chain_ascending(database)
         backward = [i for i in issues if i.category == CAT_CHAIN_BACKWARD]
@@ -140,13 +142,19 @@ class TestCheckChainAscending:
 
     def test_forward_gap_is_warning(self, database: Database) -> None:
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10000, km_end=10100, km_business=100,
+            database,
+            date_iso="2024-03-01",
+            km_start=10000,
+            km_end=10100,
+            km_business=100,
         )
         # Luecke von 50 km
         raw_insert_trip(
-            database, date_iso="2024-03-02",
-            km_start=10150, km_end=10200, km_business=50,
+            database,
+            date_iso="2024-03-02",
+            km_start=10150,
+            km_end=10200,
+            km_business=50,
         )
         issues = check_chain_ascending(database)
         breaks = [i for i in issues if i.category == CAT_CHAIN_BREAK]
@@ -155,8 +163,11 @@ class TestCheckChainAscending:
 
     def test_negative_distance_is_error(self, database: Database) -> None:
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10100, km_end=10050, km_business=0,
+            database,
+            date_iso="2024-03-01",
+            km_start=10100,
+            km_end=10050,
+            km_business=0,
         )
         issues = check_chain_ascending(database)
         neg = [i for i in issues if i.category == CAT_NEGATIVE_DISTANCE]
@@ -178,8 +189,12 @@ class TestCheckDistanceMatchesColumns:
         # Reproduktion des 103/104-Bugs:
         # km_end-km_start=0 km, aber km_business=260 km
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10000, km_end=10000, km_business=260, km_private=0,
+            database,
+            date_iso="2024-03-01",
+            km_start=10000,
+            km_end=10000,
+            km_business=260,
+            km_private=0,
         )
         issues = check_distance_matches_columns(database)
         assert len(issues) == 1
@@ -188,8 +203,12 @@ class TestCheckDistanceMatchesColumns:
 
     def test_zero_zero_is_consistent(self, database: Database) -> None:
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10000, km_end=10000, km_business=0, km_private=0,
+            database,
+            date_iso="2024-03-01",
+            km_start=10000,
+            km_end=10000,
+            km_business=0,
+            km_private=0,
         )
         assert check_distance_matches_columns(database) == []
 
@@ -211,9 +230,7 @@ class TestCheckVehicleEndLimit:
         database.add_trip(make_trip("2024-03-01", 1000))
         assert check_vehicle_end_limit(database) == []
 
-    def test_over_limit_is_error(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_over_limit_is_error(self, database: Database, vehicle: Vehicle) -> None:
         vehicle.end_km = 10100
         database.save_vehicle(vehicle)
         # add_trip lehnt nicht mehr ab — Plausi-Check muss melden
@@ -240,18 +257,14 @@ class TestCheckVehicleEndReached:
         database.add_trip(make_trip("2024-03-01", 100))
         assert check_vehicle_end_reached(database) == []
 
-    def test_exact_match_no_issue(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_exact_match_no_issue(self, database: Database, vehicle: Vehicle) -> None:
         vehicle.end_km = 10150
         database.save_vehicle(vehicle)
         database.add_trip(make_trip("2024-03-01", 100))
         database.add_trip(make_trip("2024-03-02", 50))
         assert check_vehicle_end_reached(database) == []
 
-    def test_gap_reports_warning(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_gap_reports_warning(self, database: Database, vehicle: Vehicle) -> None:
         vehicle.end_km = 10500
         database.save_vehicle(vehicle)
         database.add_trip(make_trip("2024-03-01", 100))  # endet bei 10100
@@ -260,9 +273,7 @@ class TestCheckVehicleEndReached:
         assert issues[0].category == CAT_END_MISMATCH
         assert "400 km" in issues[0].message
 
-    def test_over_end_no_issue_here(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_over_end_no_issue_here(self, database: Database, vehicle: Vehicle) -> None:
         # Ueberschreitung meldet check_vehicle_end_limit, nicht dieser Check.
         vehicle.end_km = 10050
         database.save_vehicle(vehicle)
@@ -280,22 +291,26 @@ class TestCheckEmptyTrips:
         database.add_trip(make_trip("2024-03-01", 100))
         assert check_empty_trips(database) == []
 
-    def test_zero_distance_zero_columns_no_issue(
-        self, database: Database
-    ) -> None:
+    def test_zero_distance_zero_columns_no_issue(self, database: Database) -> None:
         raw_insert_trip(
-            database, date_iso="2024-03-01",
-            km_start=10000, km_end=10000, km_business=0, km_private=0,
+            database,
+            date_iso="2024-03-01",
+            km_start=10000,
+            km_end=10000,
+            km_business=0,
+            km_private=0,
         )
         assert check_empty_trips(database) == []
 
-    def test_zero_distance_with_columns_is_error(
-        self, database: Database
-    ) -> None:
+    def test_zero_distance_with_columns_is_error(self, database: Database) -> None:
         # Der echte 103/104-Bug:
         raw_insert_trip(
-            database, date_iso="2024-11-13",
-            km_start=16070, km_end=16070, km_business=260, km_private=0,
+            database,
+            date_iso="2024-11-13",
+            km_start=16070,
+            km_end=16070,
+            km_business=260,
+            km_private=0,
         )
         issues = check_empty_trips(database)
         assert len(issues) == 1
@@ -467,16 +482,12 @@ class TestCheckTimeOverlap:
 
 
 class TestCheckWeekendBusiness:
-    def test_business_on_weekday_no_issue(
-        self, database: Database
-    ) -> None:
+    def test_business_on_weekday_no_issue(self, database: Database) -> None:
         # 2024-03-04 ist ein Montag
         database.add_trip(make_trip("2024-03-04", 50))
         assert check_weekend_business(database) == []
 
-    def test_business_on_saturday_is_warning(
-        self, database: Database
-    ) -> None:
+    def test_business_on_saturday_is_warning(self, database: Database) -> None:
         # 2024-03-02 ist ein Samstag
         database.add_trip(make_trip("2024-03-02", 50))
         issues = check_weekend_business(database)
@@ -488,8 +499,11 @@ class TestCheckWeekendBusiness:
         # 2024-03-03 ist ein Sonntag
         trip = Trip(
             date="2024-03-03",
-            km_start=0, km_end=20, km_business=20,
-            category="fuel", purpose="Tanken",
+            km_start=0,
+            km_end=20,
+            km_business=20,
+            category="fuel",
+            purpose="Tanken",
         )
         database.add_trip(trip)
         assert check_weekend_business(database) == []
@@ -505,9 +519,7 @@ class TestCheckHolidayBusiness:
         database.add_trip(make_trip("2024-03-04", 50))
         assert check_holiday_business(database, {}) == []
 
-    def test_business_on_holiday_is_warning(
-        self, database: Database
-    ) -> None:
+    def test_business_on_holiday_is_warning(self, database: Database) -> None:
         # 2024-12-25 = 1. Weihnachtstag
         database.add_trip(make_trip("2024-12-25", 50))
         holidays = {date(2024, 12, 25): "1. Weihnachtstag"}
@@ -519,8 +531,11 @@ class TestCheckHolidayBusiness:
     def test_fuel_on_holiday_is_ok(self, database: Database) -> None:
         trip = Trip(
             date="2024-12-25",
-            km_start=0, km_end=20, km_business=20,
-            category="fuel", purpose="Tanken",
+            km_start=0,
+            km_end=20,
+            km_business=20,
+            category="fuel",
+            purpose="Tanken",
         )
         database.add_trip(trip)
         holidays = {date(2024, 12, 25): "1. Weihnachtstag"}
@@ -537,9 +552,7 @@ class TestCheckBlacklistBusiness:
         database.add_trip(make_trip("2024-03-04", 50))
         assert check_blacklist_business(database) == []
 
-    def test_business_on_blacklist_is_error(
-        self, database: Database
-    ) -> None:
+    def test_business_on_blacklist_is_error(self, database: Database) -> None:
         database.add_blacklist_entry("2024-03-04", "Krank")
         database.add_trip(make_trip("2024-03-04", 50))
         issues = check_blacklist_business(database)
@@ -568,14 +581,12 @@ class TestRunAllChecks:
         vehicle.end_km = 0
         database.save_vehicle(vehicle)
         database.add_trip(make_trip("2024-03-04", 100))  # Mo
-        database.add_trip(make_trip("2024-03-05", 50))   # Di
+        database.add_trip(make_trip("2024-03-05", 50))  # Di
         report = run_all_checks(database)
         assert not report.has_issues
         assert report.error_count == 0
 
-    def test_aggregates_multiple_check_results(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_aggregates_multiple_check_results(self, database: Database, vehicle: Vehicle) -> None:
         # Mehrere Probleme erzeugen
         # 1. Wochenend-Business
         database.add_trip(make_trip("2024-03-02", 50))  # Sa
@@ -584,8 +595,11 @@ class TestRunAllChecks:
         database.save_vehicle(vehicle)
         # 3. Empty-Trip-Bug per direktem Insert
         raw_insert_trip(
-            database, date_iso="2024-03-15",
-            km_start=10100, km_end=10100, km_business=99,
+            database,
+            date_iso="2024-03-15",
+            km_start=10100,
+            km_end=10100,
+            km_business=99,
         )
         report = run_all_checks(database)
         assert report.has_issues
@@ -593,24 +607,20 @@ class TestRunAllChecks:
         assert CAT_WEEKEND_BUSINESS in cats
         assert CAT_OVER_LIMIT in cats or CAT_EMPTY_TRIP in cats
 
-    def test_holidays_only_checked_when_provided(
-        self, database: Database
-    ) -> None:
+    def test_holidays_only_checked_when_provided(self, database: Database) -> None:
         database.add_trip(make_trip("2024-12-25", 50))
         report_no = run_all_checks(database)
         cats_no = {i.category for i in report_no.issues}
         assert CAT_HOLIDAY_BUSINESS not in cats_no
 
-        report_yes = run_all_checks(
-            database, holidays_by_date={date(2024, 12, 25): "Weihnachten"}
-        )
+        report_yes = run_all_checks(database, holidays_by_date={date(2024, 12, 25): "Weihnachten"})
         cats_yes = {i.category for i in report_yes.issues}
         assert CAT_HOLIDAY_BUSINESS in cats_yes
 
     def test_grouping_by_month(self, database: Database) -> None:
         # Jeweils Wochenend-Fahrt in zwei verschiedenen Monaten
-        database.add_trip(make_trip("2024-03-02", 50))   # Sa
-        database.add_trip(make_trip("2024-04-06", 50))   # Sa
+        database.add_trip(make_trip("2024-03-02", 50))  # Sa
+        database.add_trip(make_trip("2024-04-06", 50))  # Sa
         report = run_all_checks(database)
         groups = report.by_month()
         assert (2024, 3) in groups
@@ -622,9 +632,7 @@ class TestRunAllChecks:
 # ---------------------------------------------------------------------------
 
 
-def _add_business_trips_in_month(
-    database: Database, year: int, month: int, count: int
-) -> None:
+def _add_business_trips_in_month(database: Database, year: int, month: int, count: int) -> None:
     """Legt count Business-Fahrten im angegebenen Monat an (Wochentage)."""
     added = 0
     day = 1
@@ -642,9 +650,7 @@ class TestCheckWorktimeTripRatio:
         _add_business_trips_in_month(database, 2024, 9, 10)
         assert check_worktime_trip_ratio(database) == []
 
-    def test_single_month_worktime_no_baseline(
-        self, database: Database
-    ) -> None:
+    def test_single_month_worktime_no_baseline(self, database: Database) -> None:
         """Ein einzelner Monat mit Arbeitszeit reicht nicht als Baseline."""
         _add_business_trips_in_month(database, 2024, 9, 20)
         database.save_worktime(2024, 9, 168.0)
@@ -754,9 +760,7 @@ class TestCheckBusinessQuota:
         years = [i.year for i in quota]
         assert years == [2025]
 
-    def test_run_all_checks_includes_new_checks(
-        self, database: Database
-    ) -> None:
+    def test_run_all_checks_includes_new_checks(self, database: Database) -> None:
         """Beide neuen Checks laufen ueber run_all_checks."""
         # Setup fuer beide Checks: niedrige Quote + Urlaubsmonat
         database.add_trip(make_trip("2024-03-01", 40, business=True))
@@ -771,9 +775,7 @@ class TestCheckBusinessQuota:
 # ---------------------------------------------------------------------------
 
 
-def _vehicle_with_tank(
-    database: Database, tank_l: float = 54.0, consumption: float = 7.5
-) -> None:
+def _vehicle_with_tank(database: Database, tank_l: float = 54.0, consumption: float = 7.5) -> None:
     """Setzt Tank- und Verbrauchswerte am Testwagen.
 
     Ohne gepflegte Tankdaten werden die Fuel-Checks uebersprungen — die
@@ -785,9 +787,7 @@ def _vehicle_with_tank(
     database.save_vehicle(vehicle)
 
 
-def _add_full_tank(
-    database: Database, date_iso: str, km_end: int, liters: float = 50.0
-) -> None:
+def _add_full_tank(database: Database, date_iso: str, km_end: int, liters: float = 50.0) -> None:
     """Legt einen Volltank-Event am angegebenen Endkilometerstand an."""
     trip = make_trip(date_iso, 0, business=False)
     trip.category = "fuel_private"
@@ -804,9 +804,7 @@ def _add_full_tank(
     conn.commit()
 
 
-def _add_partial_fill(
-    database: Database, date_iso: str, km_end: int, liters: float
-) -> None:
+def _add_partial_fill(database: Database, date_iso: str, km_end: int, liters: float) -> None:
     """Legt eine Teilbetankung (fuel_full_tank=False) am km-Stand an."""
     trip = make_trip(date_iso, 0, business=False)
     trip.category = "fuel_private"
@@ -855,10 +853,7 @@ class TestCheckFuelMissingLiters:
         trip.fuel_full_tank = False
         database.add_trip(trip)
 
-        errors = [
-            i for i in check_fuel_missing_liters(database)
-            if i.category == CAT_FUEL_MISSING_LITERS
-        ]
+        errors = [i for i in check_fuel_missing_liters(database) if i.category == CAT_FUEL_MISSING_LITERS]
         assert len(errors) == 1
         assert "ohne Literangabe" in errors[0].message
 
@@ -898,10 +893,7 @@ class TestCheckFuelRangeExceeded:
         _add_full_tank(database, "2024-01-10", 10700)  # 700 km, OK
         _add_full_tank(database, "2024-02-01", 11900)  # 1200 km, BAD
         _add_full_tank(database, "2024-02-10", 12600)  # 700 km, OK
-        errors = [
-            i for i in check_fuel_range_exceeded(database)
-            if i.category == CAT_FUEL_RANGE_EXCEEDED
-        ]
+        errors = [i for i in check_fuel_range_exceeded(database) if i.category == CAT_FUEL_RANGE_EXCEEDED]
         assert len(errors) == 1
 
     def test_single_full_tank_no_issue(self, database: Database) -> None:
@@ -917,10 +909,7 @@ class TestCheckFuelRangeExceeded:
         _add_partial_fill(database, "2024-01-10", 10500, 36.0)  # +36 l -> +600 km
         _add_full_tank(database, "2024-01-20", 11100)  # 1100 km insgesamt
         # Ohne Fix: 1100 > 900 -> ERROR. Mit Fix: (54+36)/6*100 = 1500 km -> OK.
-        errors = [
-            i for i in check_fuel_range_exceeded(database)
-            if i.category == CAT_FUEL_RANGE_EXCEEDED
-        ]
+        errors = [i for i in check_fuel_range_exceeded(database) if i.category == CAT_FUEL_RANGE_EXCEEDED]
         assert errors == []
 
     def test_partial_fill_still_too_far(self, database: Database) -> None:
@@ -929,10 +918,7 @@ class TestCheckFuelRangeExceeded:
         _add_full_tank(database, "2024-01-01", 10000)
         _add_partial_fill(database, "2024-01-10", 10500, 10.0)  # +10 l -> +167 km
         _add_full_tank(database, "2024-01-20", 12000)  # 2000 km -- zu weit
-        errors = [
-            i for i in check_fuel_range_exceeded(database)
-            if i.category == CAT_FUEL_RANGE_EXCEEDED
-        ]
+        errors = [i for i in check_fuel_range_exceeded(database) if i.category == CAT_FUEL_RANGE_EXCEEDED]
         assert len(errors) == 1
         assert "2000 km" in errors[0].message
         assert "10.00 l Teilbetankung" in errors[0].message
@@ -942,26 +928,24 @@ class TestCheckFuelConsumptionPartialFills:
     def test_partial_fill_counted_in_consumption(self, database: Database) -> None:
         """Teilbetankungen zaehlen zum Gesamtverbrauch zwischen zwei Volltanks."""
         from fahrtenbuch_app.services.plausibility import (
-            check_fuel_consumption_range,
             CAT_FUEL_CONSUMPTION,
+            check_fuel_consumption_range,
         )
+
         _vehicle_with_tank(database)  # target 7.5 +/- 20% -> 6..9
         _add_full_tank(database, "2024-01-01", 10000, liters=50.0)
         _add_partial_fill(database, "2024-01-10", 10500, 36.0)
         # 1200 km total, 36 + 54 = 90 l insgesamt -> 7.5 l/100km (perfekt)
         _add_full_tank(database, "2024-01-20", 11200, liters=54.0)
-        issues = [
-            i for i in check_fuel_consumption_range(database)
-            if i.category == CAT_FUEL_CONSUMPTION
-        ]
+        issues = [i for i in check_fuel_consumption_range(database) if i.category == CAT_FUEL_CONSUMPTION]
         assert issues == []
 
     def test_partial_fill_ignored_would_falsely_warn(self, database: Database) -> None:
         """Ohne Fix wuerde der Check hier faelschlich warnen."""
         from fahrtenbuch_app.services.plausibility import (
             check_fuel_consumption_range,
-            CAT_FUEL_CONSUMPTION,
         )
+
         _vehicle_with_tank(database)
         _add_full_tank(database, "2024-01-01", 10000, liters=50.0)
         _add_partial_fill(database, "2024-01-10", 10500, 36.0)
@@ -970,9 +954,7 @@ class TestCheckFuelConsumptionPartialFills:
         # = 4.5 l/100km -> das waere die falsche Warnung ohne Fix.
         issues = check_fuel_consumption_range(database)
         # Mit Fix darf keine Warnung kommen:
-        assert all(
-            "4.5 l/100km" not in i.message for i in issues
-        )
+        assert all("4.5 l/100km" not in i.message for i in issues)
 
 
 # ---------------------------------------------------------------------------
@@ -1029,12 +1011,8 @@ class TestCheckGhostBusinessTrips:
 
     def test_private_trips_not_flagged(self, database: Database) -> None:
         """Private Fahrten sind vom Ghost-Check ausgenommen."""
-        database.add_trip(
-            make_trip("2024-03-01", 260, destination="Kunde Nord", business=False)
-        )
-        database.add_trip(
-            make_trip("2024-03-03", 260, destination="Kunde Nord", business=False)
-        )
+        database.add_trip(make_trip("2024-03-01", 260, destination="Kunde Nord", business=False))
+        database.add_trip(make_trip("2024-03-03", 260, destination="Kunde Nord", business=False))
         assert check_ghost_business_trips(database) == []
 
     def test_destination_case_insensitive(self, database: Database) -> None:

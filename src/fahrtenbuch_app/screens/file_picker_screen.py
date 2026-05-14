@@ -76,9 +76,7 @@ class FilePickerScreen(ModalScreen[Path | None]):
                 yield Button("Auswaehlen", variant="primary", id="btn-select", disabled=True)
                 yield Button("Abbrechen", id="btn-cancel")
 
-    def on_directory_tree_file_selected(
-        self, event: DirectoryTree.FileSelected
-    ) -> None:
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         """Zeigt den gewaehlten Pfad an und aktiviert den Auswaehlen-Button."""
         self._selected = event.path
         self.query_one("#selected-path", Input).value = str(event.path)

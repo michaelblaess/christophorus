@@ -11,7 +11,6 @@ import pytest
 from fahrtenbuch_app.models.trip import Trip
 from fahrtenbuch_app.models.vehicle import Vehicle
 from fahrtenbuch_app.services.database import Database
-
 from tests.conftest import make_trip
 
 
@@ -25,13 +24,11 @@ def assert_chain_intact(database: Database, expected_start_km: int) -> None:
     )
     for trip in trips:
         assert trip.km_end >= trip.km_start, (
-            f"Trip {trip.id} hat negative Distanz: "
-            f"km_start={trip.km_start}, km_end={trip.km_end}"
+            f"Trip {trip.id} hat negative Distanz: km_start={trip.km_start}, km_end={trip.km_end}"
         )
     for prev, curr in zip(trips, trips[1:]):
         assert curr.km_start == prev.km_end, (
-            f"Kettenbruch zwischen Trip {prev.id} (Ende {prev.km_end}) "
-            f"und Trip {curr.id} (Start {curr.km_start})"
+            f"Kettenbruch zwischen Trip {prev.id} (Ende {prev.km_end}) und Trip {curr.id} (Start {curr.km_start})"
         )
 
 
@@ -41,18 +38,14 @@ def assert_chain_intact(database: Database, expected_start_km: int) -> None:
 
 
 class TestAddTrip:
-    def test_first_trip_starts_at_vehicle_start_km(
-        self, database: Database
-    ) -> None:
+    def test_first_trip_starts_at_vehicle_start_km(self, database: Database) -> None:
         database.add_trip(make_trip("2024-03-01", 100))
         trips = database.get_all_trips_ordered()
         assert len(trips) == 1
         assert trips[0].km_start == 10000
         assert trips[0].km_end == 10100
 
-    def test_sequential_trips_chain_correctly(
-        self, database: Database
-    ) -> None:
+    def test_sequential_trips_chain_correctly(self, database: Database) -> None:
         database.add_trip(make_trip("2024-03-01", 100))
         database.add_trip(make_trip("2024-03-02", 50))
         database.add_trip(make_trip("2024-03-03", 200))
@@ -60,9 +53,7 @@ class TestAddTrip:
         trips = database.get_all_trips_ordered()
         assert trips[-1].km_end == 10350
 
-    def test_insert_in_past_shifts_successors(
-        self, database: Database
-    ) -> None:
+    def test_insert_in_past_shifts_successors(self, database: Database) -> None:
         """Spaeteren Trip zuerst, dann frueheren — Nachfolger muessen mitgehen."""
         id_b = database.add_trip(make_trip("2024-03-10", 200))
         # Vorher einfuegen
@@ -76,18 +67,14 @@ class TestAddTrip:
         assert b.km_start == 10100
         assert b.km_end == 10300
 
-    def test_zero_distance_trip_does_not_shift_chain(
-        self, database: Database
-    ) -> None:
+    def test_zero_distance_trip_does_not_shift_chain(self, database: Database) -> None:
         database.add_trip(make_trip("2024-03-01", 100))
         database.add_trip(make_trip("2024-03-02", 0, business=False))
         database.add_trip(make_trip("2024-03-03", 50))
         assert_chain_intact(database, 10000)
         assert database.get_all_trips_ordered()[-1].km_end == 10150
 
-    def test_multiple_trips_same_day_keep_insertion_order(
-        self, database: Database
-    ) -> None:
+    def test_multiple_trips_same_day_keep_insertion_order(self, database: Database) -> None:
         id1 = database.add_trip(make_trip("2024-03-01", 30))
         id2 = database.add_trip(make_trip("2024-03-01", 40))
         id3 = database.add_trip(make_trip("2024-03-01", 50))
@@ -100,9 +87,7 @@ class TestAddTrip:
         assert t2.km_start == 10030 and t2.km_end == 10070
         assert t3.km_start == 10070 and t3.km_end == 10120
 
-    def test_distance_preserved_from_user_input(
-        self, database: Database
-    ) -> None:
+    def test_distance_preserved_from_user_input(self, database: Database) -> None:
         """Distanz aus Trip-Vorlage muss beibehalten werden, auch wenn
         km_start vom Vorgaenger ueberschrieben wird."""
         trip = Trip(
@@ -124,9 +109,7 @@ class TestAddTrip:
 
 
 class TestUpdateTrip:
-    def test_update_distance_shifts_successors(
-        self, database: Database
-    ) -> None:
+    def test_update_distance_shifts_successors(self, database: Database) -> None:
         id_a = database.add_trip(make_trip("2024-03-01", 100))
         database.add_trip(make_trip("2024-03-02", 50))
         database.add_trip(make_trip("2024-03-03", 200))
@@ -142,9 +125,7 @@ class TestUpdateTrip:
         # Gesamt: 150 + 50 + 200 = 400
         assert database.get_all_trips_ordered()[-1].km_end == 10400
 
-    def test_update_distance_smaller_pulls_successors_back(
-        self, database: Database
-    ) -> None:
+    def test_update_distance_smaller_pulls_successors_back(self, database: Database) -> None:
         id_a = database.add_trip(make_trip("2024-03-01", 200))
         database.add_trip(make_trip("2024-03-02", 100))
 
@@ -157,9 +138,7 @@ class TestUpdateTrip:
         assert_chain_intact(database, 10000)
         assert database.get_all_trips_ordered()[-1].km_end == 10150
 
-    def test_update_date_only_preserves_total_distance(
-        self, database: Database
-    ) -> None:
+    def test_update_date_only_preserves_total_distance(self, database: Database) -> None:
         """Reproduziert den Bug, der zur Limit-Verletzung gefuehrt hat:
         beim Aendern nur des Datums darf der km-Stand nicht explodieren."""
         database.add_trip(make_trip("2024-03-01", 100))
@@ -179,7 +158,7 @@ class TestUpdateTrip:
             time_to=b.time_to,
             destination=b.destination,
             purpose=b.purpose,
-            km_start=0,           # wird von DB gesetzt
+            km_start=0,  # wird von DB gesetzt
             km_end=old_distance,  # nur die Distanz zaehlt
             km_business=b.km_business,
             km_private=b.km_private,
@@ -192,17 +171,19 @@ class TestUpdateTrip:
         # Gesamt-km darf sich nicht aendern
         assert database.get_all_trips_ordered()[-1].km_end == 10240
 
-    def test_update_changes_chain_position_when_date_moved(
-        self, database: Database
-    ) -> None:
+    def test_update_changes_chain_position_when_date_moved(self, database: Database) -> None:
         id_a = database.add_trip(make_trip("2024-03-01", 100))
         id_b = database.add_trip(make_trip("2024-03-02", 50))
         # B ans Anfang vorziehen
         b = database.get_trip_by_id(id_b)
         assert b is not None
         new_b = Trip(
-            id=b.id, date="2024-02-15",
-            km_start=0, km_end=50, km_business=50, category="business",
+            id=b.id,
+            date="2024-02-15",
+            km_start=0,
+            km_end=50,
+            km_business=50,
+            category="business",
         )
         database.update_trip(id_b, new_b)
 
@@ -211,9 +192,7 @@ class TestUpdateTrip:
         assert ordered[0].id == id_b
         assert ordered[1].id == id_a
 
-    def test_update_time_to_only_keeps_chain_stable(
-        self, database: Database
-    ) -> None:
+    def test_update_time_to_only_keeps_chain_stable(self, database: Database) -> None:
         """Regression: Editieren eines Non-km-Feldes (time_to) darf die
         km-Kette nicht verschieben — auch wenn das Trip-Objekt vom UI mit
         einem veralteten/falschen km_start uebergeben wird.
@@ -232,9 +211,7 @@ class TestUpdateTrip:
         assert_chain_intact(database, 10000)
         assert database.get_all_trips_ordered()[-1].km_end == 10350
 
-    def test_update_time_from_later_same_day_keeps_chain(
-        self, database: Database
-    ) -> None:
+    def test_update_time_from_later_same_day_keeps_chain(self, database: Database) -> None:
         """Regression: Trip auf dem gleichen Tag zeitlich nach hinten
         verschieben darf die Kette nicht verschieben. Der alte Bug war,
         dass get_km_end_before() mit exclude_trip_id den eigenen Trip an
@@ -273,9 +250,7 @@ class TestUpdateTrip:
         assert t127_after.km_start == 10060
         assert t127_after.km_end == 10096
 
-    def test_update_time_to_preserves_chain_gap(
-        self, database: Database
-    ) -> None:
+    def test_update_time_to_preserves_chain_gap(self, database: Database) -> None:
         """Regression: Edits ohne Positions- oder Distanzaenderung duerfen
         einen bestehenden Gap zwischen Vorgaenger und Trip NICHT "heilen",
         weil ein Gap z.B. eine nicht geloggte Privatfahrt repraesentieren
@@ -293,10 +268,7 @@ class TestUpdateTrip:
         original_km_start = b.km_start + 30
         original_km_end = b.km_end + 30
         conn = database._get_conn()
-        conn.execute(
-            "UPDATE trips SET km_start = km_start + 30, km_end = km_end + 30 "
-            "WHERE date >= '2024-03-02'"
-        )
+        conn.execute("UPDATE trips SET km_start = km_start + 30, km_end = km_end + 30 WHERE date >= '2024-03-02'")
         conn.commit()
 
         # Jetzt nur time_to editieren — km muessen exakt so bleiben.
@@ -315,9 +287,7 @@ class TestUpdateTrip:
         with pytest.raises(ValueError):
             database.update_trip(99999, make_trip("2024-03-01", 10))
 
-    def test_update_does_not_reject_over_limit(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_update_does_not_reject_over_limit(self, database: Database, vehicle: Vehicle) -> None:
         """Limit-Verletzung wird nicht mehr als Hard-Stop behandelt —
         sie muss vom Plausi-Check gemeldet werden, nicht vom DB-Layer."""
         # Sehr knappes Limit setzen
@@ -353,9 +323,7 @@ class TestDeleteTrip:
         assert len(ordered) == 2
         assert ordered[-1].km_end == 10180
 
-    def test_delete_only_trip_leaves_empty_chain(
-        self, database: Database
-    ) -> None:
+    def test_delete_only_trip_leaves_empty_chain(self, database: Database) -> None:
         id_a = database.add_trip(make_trip("2024-03-01", 100))
         database.delete_trip(id_a)
         assert database.get_all_trips_ordered() == []
@@ -372,9 +340,7 @@ class TestDeleteTrip:
 
 
 class TestGetKmEndBefore:
-    def test_returns_vehicle_start_km_when_empty(
-        self, database: Database
-    ) -> None:
+    def test_returns_vehicle_start_km_when_empty(self, database: Database) -> None:
         assert database.get_km_end_before("2024-03-01") == 10000
 
     def test_returns_predecessor_km_end(self, database: Database) -> None:
@@ -386,13 +352,9 @@ class TestGetKmEndBefore:
         id_a = database.add_trip(make_trip("2024-03-01", 100))
         id_b = database.add_trip(make_trip("2024-03-01", 50))
         # Vorgaenger von B (am gleichen Tag) ist A
-        assert database.get_km_end_before(
-            "2024-03-01", exclude_trip_id=id_b
-        ) == 10100
+        assert database.get_km_end_before("2024-03-01", exclude_trip_id=id_b) == 10100
         # Vorgaenger von A (am gleichen Tag) ist nichts
-        assert database.get_km_end_before(
-            "2024-03-01", exclude_trip_id=id_a
-        ) == 10000
+        assert database.get_km_end_before("2024-03-01", exclude_trip_id=id_a) == 10000
 
 
 # ---------------------------------------------------------------------------
@@ -416,9 +378,7 @@ def _add_trip_at(
 class TestTimeFromOrdering:
     """Same-day-Trips werden anhand time_from in die Kette eingefuegt."""
 
-    def test_earlier_time_inserted_later_places_first(
-        self, database: Database
-    ) -> None:
+    def test_earlier_time_inserted_later_places_first(self, database: Database) -> None:
         """Zuerst 17:00 eingefuegt, dann 16:00 — 16:00 muss in der Kette zuerst kommen."""
         id_late = _add_trip_at(database, "2024-03-01", "17:00", 36)
         id_early = _add_trip_at(database, "2024-03-01", "16:00", 41)
@@ -431,9 +391,7 @@ class TestTimeFromOrdering:
         assert late.km_start == 10041
         assert late.km_end == 10077
 
-    def test_three_trips_same_day_ordered_by_time(
-        self, database: Database
-    ) -> None:
+    def test_three_trips_same_day_ordered_by_time(self, database: Database) -> None:
         _add_trip_at(database, "2024-03-01", "12:00", 20)
         _add_trip_at(database, "2024-03-01", "08:00", 10)
         _add_trip_at(database, "2024-03-01", "18:00", 30)
@@ -443,9 +401,7 @@ class TestTimeFromOrdering:
         assert [t.km_start for t in trips] == [10000, 10010, 10030]
         assert [t.km_end for t in trips] == [10010, 10030, 10060]
 
-    def test_update_time_from_repositions_chain(
-        self, database: Database
-    ) -> None:
+    def test_update_time_from_repositions_chain(self, database: Database) -> None:
         """Uhrzeit eines Trips aendern → Kette muss neu ausgerichtet werden."""
         id_a = _add_trip_at(database, "2024-03-01", "09:00", 100)
         id_b = _add_trip_at(database, "2024-03-01", "15:00", 50)
@@ -469,9 +425,7 @@ class TestTimeFromOrdering:
         assert a_after.km_start == 10050
         assert a_after.km_end == 10150
 
-    def test_delete_by_time_shifts_correct_successors(
-        self, database: Database
-    ) -> None:
+    def test_delete_by_time_shifts_correct_successors(self, database: Database) -> None:
         _add_trip_at(database, "2024-03-01", "08:00", 10)
         id_mid = _add_trip_at(database, "2024-03-01", "12:00", 20)
         _add_trip_at(database, "2024-03-01", "18:00", 30)
@@ -481,9 +435,7 @@ class TestTimeFromOrdering:
         assert [t.time_from for t in trips] == ["08:00", "18:00"]
         assert trips[-1].km_end == 10040
 
-    def test_rebuild_heals_misordered_same_day_chain(
-        self, database: Database
-    ) -> None:
+    def test_rebuild_heals_misordered_same_day_chain(self, database: Database) -> None:
         """Simuliert die Dezember-29-Situation: Trips same-day in falscher
         Zeit-Reihenfolge eingefuegt → rebuild_all_km repariert die Kette.
         """
@@ -554,9 +506,7 @@ class TestRebuildAllKm:
         assert ordered[0].km_end - ordered[0].km_start == 100
         assert ordered[1].km_end - ordered[1].km_start == 50
 
-    def test_rebuild_raises_when_over_limit(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_rebuild_raises_when_over_limit(self, database: Database, vehicle: Vehicle) -> None:
         vehicle.end_km = 10100
         database.save_vehicle(vehicle)
         database.add_trip(make_trip("2024-03-01", 50))
@@ -564,9 +514,7 @@ class TestRebuildAllKm:
         with pytest.raises(ValueError, match="Endkilometerstand"):
             database.rebuild_all_km()
 
-    def test_rebuild_force_ignores_over_limit(
-        self, database: Database, vehicle: Vehicle
-    ) -> None:
+    def test_rebuild_force_ignores_over_limit(self, database: Database, vehicle: Vehicle) -> None:
         """Mit force=True laeuft der Rebuild auch ueber dem Vertragslimit."""
         vehicle.end_km = 10100
         database.save_vehicle(vehicle)
@@ -576,9 +524,7 @@ class TestRebuildAllKm:
         assert changed == 2
         assert final_km == 10250
 
-    def test_rebuild_uses_column_sum_when_chain_is_zero(
-        self, database: Database
-    ) -> None:
+    def test_rebuild_uses_column_sum_when_chain_is_zero(self, database: Database) -> None:
         """Trip #104-Fall: km_start==km_end aber km_business=260.
 
         Rebuild muss 260 km aus den Spalten uebernehmen, nicht bei 0
@@ -590,7 +536,8 @@ class TestRebuildAllKm:
         # Simuliere Nutzer-Bug: km_end auf km_start setzen, km_business
         # steht aber korrekt in der Spalte.
         database._get_conn().execute(  # type: ignore[reportPrivateUsage]
-            "UPDATE trips SET km_end = km_start WHERE id = ?", (t2_id,),
+            "UPDATE trips SET km_end = km_start WHERE id = ?",
+            (t2_id,),
         )
         database._get_conn().commit()  # type: ignore[reportPrivateUsage]
         changed, final_km = database.rebuild_all_km()
@@ -606,9 +553,7 @@ class TestRebuildAllKm:
 
 
 class TestMixedOperations:
-    def test_full_chain_remains_ascending_after_random_ops(
-        self, database: Database
-    ) -> None:
+    def test_full_chain_remains_ascending_after_random_ops(self, database: Database) -> None:
         """Verschiedenste Operationen — danach muss die Kette sauber sein."""
         ids = []
         for day, dist in [

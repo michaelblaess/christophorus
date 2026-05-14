@@ -11,7 +11,6 @@ from textual.widgets import Button, Checkbox, Input, Label, Static
 
 from fahrtenbuch_app.models.settings import GlobalConfig
 
-
 # Rueckgabe-Typ des StartScreen:
 # - None           → Dialog abgebrochen
 # - (path, None)   → Oeffnen oder leeres Neu-Anlegen
@@ -114,10 +113,7 @@ class StartScreen(ModalScreen[StartResult | None]):
     def compose(self) -> ComposeResult:
         """Erstellt den Startbildschirm."""
         # Basisverzeichnis: zuletzt verwendetes oder Fallback auf Home
-        default_base = (
-            self._config.last_base_dir
-            or str(Path.home() / "Fahrtenbuecher")
-        )
+        default_base = self._config.last_base_dir or str(Path.home() / "Fahrtenbuecher")
 
         with Vertical():
             yield Static("Fahrtenbuch verwalten", id="title")
@@ -187,15 +183,9 @@ class StartScreen(ModalScreen[StartResult | None]):
                     )
 
             with Horizontal(classes="button-row"):
-                yield Button(
-                    "Neu anlegen", variant="primary", id="btn-create"
-                )
-                yield Button(
-                    "Pfad oeffnen...", variant="success", id="btn-open"
-                )
-                yield Button(
-                    "Abbrechen (Esc)", variant="default", id="btn-cancel"
-                )
+                yield Button("Neu anlegen", variant="primary", id="btn-create")
+                yield Button("Pfad oeffnen...", variant="success", id="btn-open")
+                yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         """Aktiviert/Deaktiviert das Quellpfad-Feld abhaengig von der Checkbox."""
@@ -285,14 +275,11 @@ class StartScreen(ModalScreen[StartResult | None]):
         path = Path(base_dir) / fb_name if fb_name else Path(base_dir)
 
         if not path.exists():
-            self.notify(
-                f"Verzeichnis existiert nicht: {path}", severity="error"
-            )
+            self.notify(f"Verzeichnis existiert nicht: {path}", severity="error")
             return
         if not (path / "fahrtenbuch.db").exists():
             self.notify(
-                f"Keine fahrtenbuch.db im Pfad: {path}. "
-                "Nutze 'Neu anlegen' zum Erstellen.",
+                f"Keine fahrtenbuch.db im Pfad: {path}. Nutze 'Neu anlegen' zum Erstellen.",
                 severity="error",
             )
             return
@@ -329,9 +316,7 @@ class StartScreen(ModalScreen[StartResult | None]):
                 severity="information",
             )
         except Exception as e:
-            self.notify(
-                f"Sicherung fehlgeschlagen: {e}", severity="error"
-            )
+            self.notify(f"Sicherung fehlgeschlagen: {e}", severity="error")
 
     def action_cancel(self) -> None:
         """Bricht ab."""

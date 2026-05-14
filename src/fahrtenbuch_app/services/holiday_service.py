@@ -1,6 +1,6 @@
 """Feiertags- und Wochenend-Erkennung."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import holidays
 
@@ -73,6 +73,7 @@ class HolidayService:
     def count_workdays_in_month(self, year: int, month: int) -> int:
         """Zaehlt die Arbeitstage in einem Monat."""
         import calendar
+
         count = 0
         cal = calendar.Calendar()
         for day_num, weekday in cal.itermonthdays2(year, month):

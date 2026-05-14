@@ -26,9 +26,7 @@ from fahrtenbuch_app.services.plausibility import (
     check_fuel_tank_capacity,
     run_all_checks,
 )
-
 from tests.conftest import make_trip
-
 
 # ---------------------------------------------------------------------------
 # Helfer
@@ -252,9 +250,7 @@ class TestFuelConsumptionRangeCheck:
         assert len(issues) == 1
         assert issues[0].severity == SEVERITY_WARNING
 
-    def test_winter_tolerance_suppresses_small_deviation(
-        self, database: Database
-    ) -> None:
+    def test_winter_tolerance_suppresses_small_deviation(self, database: Database) -> None:
         """In Winter-Monaten mit aktivem Setting greift erweiterte Toleranz."""
         set_fuel_vehicle(database, consumption_l_100km=9.0)
         database.set_setting("fuel_winter_tolerance", "1")
@@ -263,9 +259,7 @@ class TestFuelConsumptionRangeCheck:
         self._build_chain(database, distance_km=500, liters_second_tank=55.0)
         assert check_fuel_consumption_range(database) == []
 
-    def test_winter_tolerance_still_flags_large_deviation(
-        self, database: Database
-    ) -> None:
+    def test_winter_tolerance_still_flags_large_deviation(self, database: Database) -> None:
         """Grobe Ausreisser bleiben auch im Winter erkannt."""
         set_fuel_vehicle(database, consumption_l_100km=9.0)
         database.set_setting("fuel_winter_tolerance", "1")
