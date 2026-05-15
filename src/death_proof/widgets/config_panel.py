@@ -9,8 +9,8 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Button, Static
 
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.formatting import format_km
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.formatting import format_km
 
 _MONTH_NAMES = [
     "Januar",

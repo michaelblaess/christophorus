@@ -9,7 +9,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Static
 
-from fahrtenbuch_app.models.settings import GlobalConfig
+from death_proof.models.settings import GlobalConfig
+from death_proof.services.database import Database
 
 # Rueckgabe-Typ des StartScreen:
 # - None           → Dialog abgebrochen
@@ -224,7 +225,7 @@ class StartScreen(ModalScreen[StartResult | None]):
 
         # Verhindern, dass "Neu anlegen" still ein bestehendes Fahrtenbuch
         # oeffnet — der User hat NEU gedrueckt, das ist eindeutig.
-        if (target_path / "fahrtenbuch.db").exists():
+        if Database.has_logbook(target_path):
             self.notify(
                 f"Am Zielpfad existiert bereits ein Fahrtenbuch: {target_path}. "
                 "Waehle 'Pfad oeffnen...' oder einen anderen Namen.",
@@ -247,9 +248,9 @@ class StartScreen(ModalScreen[StartResult | None]):
                 )
                 return
             source_path = Path(source_str)
-            if not (source_path / "fahrtenbuch.db").exists():
+            if not Database.has_logbook(source_path):
                 self.notify(
-                    f"Keine fahrtenbuch.db im Quellpfad: {source_path}",
+                    f"Kein Fahrtenbuch im Quellpfad: {source_path}",
                     severity="error",
                 )
                 return
@@ -277,9 +278,9 @@ class StartScreen(ModalScreen[StartResult | None]):
         if not path.exists():
             self.notify(f"Verzeichnis existiert nicht: {path}", severity="error")
             return
-        if not (path / "fahrtenbuch.db").exists():
+        if not Database.has_logbook(path):
             self.notify(
-                f"Keine fahrtenbuch.db im Pfad: {path}. Nutze 'Neu anlegen' zum Erstellen.",
+                f"Kein Fahrtenbuch im Pfad: {path}. Nutze 'Neu anlegen' zum Erstellen.",
                 severity="error",
             )
             return

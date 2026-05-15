@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.database import Database
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.database import Database
 
 
 class Fahrtenbuch:
     """Repraesentiert ein einzelnes Fahrtenbuch (Verzeichnis mit SQLite-DB).
 
-    Jedes Fahrtenbuch ist ein Verzeichnis mit einer fahrtenbuch.db und
+    Jedes Fahrtenbuch ist ein Verzeichnis mit einer death-proof.db und
     einem belege/-Unterverzeichnis fuer Belegbilder.
     """
 

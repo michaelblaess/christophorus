@@ -6,7 +6,7 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from fahrtenbuch_app import __author__, __version__, __year__
+from death_proof import __author__, __version__, __year__
 
 
 class InfoScreen(ModalScreen[None]):

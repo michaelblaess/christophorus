@@ -9,9 +9,9 @@ Deckt drei Schichten ab:
 
 from __future__ import annotations
 
-from fahrtenbuch_app.models.trip import Trip, get_informational_categories
-from fahrtenbuch_app.services.database import Database
-from fahrtenbuch_app.services.plausibility import (
+from death_proof.models.trip import Trip, get_informational_categories
+from death_proof.services.database import Database
+from death_proof.services.plausibility import (
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,

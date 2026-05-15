@@ -6,8 +6,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from fahrtenbuch_app.models.trip import MonthData, Trip
-from fahrtenbuch_app.models.vehicle import Vehicle
+from death_proof.models.trip import MonthData, Trip
+from death_proof.models.vehicle import Vehicle
 
 # Tabellen, die Audit-Spalten bekommen (siehe _migrate_add_audit_columns).
 # documents hat bereits created_at — deshalb separate Liste.
@@ -48,17 +48,40 @@ def _audit_user() -> str:
 
 
 class Database:
-    """Verwaltet eine fahrtenbuch.db SQLite-Datenbank.
+    """Verwaltet eine death-proof.db SQLite-Datenbank.
 
     Jedes Fahrtenbuch hat eine eigene Datenbank in seinem Verzeichnis.
     """
 
-    DB_FILENAME = "fahrtenbuch.db"
+    DB_FILENAME = "death-proof.db"
+    # Alter Dateiname vor der Umbenennung auf "Death Proof". Wird beim
+    # Oeffnen transparent auf DB_FILENAME migriert (siehe _migrate_legacy_db).
+    LEGACY_DB_FILENAME = "fahrtenbuch.db"
 
     def __init__(self, path: Path) -> None:
         self._path = path
         self._db_file = path / self.DB_FILENAME
         self._conn: sqlite3.Connection | None = None
+
+    @staticmethod
+    def has_logbook(path: Path) -> bool:
+        """Prueft ob im Verzeichnis ein Fahrtenbuch liegt.
+
+        Erkennt sowohl die aktuelle death-proof.db als auch die alte
+        fahrtenbuch.db (Legacy), damit bestehende Fahrtenbuecher vor der
+        Migration weiterhin als gueltig erkannt werden.
+        """
+        return (path / Database.DB_FILENAME).exists() or (path / Database.LEGACY_DB_FILENAME).exists()
+
+    def _migrate_legacy_db(self) -> None:
+        """Benennt eine alte fahrtenbuch.db einmalig auf death-proof.db um.
+
+        Migriert nur, wenn noch keine death-proof.db existiert. Vorhandene
+        Backup-Dateien (fahrtenbuch.db.backup_*) bleiben unangetastet.
+        """
+        legacy = self._path / self.LEGACY_DB_FILENAME
+        if legacy.exists() and not self._db_file.exists():
+            legacy.rename(self._db_file)
 
     @property
     def path(self) -> Path:
@@ -80,6 +103,9 @@ class Database:
         self._path.mkdir(parents=True, exist_ok=True)
         belege_dir = self._path / "belege"
         belege_dir.mkdir(parents=True, exist_ok=True)
+
+        # Legacy-DB (fahrtenbuch.db) vor dem Verbinden migrieren.
+        self._migrate_legacy_db()
 
         self._conn = sqlite3.connect(str(self._db_file), timeout=10.0)
         self._conn.row_factory = sqlite3.Row
@@ -1486,15 +1512,17 @@ class Database:
         Migration laeuft und das Schema kompatibel ist.
         """
         conn = self._get_conn()
-        source_db_file = source_path / self.DB_FILENAME
-        if not source_db_file.exists():
-            raise FileNotFoundError(f"Quell-Datenbank nicht gefunden: {source_db_file}")
+        if not Database.has_logbook(source_path):
+            raise FileNotFoundError(f"Quell-Datenbank nicht gefunden: {source_path / self.DB_FILENAME}")
 
-        # Quelle kurz oeffnen, damit Migrationen laufen. Danach ist das
-        # Schema garantiert identisch zum Ziel, sodass SELECT * sicher ist.
+        # Quelle kurz oeffnen, damit Migrationen laufen (inkl. Legacy-DB-
+        # Umbenennung). Danach ist das Schema garantiert identisch zum Ziel,
+        # sodass SELECT * sicher ist und die Datei unter DB_FILENAME liegt.
         src_fb = Database(source_path)
         src_fb.open()
         src_fb.close()
+
+        source_db_file = source_path / self.DB_FILENAME
 
         # ATTACH erlaubt keinen ?-Parameter fuer den Pfad, daher SQL-Literal
         # mit doppeltem Einzel-Quote als Escape.

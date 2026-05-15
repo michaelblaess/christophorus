@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from fahrtenbuch_app.models.trip import Trip
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.database import Database
+from death_proof.models.trip import Trip
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.database import Database
 from tests.conftest import make_trip
 
 

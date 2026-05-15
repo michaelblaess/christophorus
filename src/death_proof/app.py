@@ -9,25 +9,26 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
 
-from fahrtenbuch_app import __version__, __year__
-from fahrtenbuch_app.models.fahrtenbuch import Fahrtenbuch
-from fahrtenbuch_app.models.settings import GlobalConfig
-from fahrtenbuch_app.models.trip import (
+from death_proof import __version__, __year__
+from death_proof.models.fahrtenbuch import Fahrtenbuch
+from death_proof.models.settings import GlobalConfig
+from death_proof.models.trip import (
     Trip,
     set_business_categories,
     set_informational_categories,
 )
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.formatting import format_km
-from fahrtenbuch_app.services.holiday_service import HolidayService
-from fahrtenbuch_app.widgets.blacklist_view import BlacklistView
-from fahrtenbuch_app.widgets.calendar_view import CalendarView
-from fahrtenbuch_app.widgets.config_panel import ConfigPanel
-from fahrtenbuch_app.widgets.documents_view import DocumentsView
-from fahrtenbuch_app.widgets.summary_panel import SummaryPanel
-from fahrtenbuch_app.widgets.trip_table import TripTable
-from fahrtenbuch_app.widgets.worktimes_view import WorktimesView
-from fahrtenbuch_app.widgets.year_view import YearView
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.database import Database
+from death_proof.services.formatting import format_km
+from death_proof.services.holiday_service import HolidayService
+from death_proof.widgets.blacklist_view import BlacklistView
+from death_proof.widgets.calendar_view import CalendarView
+from death_proof.widgets.config_panel import ConfigPanel
+from death_proof.widgets.documents_view import DocumentsView
+from death_proof.widgets.summary_panel import SummaryPanel
+from death_proof.widgets.trip_table import TripTable
+from death_proof.widgets.worktimes_view import WorktimesView
+from death_proof.widgets.year_view import YearView
 
 _MARKUP_RE = re.compile(r"\[/?[^\]]*\]")
 
@@ -141,7 +142,7 @@ class FahrtenbuchApp(App):
 
     def _show_start_screen(self) -> None:
         """Zeigt den Start-Screen zum Oeffnen/Erstellen/Sichern eines Fahrtenbuchs."""
-        from fahrtenbuch_app.screens.start_screen import StartScreen
+        from death_proof.screens.start_screen import StartScreen
 
         current_path: str | None = None
         on_backup = None
@@ -193,8 +194,7 @@ class FahrtenbuchApp(App):
             self._fahrtenbuch = None
 
         try:
-            db_file = path / "fahrtenbuch.db"
-            if db_file.exists():
+            if Database.has_logbook(path):
                 self._fahrtenbuch = Fahrtenbuch.open(path)
                 self._write_log(f"Fahrtenbuch geoeffnet: {path}")
             else:
@@ -412,7 +412,7 @@ class FahrtenbuchApp(App):
         if path is None:
             self.notify("Datei nicht mehr verfuegbar", severity="warning")
             return
-        from fahrtenbuch_app.services.os_utils import open_file_in_system
+        from death_proof.services.os_utils import open_file_in_system
 
         try:
             open_file_in_system(path)
@@ -454,7 +454,7 @@ class FahrtenbuchApp(App):
         self._selected_trip_index = event.index
         self._selected_trip_id = event.trip.id
 
-        from fahrtenbuch_app.screens.trip_screen import TripScreen
+        from death_proof.screens.trip_screen import TripScreen
 
         self.push_screen(
             TripScreen(
@@ -474,7 +474,7 @@ class FahrtenbuchApp(App):
             return
         self._selected_trip_id = event.trip.id
         self._selected_trip_index = -1
-        from fahrtenbuch_app.screens.trip_screen import TripScreen
+        from death_proof.screens.trip_screen import TripScreen
 
         self.push_screen(
             TripScreen(
@@ -488,7 +488,7 @@ class FahrtenbuchApp(App):
         """Oeffnet den TripScreen fuer eine neue Fahrt am angeklickten Tag."""
         if self._fahrtenbuch is None:
             return
-        from fahrtenbuch_app.screens.trip_screen import TripScreen
+        from death_proof.screens.trip_screen import TripScreen
 
         db = self._fahrtenbuch.database
         last_km = db.get_last_km_end(self._year, self._month)
@@ -507,7 +507,7 @@ class FahrtenbuchApp(App):
         """Callback nach dem Bearbeiten einer Fahrt."""
         # Loesch-Anforderung aus dem TripScreen → in den normalen
         # Loesch-Pfad mit Confirm-Alert umlenken.
-        from fahrtenbuch_app.screens.trip_screen import DELETE_REQUESTED
+        from death_proof.screens.trip_screen import DELETE_REQUESTED
 
         if trip is DELETE_REQUESTED:
             self.action_delete_trip()
@@ -543,7 +543,7 @@ class FahrtenbuchApp(App):
         """Oeffnet den Blacklist-Detail-Screen."""
         if self._fahrtenbuch is None:
             return
-        from fahrtenbuch_app.screens.blacklist_detail_screen import BlacklistDetailScreen
+        from death_proof.screens.blacklist_detail_screen import BlacklistDetailScreen
 
         self.push_screen(
             BlacklistDetailScreen(
@@ -586,7 +586,7 @@ class FahrtenbuchApp(App):
             self.notify("Fahrt nicht gefunden", severity="warning")
             return
 
-        from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
+        from death_proof.screens.confirm_screen import ConfirmScreen
 
         # Datum deutsch formatieren
         date_de = trip.date
@@ -789,7 +789,7 @@ class FahrtenbuchApp(App):
         event: "DocumentsView.DocumentOpened",
     ) -> None:
         """Oeffnet den angeklickten Beleg im Standard-Programm."""
-        from fahrtenbuch_app.services.os_utils import open_file_in_system
+        from death_proof.services.os_utils import open_file_in_system
 
         try:
             open_file_in_system(event.path)
@@ -842,7 +842,7 @@ class FahrtenbuchApp(App):
             self._open_new_blacklist_entry()
             return
 
-        from fahrtenbuch_app.screens.trip_screen import TripScreen
+        from death_proof.screens.trip_screen import TripScreen
 
         db = self._fahrtenbuch.database
         last_km = db.get_last_km_end(self._year, self._month)
@@ -862,7 +862,7 @@ class FahrtenbuchApp(App):
         """Oeffnet den Blacklist-Detail-Screen im Neu-Modus."""
         if self._fahrtenbuch is None:
             return
-        from fahrtenbuch_app.screens.blacklist_detail_screen import BlacklistDetailScreen
+        from death_proof.screens.blacklist_detail_screen import BlacklistDetailScreen
 
         # Voreinstellung: aktueller Monat, 1. Tag — hilft beim schnellen Eintragen
         default_iso = f"{self._year}-{self._month:02d}-01"
@@ -904,7 +904,7 @@ class FahrtenbuchApp(App):
         db = self._fahrtenbuch.database
         vehicle = self._fahrtenbuch.vehicle
 
-        from fahrtenbuch_app.services.excel_export import export_trips, month_name_de
+        from death_proof.services.excel_export import export_trips, month_name_de
 
         # Fahrzeug-Info fuer Titel
         if vehicle and vehicle.name and vehicle.plate:
@@ -983,7 +983,7 @@ class FahrtenbuchApp(App):
             self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
             return
 
-        from fahrtenbuch_app.screens.settings_screen import SettingsScreen
+        from death_proof.screens.settings_screen import SettingsScreen
 
         self.push_screen(
             SettingsScreen(self._fahrtenbuch.database),
@@ -1052,7 +1052,7 @@ class FahrtenbuchApp(App):
             self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
             return
 
-        from fahrtenbuch_app.services.plausibility import (
+        from death_proof.services.plausibility import (
             CAT_GHOST_BUSINESS_TRIP,
             SEVERITY_ERROR,
             SEVERITY_WARNING,
@@ -1127,7 +1127,7 @@ class FahrtenbuchApp(App):
             self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
             return
 
-        from fahrtenbuch_app.screens.confirm_screen import ConfirmScreen
+        from death_proof.screens.confirm_screen import ConfirmScreen
 
         message = (
             "Die km-Kette wird nach Datum und Uhrzeit neu aufgebaut.\n\n"
@@ -1179,7 +1179,7 @@ class FahrtenbuchApp(App):
 
     def action_show_info(self) -> None:
         """Zeigt den Info-Dialog."""
-        from fahrtenbuch_app.screens.info_screen import InfoScreen
+        from death_proof.screens.info_screen import InfoScreen
 
         self.push_screen(InfoScreen())
 

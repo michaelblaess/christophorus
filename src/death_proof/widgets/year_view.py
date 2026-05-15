@@ -6,8 +6,8 @@ from textual.containers import Horizontal, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import Static
 
-from fahrtenbuch_app.models.trip import MonthData
-from fahrtenbuch_app.services.formatting import format_km
+from death_proof.models.trip import MonthData
+from death_proof.services.formatting import format_km
 
 _MONTH_NAMES = [
     "Januar",

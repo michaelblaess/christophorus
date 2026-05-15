@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fahrtenbuch"
+name = "death-proof"
 version = "1.1.0"
-description = "Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher"
+description = "Death Proof — Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher"
 requires-python = ">=3.12"
 dependencies = [
     "textual>=0.40",
@@ -27,13 +27,13 @@ dev = [
 ]
 
 [project.scripts]
-fahrtenbuch = "fahrtenbuch_app.__main__:main"
+death-proof = "death_proof.__main__:main"
 
 [tool.poe.tasks]
-run = { cmd = "python -m fahrtenbuch_app", help = "Startet fahrtenbuch" }
+run = { cmd = "python -m death_proof", help = "Startet Death Proof" }
 test = { cmd = "pytest", help = "Tests sequentiell (schnell bei Unit-Tests)" }
 test-parallel = { cmd = "pytest -n auto", help = "Tests parallel (fuer langsame Test-Suiten)" }
-cov = { cmd = "pytest --cov=fahrtenbuch_app --cov-report=term-missing", help = "Tests + Coverage" }
+cov = { cmd = "pytest --cov=death_proof --cov-report=term-missing", help = "Tests + Coverage" }
 typecheck = { cmd = "mypy src", help = "mypy strict ueber src/" }
 lint = { cmd = "ruff check .", help = "Ruff Linting" }
 fmt = { cmd = "ruff format .", help = "Ruff Formatting" }

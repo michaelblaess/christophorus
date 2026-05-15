@@ -4,8 +4,8 @@ from rich.text import Text
 from textual.app import RenderResult
 from textual.widget import Widget
 
-from fahrtenbuch_app.models.trip import MonthData
-from fahrtenbuch_app.services.formatting import format_km
+from death_proof.models.trip import MonthData
+from death_proof.services.formatting import format_km
 
 
 class SummaryPanel(Widget):

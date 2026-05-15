@@ -17,14 +17,14 @@ from textual.widgets import (
     TextArea,
 )
 
-from fahrtenbuch_app.models.settings import AddressEntry
-from fahrtenbuch_app.models.trip import (
+from death_proof.models.settings import AddressEntry
+from death_proof.models.trip import (
     Trip,
     get_business_categories,
     get_informational_categories,
 )
-from fahrtenbuch_app.services.database import Database
-from fahrtenbuch_app.services.formatting import format_km, parse_km
+from death_proof.services.database import Database
+from death_proof.services.formatting import format_km, parse_km
 
 
 def _iso_to_de(iso: str) -> str:
@@ -838,7 +838,7 @@ class TripScreen(ModalScreen[Trip | None]):
 
     def _open_date_picker(self) -> None:
         """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
-        from fahrtenbuch_app.screens.date_picker_screen import DatePickerScreen
+        from death_proof.screens.date_picker_screen import DatePickerScreen
 
         current_de = self.query_one("#input-date", Input).value.strip()
         current_iso = _de_to_iso(current_de) if current_de else self._default_date
@@ -854,7 +854,7 @@ class TripScreen(ModalScreen[Trip | None]):
 
     def _open_file_picker(self) -> None:
         """Oeffnet den File-Picker-Screen."""
-        from fahrtenbuch_app.screens.file_picker_screen import FilePickerScreen
+        from death_proof.screens.file_picker_screen import FilePickerScreen
 
         start = self._database.path
         self.app.push_screen(
@@ -886,7 +886,7 @@ class TripScreen(ModalScreen[Trip | None]):
             if not file_path.is_absolute():
                 file_path = Path(self._database.path) / file_path
             try:
-                from fahrtenbuch_app.services.os_utils import open_file_in_system
+                from death_proof.services.os_utils import open_file_in_system
 
                 open_file_in_system(file_path)
             except FileNotFoundError:

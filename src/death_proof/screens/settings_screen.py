@@ -15,10 +15,10 @@ from textual.widgets import (
     TabPane,
 )
 
-from fahrtenbuch_app.models.settings import AddressEntry
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.database import Database
-from fahrtenbuch_app.services.formatting import format_km, parse_km
+from death_proof.models.settings import AddressEntry
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.database import Database
+from death_proof.services.formatting import format_km, parse_km
 
 
 def _iso_to_de(iso: str) -> str:

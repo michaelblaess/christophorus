@@ -10,8 +10,8 @@ from textual.events import Click
 from textual.message import Message
 from textual.widget import Widget
 
-from fahrtenbuch_app.models.trip import MonthData, Trip, TripDay
-from fahrtenbuch_app.services.formatting import format_km
+from death_proof.models.trip import MonthData, Trip, TripDay
+from death_proof.services.formatting import format_km
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 

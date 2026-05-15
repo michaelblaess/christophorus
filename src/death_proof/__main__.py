@@ -6,8 +6,8 @@ import argparse
 def main() -> None:
     """Startet die Fahrtenbuch TUI."""
     parser = argparse.ArgumentParser(
-        prog="fahrtenbuch",
-        description="Fahrtenbuch TUI — Finanzamt-konforme Fahrtenbuecher",
+        prog="death-proof",
+        description="Death Proof — Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher",
     )
     parser.add_argument(
         "--year",
@@ -18,12 +18,12 @@ def main() -> None:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__import__('fahrtenbuch_app').__version__}",
+        version=f"%(prog)s {__import__('death_proof').__version__}",
     )
 
     args = parser.parse_args()
 
-    from fahrtenbuch_app.app import FahrtenbuchApp
+    from death_proof.app import FahrtenbuchApp
 
     app = FahrtenbuchApp(year_override=args.year if args.year > 0 else None)
     app.run()

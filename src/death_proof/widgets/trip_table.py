@@ -8,8 +8,8 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable
 
-from fahrtenbuch_app.models.trip import MonthData, Trip
-from fahrtenbuch_app.services.formatting import format_km
+from death_proof.models.trip import MonthData, Trip
+from death_proof.services.formatting import format_km
 
 _WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 

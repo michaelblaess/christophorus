@@ -10,7 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static
 
-from fahrtenbuch_app.services.database import Database
+from death_proof.services.database import Database
 
 
 def _iso_to_de(iso: str) -> str:
@@ -263,7 +263,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
 
     def _open_date_picker(self) -> None:
         """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
-        from fahrtenbuch_app.screens.date_picker_screen import DatePickerScreen
+        from death_proof.screens.date_picker_screen import DatePickerScreen
 
         current_de = self.query_one("#input-date", Input).value.strip()
         current_iso = _de_to_iso(current_de) if current_de else self._date_str
@@ -285,7 +285,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
                 severity="warning",
             )
             return
-        from fahrtenbuch_app.screens.file_picker_screen import FilePickerScreen
+        from death_proof.screens.file_picker_screen import FilePickerScreen
 
         self.app.push_screen(
             FilePickerScreen(start_path=self._database.path),

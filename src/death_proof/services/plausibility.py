@@ -12,12 +12,12 @@ sowohl testbar als auch gefahrlos wiederholt aufrufbar.
 from dataclasses import dataclass, field
 from datetime import date
 
-from fahrtenbuch_app.models.trip import (
+from death_proof.models.trip import (
     Trip,
     get_business_categories,
     get_informational_categories,
 )
-from fahrtenbuch_app.services.database import Database
+from death_proof.services.database import Database
 
 __all__ = [
     "PlausibilityIssue",

@@ -1,4 +1,4 @@
-"""Tests fuer fahrtenbuch_app.services.plausibility.
+"""Tests fuer death_proof.services.plausibility.
 
 Die Plausibilitaets-Checks werden sowohl von dieser Test-Suite als auch
 spaeter vom 'p'-Button in der UI verwendet — beide nutzen denselben Code,
@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from fahrtenbuch_app.models.trip import Trip
-from fahrtenbuch_app.models.vehicle import Vehicle
-from fahrtenbuch_app.services.database import Database
-from fahrtenbuch_app.services.plausibility import (
+from death_proof.models.trip import Trip
+from death_proof.models.vehicle import Vehicle
+from death_proof.services.database import Database
+from death_proof.services.plausibility import (
     BUSINESS_QUOTA_MIN,
     CAT_BLACKLIST_BUSINESS,
     CAT_BUSINESS_QUOTA_LOW,
@@ -927,7 +927,7 @@ class TestCheckFuelRangeExceeded:
 class TestCheckFuelConsumptionPartialFills:
     def test_partial_fill_counted_in_consumption(self, database: Database) -> None:
         """Teilbetankungen zaehlen zum Gesamtverbrauch zwischen zwei Volltanks."""
-        from fahrtenbuch_app.services.plausibility import (
+        from death_proof.services.plausibility import (
             CAT_FUEL_CONSUMPTION,
             check_fuel_consumption_range,
         )
@@ -942,7 +942,7 @@ class TestCheckFuelConsumptionPartialFills:
 
     def test_partial_fill_ignored_would_falsely_warn(self, database: Database) -> None:
         """Ohne Fix wuerde der Check hier faelschlich warnen."""
-        from fahrtenbuch_app.services.plausibility import (
+        from death_proof.services.plausibility import (
             check_fuel_consumption_range,
         )
 

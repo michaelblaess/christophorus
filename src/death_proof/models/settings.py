@@ -57,7 +57,7 @@ class AddressEntry:
 
 @dataclass
 class GlobalConfig:
-    """Globale Konfiguration — wird als JSON in ~/.fahrtenbuch/config.json gespeichert.
+    """Globale Konfiguration — wird als JSON in ~/.death-proof/config.json gespeichert.
 
     Enthaelt nur anwendungsweite Einstellungen, keine Fahrtenbuch-spezifischen Daten.
     """
@@ -68,8 +68,12 @@ class GlobalConfig:
     log_visible: bool = True
     last_base_dir: str = ""
 
-    CONFIG_DIR: Path = Path.home() / ".fahrtenbuch"
+    CONFIG_DIR: Path = Path.home() / ".death-proof"
     CONFIG_FILE: Path = CONFIG_DIR / "config.json"
+
+    # Alter Settings-Ordner vor der Umbenennung auf "Death Proof". Wird beim
+    # Laden transparent auf CONFIG_DIR migriert (siehe _migrate_legacy_dir).
+    LEGACY_CONFIG_DIR: Path = Path.home() / ".fahrtenbuch"
 
     MAX_RECENT: int = 10
 
@@ -95,12 +99,28 @@ class GlobalConfig:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     @staticmethod
+    def _migrate_legacy_dir() -> None:
+        """Benennt das alte ~/.fahrtenbuch Verzeichnis einmalig auf ~/.death-proof um.
+
+        Migriert nur, wenn der neue Ordner noch nicht existiert. Schlaegt die
+        Umbenennung fehl (z.B. Rechte), wird der Fehler verschluckt — die App
+        startet dann mit Default-Settings.
+        """
+        legacy = Path.home() / ".fahrtenbuch"
+        new = Path.home() / ".death-proof"
+        if legacy.exists() and not new.exists():
+            with contextlib.suppress(Exception):
+                legacy.rename(new)
+
+    @staticmethod
     def load() -> "GlobalConfig":
         """Laedt die globale Konfiguration aus JSON oder erstellt Default.
 
-        Migriert dabei alte Theme-Slugs aus textual-themes < 0.5 auf
-        ihre aktuellen Namen und persistiert die Migration.
+        Migriert dabei den alten Settings-Ordner (~/.fahrtenbuch) sowie alte
+        Theme-Slugs aus textual-themes < 0.5 auf ihre aktuellen Namen und
+        persistiert die Migration.
         """
+        GlobalConfig._migrate_legacy_dir()
         config = GlobalConfig()
         if not config.CONFIG_FILE.exists():
             return config

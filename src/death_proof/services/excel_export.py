@@ -7,7 +7,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.worksheet import Worksheet
 
-from fahrtenbuch_app.models.trip import Trip, get_informational_categories
+from death_proof.models.trip import Trip, get_informational_categories
 
 # Layout orientiert am Vorlage-Fahrtenbuch
 _COLUMN_WIDTHS = {
