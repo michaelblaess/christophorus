@@ -2,6 +2,10 @@
 
 import argparse
 
+from textual_widgets import reset_terminal_title, set_terminal_title
+
+from death_proof import __version__
+
 
 def main() -> None:
     """Startet die Fahrtenbuch TUI."""
@@ -18,15 +22,20 @@ def main() -> None:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {__import__('death_proof').__version__}",
+        version=f"%(prog)s {__version__}",
     )
 
     args = parser.parse_args()
 
     from death_proof.app import FahrtenbuchApp
 
-    app = FahrtenbuchApp(year_override=args.year if args.year > 0 else None)
-    app.run()
+    # Terminal-Tab-Titel setzen - Textual macht das nicht selbst.
+    set_terminal_title(f"Death Proof v{__version__}")
+    try:
+        app = FahrtenbuchApp(year_override=args.year if args.year > 0 else None)
+        app.run()
+    finally:
+        reset_terminal_title()
 
 
 if __name__ == "__main__":

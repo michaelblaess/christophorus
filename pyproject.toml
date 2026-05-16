@@ -13,6 +13,7 @@ dependencies = [
     "openpyxl>=3.1",
     "holidays>=0.40",
     "textual-themes @ git+https://github.com/michaelblaess/textual-themes.git",
+    "textual-widgets @ git+https://github.com/michaelblaess/textual-widgets.git",
 ]
 
 [project.optional-dependencies]
