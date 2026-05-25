@@ -17,6 +17,7 @@ from textual.widgets import (
     TextArea,
 )
 
+from death_proof.i18n import t
 from death_proof.models.settings import AddressEntry
 from death_proof.models.trip import (
     Trip,
@@ -155,8 +156,8 @@ class TripScreen(ModalScreen[Trip | None]):
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Abbrechen"),
-        Binding("ctrl+s", "save", "Speichern"),
+        Binding("escape", "cancel", "cancel"),
+        Binding("ctrl+s", "save", "save"),
     ]
 
     def __init__(
@@ -189,17 +190,17 @@ class TripScreen(ModalScreen[Trip | None]):
     def compose(self) -> ComposeResult:
         """Erstellt das Formular."""
         trip = self._trip or Trip()
-        title = "Fahrt bearbeiten" if self._is_edit else "Neue Fahrt"
+        title = t("trip.title_edit") if self._is_edit else t("trip.title_new")
 
         self._load_addresses()
         dest_options = self._build_destination_options()
         category_options = self._database.get_category_options()
         if not category_options:
             category_options = [
-                ("Geschaeftlich", "business"),
-                ("Privat", "private"),
-                ("Tanken", "fuel"),
-                ("Service (TUeV, Reifen, ...)", "service"),
+                (t("trip.cat.business"), "business"),
+                (t("trip.cat.private"), "private"),
+                (t("trip.cat.fuel"), "fuel"),
+                (t("trip.cat.service"), "service"),
             ]
         # Lookup code → display_name fuer spaeteren Abgleich beim Kategoriewechsel
         self._category_labels = {code: label for label, code in category_options}
@@ -228,32 +229,32 @@ class TripScreen(ModalScreen[Trip | None]):
             yield Static(title, id="title")
 
             with Horizontal(classes="form-row"):
-                yield Label("Datum:")
+                yield Label(t("trip.label.date"))
                 yield Input(
                     value=default_date_de,
-                    placeholder="TT.MM.JJJJ",
+                    placeholder=t("trip.placeholder.date_de"),
                     id="input-date",
                 )
                 yield Button("...", id="btn-date-picker")
 
             with Horizontal(classes="form-row"):
-                yield Label("Fahrzeit von:")
+                yield Label(t("trip.label.time_from"))
                 yield Input(
                     value=trip.time_from,
-                    placeholder="08:00",
+                    placeholder=t("trip.placeholder.time_from"),
                     id="input-time-from",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Fahrzeit bis:")
+                yield Label(t("trip.label.time_to"))
                 yield Input(
                     value=trip.time_to,
-                    placeholder="11:00",
+                    placeholder=t("trip.placeholder.time_to"),
                     id="input-time-to",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Kategorie:")
+                yield Label(t("trip.label.category"))
                 yield Select(
                     options=category_options,
                     value=trip.category if self._is_edit else "business",
@@ -261,84 +262,84 @@ class TripScreen(ModalScreen[Trip | None]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Ziel (Auswahl):")
+                yield Label(t("trip.label.destination_select"))
                 select = Select[str](
-                    options=dest_options if dest_options else [("(keine Adressen)", "__none__")],
-                    prompt="Ziel auswaehlen...",
+                    options=dest_options if dest_options else [(t("trip.dest.no_addresses"), "__none__")],
+                    prompt=t("trip.dest.select"),
                     id="select-destination",
                     allow_blank=True,
                 )
                 yield select
 
             with Horizontal(classes="form-row"):
-                yield Label("Ziel (Adresse):")
+                yield Label(t("trip.label.destination_addr"))
                 yield TextArea(
                     trip.destination,
                     id="input-destination",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Strecke:")
+                yield Label(t("trip.label.route"))
                 yield Select[str](
                     options=[
-                        ("Einfach (nur Hinfahrt)", "oneway"),
-                        ("Hin- und Rueckfahrt", "roundtrip"),
+                        (t("trip.route.oneway"), "oneway"),
+                        (t("trip.route.roundtrip"), "roundtrip"),
                     ],
                     value="roundtrip" if (self._is_edit and trip.round_trip) else "oneway",
                     id="select-round-trip",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Reisezweck:")
+                yield Label(t("trip.label.purpose"))
                 yield Input(
                     value=trip.purpose,
-                    placeholder="z.B. Abstimmung Projekt",
+                    placeholder=t("trip.placeholder.purpose"),
                     id="input-purpose",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("km Anfang:")
+                yield Label(t("trip.label.km_start"))
                 yield Input(
                     value=format_km(default_km_start) if default_km_start > 0 else "",
-                    placeholder="Kilometerstand",
+                    placeholder=t("trip.placeholder.km"),
                     id="input-km-start",
                     disabled=True,
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("km Ende:")
+                yield Label(t("trip.label.km_end"))
                 yield Input(
                     value=format_km(trip.km_end) if self._is_edit and trip.km_end > 0 else "",
-                    placeholder="Kilometerstand",
+                    placeholder=t("trip.placeholder.km"),
                     id="input-km-end",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("km geschaeftl.:")
+                yield Label(t("trip.label.km_business"))
                 yield Input(
                     value=format_km(trip.km_business) if self._is_edit and trip.km_business > 0 else "",
-                    placeholder="0",
+                    placeholder=t("trip.placeholder.km_split"),
                     id="input-km-business",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("km privat:")
+                yield Label(t("trip.label.km_private"))
                 yield Input(
                     value=format_km(trip.km_private) if self._is_edit and trip.km_private > 0 else "",
-                    placeholder="0",
+                    placeholder=t("trip.placeholder.km_split"),
                     id="input-km-private",
                 )
 
             with Horizontal(classes="form-row", id="row-fuel-liters"):
-                yield Label("Getankt (Liter):")
+                yield Label(t("trip.label.fuel_liters"))
                 yield Input(
                     value=_format_liters(trip.fuel_liters) if self._is_edit else "",
-                    placeholder="z.B. 46,5",
+                    placeholder=t("trip.placeholder.fuel"),
                     id="input-fuel-liters",
                 )
 
             with Horizontal(classes="form-row", id="row-fuel-full-tank"):
-                yield Label("Volltanken:")
+                yield Label(t("trip.label.full_tank"))
                 yield Checkbox(
                     value=trip.fuel_full_tank if self._is_edit else True,
                     id="check-fuel-full-tank",
@@ -353,21 +354,21 @@ class TripScreen(ModalScreen[Trip | None]):
 
             # Belege-Sektion (nur im Bearbeitungsmodus)
             if self._is_edit and self._trip is not None:
-                yield Static("Belege", id="docs-title")
+                yield Static(t("trip.docs_title"), id="docs-title")
                 yield Vertical(id="docs-list")
                 with Horizontal(classes="form-row"):
                     yield Label("")
                     yield Button(
-                        "+ Beleg hinzufuegen",
+                        t("trip.btn_add_doc"),
                         variant="success",
                         id="btn-add-doc",
                     )
 
             with Horizontal(classes="button-row"):
-                yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
-                yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
+                yield Button(t("trip.btn_save"), variant="primary", id="btn-save")
+                yield Button(t("trip.btn_cancel"), variant="default", id="btn-cancel")
                 if self._is_edit and self._trip is not None and self._trip.id > 0:
-                    yield Button("Loeschen", variant="error", id="btn-delete")
+                    yield Button(t("trip.btn_delete"), variant="error", id="btn-delete")
 
     def _format_audit_text(self, trip_id: int) -> str:
         """Formatiert die Audit-Informationen (created/changed) fuer die
@@ -391,8 +392,8 @@ class TripScreen(ModalScreen[Trip | None]):
         def fmt_who(user: str) -> str:
             return user if user else "\u2014"
 
-        created = f"Erstellt: {fmt_when(info['created_at'])} von {fmt_who(info['created_by'])}"
-        changed = f"Geaendert: {fmt_when(info['changed_at'])} von {fmt_who(info['changed_by'])}"
+        created = t("trip.audit_created", when=fmt_when(info["created_at"]), who=fmt_who(info["created_by"]))
+        changed = t("trip.audit_changed", when=fmt_when(info["changed_at"]), who=fmt_who(info["changed_by"]))
         return f"{created}\n{changed}"
 
     def _load_addresses(self) -> None:
@@ -497,7 +498,8 @@ class TripScreen(ModalScreen[Trip | None]):
             home_address = self._database.get_setting("home_address", "").strip()
             self._selected_entry_km = 0.0
             dest_area = self.query_one("#input-destination", TextArea)
-            dest_area.load_text(f"Zuhause\n{home_address}" if home_address else "Zuhause")
+            home_only = t("trip.dest.home_only")
+            dest_area.load_text(f"{home_only}\n{home_address}" if home_address else home_only)
             return
 
         entry = self._find_address_entry(key)
@@ -516,21 +518,21 @@ class TripScreen(ModalScreen[Trip | None]):
             category_select.value = "business"
             purpose_input = self.query_one("#input-purpose", Input)
             if not purpose_input.value:
-                purpose_input.value = "Abstimmung Projekt"
+                purpose_input.value = t("trip.purpose.customer_default")
         elif entry.category == "gas_station":
             category_select.value = "fuel"
         elif entry.category == "steuerberaterin":
             category_select.value = "business"
             purpose_input = self.query_one("#input-purpose", Input)
             if not purpose_input.value:
-                purpose_input.value = "Steuerberaterin"
+                purpose_input.value = t("trip.purpose.tax_advisor_default")
         elif entry.category == "shopping":
             category_select.value = "private"
         elif entry.category == "restaurant":
             category_select.value = "business"
             purpose_input = self.query_one("#input-purpose", Input)
             if not purpose_input.value:
-                purpose_input.value = "Geschaeftsessen"
+                purpose_input.value = t("trip.purpose.restaurant_default")
 
         self._recalculate_km()
 
@@ -736,25 +738,25 @@ class TripScreen(ModalScreen[Trip | None]):
         options: list[tuple[str, str]] = []
 
         category_labels = {
-            "customer": "Kunde",
-            "gas_station": "Tankstelle",
-            "shopping": "Einkaufen",
-            "steuerberaterin": "Steuerberaterin",
-            "restaurant": "Restaurant",
-            "other": "Sonstige",
+            "customer": t("trip.cat_addr.customer"),
+            "gas_station": t("trip.cat_addr.gas_station"),
+            "shopping": t("trip.cat_addr.shopping"),
+            "steuerberaterin": t("trip.cat_addr.tax_advisor"),
+            "restaurant": t("trip.cat_addr.restaurant"),
+            "other": t("trip.cat_addr.other"),
         }
 
         for addr in self._addresses:
             cat_label = category_labels.get(addr.category, addr.category)
-            label = f"{cat_label}: {addr.name} ({addr.km:.0f} km)"
+            label = t("trip.cat_addr.option", category=cat_label, name=addr.name, km=addr.km)
             options.append((label, f"addr_{addr.id}"))
 
         options.sort(key=lambda o: o[0].casefold())
-        options.insert(0, ("(leer)", "__clear__"))
+        options.insert(0, (t("trip.dest.empty"), "__clear__"))
 
         home_address = self._database.get_setting("home_address", "").strip()
         if home_address:
-            options.insert(1, (f"Zuhause: {home_address}", "__home__"))
+            options.insert(1, (t("trip.dest.home_label", address=home_address), "__home__"))
 
         return options
 
@@ -890,9 +892,9 @@ class TripScreen(ModalScreen[Trip | None]):
 
                 open_file_in_system(file_path)
             except FileNotFoundError:
-                self.notify(f"Datei nicht gefunden: {file_path}", severity="error")
+                self.notify(t("notify.file_not_found", path=file_path), severity="error")
             except Exception as exc:
-                self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
+                self.notify(t("notify.open_file_failed", error=exc), severity="error")
             return
 
     def action_delete_doc(self, doc_id: int) -> None:
@@ -904,7 +906,7 @@ class TripScreen(ModalScreen[Trip | None]):
         """Speichert die Fahrt."""
         trip_date_input = self.query_one("#input-date", Input).value.strip()
         if not trip_date_input:
-            self.notify("Datum ist erforderlich", severity="error")
+            self.notify(t("trip.notify.date_required"), severity="error")
             return
         trip_date = _de_to_iso(trip_date_input)
 

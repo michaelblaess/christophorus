@@ -6,6 +6,24 @@ ConfigPanel {
     margin-bottom: 0;
 }
 
+/* InfoHeader-Overrides fuer ConfigPanel: bei columns=1 muss die
+   navigable Zelle (Zeitraum) eng am Wert kleben — sonst reisst die
+   Library die Pfeile ueber die volle Panel-Breite. App-level CSS
+   gewinnt gegen DEFAULT_CSS der textual_widgets-Library. */
+ConfigPanel .info-cell {
+    width: auto;
+}
+ConfigPanel .info-value {
+    width: auto;
+}
+ConfigPanel .info-nav {
+    width: auto;
+}
+ConfigPanel .info-nav-value {
+    width: auto;
+    padding: 0 1;
+}
+
 #view-tabs {
     height: 3;
 }
@@ -39,7 +57,7 @@ BlacklistView {
 }
 
 SummaryPanel {
-    height: 3;
+    height: 1;
     margin-top: 0;
 }
 
@@ -47,11 +65,18 @@ SummaryPanel.hidden {
     display: none;
 }
 
+#log-splitter {
+    height: 1;
+}
+
+#log-splitter.hidden {
+    display: none;
+}
+
 #log-panel {
     height: 10;
     min-height: 3;
-    border-top: solid $accent;
-    display: block;
+    max-height: 40;
 }
 
 #log-panel.hidden {

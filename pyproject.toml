@@ -43,6 +43,9 @@ fix = { cmd = "ruff check --fix .", help = "Ruff Auto-Fix" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+death_proof = ["locale/*.json"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

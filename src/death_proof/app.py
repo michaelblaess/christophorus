@@ -1,15 +1,22 @@
 """Fahrtenbuch TUI — Hauptanwendung."""
 
 import contextlib
-import re
-from datetime import date, datetime
+import dataclasses
+from datetime import date
 from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Footer, Header, RichLog, Tab, Tabs
+from textual.widgets import ContentSwitcher, Footer, Header, Tab, Tabs
+from textual_widgets import (
+    CrashGuard,
+    HorizontalSplitter,
+    LogPanel,
+    LogRouter,
+)
 
 from death_proof import __version__, __year__
+from death_proof.i18n import current_language, month_name, t
 from death_proof.models.fahrtenbuch import Fahrtenbuch
 from death_proof.models.settings import GlobalConfig
 from death_proof.models.trip import (
@@ -30,44 +37,68 @@ from death_proof.widgets.trip_table import TripTable
 from death_proof.widgets.worktimes_view import WorktimesView
 from death_proof.widgets.year_view import YearView
 
-_MARKUP_RE = re.compile(r"\[/?[^\]]*\]")
 
-
-def _strip_markup(text: str) -> str:
-    """Entfernt Rich/Textual-Markup-Tags fuer Plaintext-Ausgabe."""
-    return _MARKUP_RE.sub("", text)
-
-
-class FahrtenbuchApp(App):
+class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
     """Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher."""
 
     CSS_PATH = "app.tcss"
     TITLE = f"Death Proof v{__version__} ({__year__})"
 
+    # Class-level BINDINGS koennen kein t() — Strings sind hier noch nicht
+    # geladen. Wir setzen die Default-Labels auf die internen Action-Namen
+    # und uebersetzen + tooltippen in on_mount per dataclasses.replace.
     BINDINGS = [
-        Binding("q,Q", "quit", "Beenden", key_display="q"),
-        Binding("n,N", "new_trip", "Neue Fahrt", key_display="n"),
-        Binding("d,D", "delete_trip", "Loeschen", key_display="d"),
-        Binding("e,E", "export_excel", "Excel", key_display="e"),
-        Binding("s,S", "show_settings", "Settings", key_display="s"),
-        Binding("v,V", "open_fahrtenbuch", "Verwalten", key_display="v"),
-        Binding("b,B", "toggle_blacklist", "Blacklist", key_display="b"),
-        Binding("comma", "prev_month", "Monat", key_display="<"),
-        Binding("full_stop", "next_month", "Monat", key_display=">"),
-        Binding("f5", "refresh_view", "Aktualisieren"),
-        Binding("p,P", "check_plausibility", "Plausibilitaet", key_display="p"),
-        Binding("r,R", "rebuild_km", "km reparieren", key_display="r"),
-        Binding("l,L", "toggle_log", "Log", key_display="l"),
-        Binding("plus", "log_bigger", "Log +", key_display="+"),
-        Binding("minus", "log_smaller", "Log -", key_display="-"),
-        Binding("c,C", "copy_log", "Log kopieren", key_display="c"),
-        Binding("ctrl+l", "clear_log", "Log leeren"),
-        Binding("i,I", "show_info", "Info", key_display="i"),
+        Binding("q,Q", "quit", "quit", key_display="q"),
+        Binding("n,N", "new_trip", "new_trip", key_display="n"),
+        Binding("delete", "delete_trip", "delete", key_display="DEL"),
+        Binding("e,E", "export_excel", "export_excel", key_display="e"),
+        Binding("s,S", "show_settings", "settings", key_display="s"),
+        Binding("v,V", "open_fahrtenbuch", "manage", key_display="v"),
+        Binding("b,B", "toggle_blacklist", "blacklist", key_display="b"),
+        # Monatsnavigation: weiter per "," / "." bedienbar, aber NICHT im
+        # Footer anzeigen — die InfoHeader-Pfeile zeigen die Funktion schon.
+        Binding("comma", "prev_month", "month_prev", show=False),
+        Binding("full_stop", "next_month", "month_next", show=False),
+        Binding("f5", "refresh_view", "refresh"),
+        Binding("p,P", "check_plausibility", "plausibility", key_display="p"),
+        Binding("r,R", "rebuild_km", "rebuild_km", key_display="r"),
+        Binding("l,L", "toggle_log", "log_toggle", key_display="l"),
+        Binding("plus", "log_bigger", "log_bigger", show=False),
+        Binding("minus", "log_smaller", "log_smaller", show=False),
+        Binding("c,C", "copy_log", "log_copy", show=False),
+        Binding("ctrl+l", "clear_log", "log_clear", show=False),
+        Binding("t,T", "cycle_theme", "theme", key_display="t"),
+        Binding("i,I", "show_info", "info", key_display="i"),
     ]
+
+    # Mapping action -> i18n-Key (sowohl fuer description als auch tooltip).
+    _BINDING_I18N: dict[str, str] = {
+        "quit": "quit",
+        "new_trip": "new_trip",
+        "delete_trip": "delete",
+        "export_excel": "export_excel",
+        "show_settings": "settings",
+        "open_fahrtenbuch": "manage",
+        "toggle_blacklist": "blacklist",
+        "prev_month": "month_prev",
+        "next_month": "month_next",
+        "refresh_view": "refresh",
+        "check_plausibility": "plausibility",
+        "rebuild_km": "rebuild_km",
+        "toggle_log": "log_toggle",
+        "log_bigger": "log_bigger",
+        "log_smaller": "log_smaller",
+        "copy_log": "log_copy",
+        "clear_log": "log_clear",
+        "cycle_theme": "theme",
+        "show_info": "info",
+    }
 
     def __init__(self, year_override: int | None = None, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._config = GlobalConfig.load()
+        # CrashGuard liest dieses Attribut fuer den Fehler-Dialog
+        self.crash_guard_lang = current_language()
 
         try:
             from textual_themes import register_all
@@ -86,7 +117,6 @@ class FahrtenbuchApp(App):
         self._selected_trip_index: int = -1
         self._selected_trip_id: int = 0
         self._holiday_service = HolidayService("BB")  # Brandenburg
-        self._log_lines: list[str] = []
         self._log_file_map: dict[int, Path] = {}
         self._log_file_counter: int = 0
         # Plausi-Zustand: trip_ids mit Problemen + Monats-Stats fuer Markierung
@@ -105,13 +135,13 @@ class FahrtenbuchApp(App):
             id="config-panel",
         )
         yield Tabs(
-            Tab("Liste (Monat)", id="tab-list"),
-            Tab("Liste (Jahr)", id="tab-list-year"),
-            Tab("Kalender", id="tab-calendar"),
-            Tab("Jahr", id="tab-year"),
-            Tab("Blacklist", id="tab-blacklist"),
-            Tab("Belege", id="tab-documents"),
-            Tab("Arbeitszeit", id="tab-worktimes"),
+            Tab(t("tab.list_month"), id="tab-list"),
+            Tab(t("tab.list_year"), id="tab-list-year"),
+            Tab(t("tab.calendar"), id="tab-calendar"),
+            Tab(t("tab.year"), id="tab-year"),
+            Tab(t("tab.blacklist"), id="tab-blacklist"),
+            Tab(t("tab.documents"), id="tab-documents"),
+            Tab(t("tab.worktimes"), id="tab-worktimes"),
             id="view-tabs",
         )
         with ContentSwitcher(initial="trip-table", id="view-switcher"):
@@ -123,15 +153,19 @@ class FahrtenbuchApp(App):
             yield DocumentsView(id="documents-view")
             yield WorktimesView(id="worktimes-view")
         yield SummaryPanel(id="summary-panel")
-        yield RichLog(id="log-panel", highlight=True, markup=True)
+        yield HorizontalSplitter(target_id="main", min_size=10, id="log-splitter")
+        yield LogPanel(lang=current_language(), export_name="death-proof", id="log-panel")
         yield Footer()
 
     def on_mount(self) -> None:
         """Wird nach dem Starten aufgerufen."""
+        self._apply_binding_i18n()
+
         if not self._config.log_visible:
             self.query_one("#log-panel").add_class("hidden")
+            self.query_one("#log-splitter").add_class("hidden")
 
-        self._write_log(f"Death Proof v{__version__} gestartet")
+        self._write_log(t("log.app_started", version=__version__))
 
         # Versuche zuletzt geoeffnetes Fahrtenbuch zu oeffnen
         last_path = self._config.last_opened_path
@@ -139,6 +173,25 @@ class FahrtenbuchApp(App):
             self._open_fahrtenbuch(last_path)
         else:
             self._show_start_screen()
+
+    def _apply_binding_i18n(self) -> None:
+        """Setzt description + tooltip aller Bindings zur Laufzeit aus i18n.
+
+        BINDINGS auf Klassenebene koennen kein t() (Strings noch nicht
+        geladen). Hier patchen wir jeden Binding via dataclasses.replace,
+        weil Binding frozen ist.
+        """
+        for key, bindings_list in self._bindings.key_to_bindings.items():
+            for i, binding in enumerate(bindings_list):
+                action = binding.action
+                key_i18n = self._BINDING_I18N.get(action)
+                if key_i18n is None:
+                    continue
+                self._bindings.key_to_bindings[key][i] = dataclasses.replace(
+                    binding,
+                    description=t(f"binding.{key_i18n}"),
+                    tooltip=t(f"tooltip.{key_i18n}"),
+                )
 
     def _show_start_screen(self) -> None:
         """Zeigt den Start-Screen zum Oeffnen/Erstellen/Sichern eines Fahrtenbuchs."""
@@ -164,7 +217,7 @@ class FahrtenbuchApp(App):
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             raise RuntimeError("Kein Fahrtenbuch geoeffnet")
         backup_path = self._fahrtenbuch.database.backup_to_file()
-        self._write_log(f"[green]Datenbank gesichert: {backup_path}[/green]")
+        self._write_log(t("log.backup_done", path=backup_path), level="success")
         return backup_path
 
     def _on_start_screen_closed(self, result: tuple[str, str | None] | None) -> None:
@@ -174,7 +227,7 @@ class FahrtenbuchApp(App):
         """
         if result is None:
             if self._fahrtenbuch is None:
-                self._write_log("[yellow]Kein Fahrtenbuch geoeffnet. Druecke [V] zum Verwalten.[/yellow]")
+                self._write_log(t("log.fahrtenbuch_closed_hint"), level="warning")
             return
         target_path, clone_source = result
         self._open_fahrtenbuch(target_path, clone_source=clone_source)
@@ -196,22 +249,22 @@ class FahrtenbuchApp(App):
         try:
             if Database.has_logbook(path):
                 self._fahrtenbuch = Fahrtenbuch.open(path)
-                self._write_log(f"Fahrtenbuch geoeffnet: {path}")
+                self._write_log(t("log.fahrtenbuch_opened", path=path))
             else:
                 # Neues Fahrtenbuch anlegen — Fahrzeug wird spaeter ueber Settings konfiguriert
                 self._fahrtenbuch = Fahrtenbuch.create(path, Vehicle())
-                self._write_log(f"[green]Neues Fahrtenbuch erstellt: {path}[/green]")
+                self._write_log(t("log.fahrtenbuch_created", path=path), level="success")
                 if clone_source is not None:
                     try:
                         self._fahrtenbuch.database.clone_settings_from(Path(clone_source))
-                        self._write_log(f"[green]Einstellungen uebernommen aus: {clone_source}[/green]")
+                        self._write_log(t("log.clone_done", source=clone_source), level="success")
                     except Exception as exc:
-                        self._write_log(f"[red]Clone fehlgeschlagen: {exc}[/red]")
-                        self.notify(f"Clone fehlgeschlagen: {exc}", severity="error")
-                self._write_log("[yellow]Druecke [S] um das Fahrzeug zu konfigurieren.[/yellow]")
+                        self._write_log(t("log.clone_failed", error=exc), level="error")
+                        self.notify(t("notify.clone_failed", error=exc), severity="error")
+                self._write_log(t("log.configure_vehicle_hint"), level="warning")
         except Exception as exc:
-            self._write_log(f"[red]Fehler beim Oeffnen: {exc}[/red]")
-            self.notify(f"Fehler: {exc}", severity="error")
+            self._write_log(t("log.open_failed", error=exc), level="error")
+            self.notify(t("notify.error_generic", error=exc), severity="error")
             return
 
         # GlobalConfig aktualisieren
@@ -250,7 +303,7 @@ class FahrtenbuchApp(App):
         config_panel.update_month(self._year, self._month)
 
         if vehicle and vehicle.name:
-            self._write_log(f"Fahrzeug: {vehicle.name} ({vehicle.plate})")
+            self._write_log(t("log.vehicle_info", name=vehicle.name, plate=vehicle.plate))
 
         self._refresh_data()
 
@@ -340,31 +393,48 @@ class FahrtenbuchApp(App):
             holiday_name = holidays_map.get(d, "")
             if holiday_name:
                 self._write_log(
-                    f"[bold red]WARNUNG: Geschaeftliche Fahrt am Feiertag "
-                    f"{d.strftime('%d.%m.%Y')} ({holiday_name}): "
-                    f"{trip.purpose}[/bold red]"
+                    t(
+                        "log.warn_holiday",
+                        date=d.strftime("%d.%m.%Y"),
+                        holiday=holiday_name,
+                        purpose=trip.purpose,
+                    ),
+                    level="error",
                 )
                 warnings += 1
             elif d.weekday() >= 5:
                 self._write_log(
-                    f"[bold red]WARNUNG: Geschaeftliche Fahrt am Wochenende "
-                    f"{d.strftime('%d.%m.%Y')}: {trip.purpose}[/bold red]"
+                    t(
+                        "log.warn_weekend",
+                        date=d.strftime("%d.%m.%Y"),
+                        purpose=trip.purpose,
+                    ),
+                    level="error",
                 )
                 warnings += 1
 
-        self._write_log(
-            f"Daten geladen: {len(month_data.trips)} Fahrten, "
-            f"{format_km(month_data.km_total)} km gesamt"
-            + (f", [bold red]{warnings} Warnungen[/bold red]" if warnings else "")
-        )
+        if warnings:
+            self._write_log(
+                t(
+                    "log.data_loaded_with_warnings",
+                    trips=len(month_data.trips),
+                    km=format_km(month_data.km_total),
+                    warnings=warnings,
+                )
+            )
+        else:
+            self._write_log(
+                t(
+                    "log.data_loaded",
+                    trips=len(month_data.trips),
+                    km=format_km(month_data.km_total),
+                )
+            )
 
-    def _write_log(self, message: str) -> None:
-        """Schreibt eine Nachricht ins Log mit Zeitstempel."""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log = self.query_one("#log-panel", RichLog)
-        log.write(f"[dim]{timestamp}[/dim] {message}")
-        # Plain-Text-Fassung fuer "Log kopieren" mithalten
-        self._log_lines.append(f"{timestamp} {_strip_markup(message)}")
+    def _write_log(self, message: str, level: str = "info") -> None:
+        """Schreibt eine Nachricht ins LogPanel."""
+        with contextlib.suppress(Exception):
+            self.query_one("#log-panel", LogPanel).write_log(message, level=level)
 
     def action_log_bigger(self) -> None:
         """Vergroessert das Log-Fenster um 5 Zeilen (max 40)."""
@@ -379,47 +449,38 @@ class FahrtenbuchApp(App):
     def _apply_log_height(self) -> None:
         """Setzt die aktuelle Log-Hoehe auf das Widget."""
         try:
-            log = self.query_one("#log-panel", RichLog)
+            log = self.query_one("#log-panel", LogPanel)
             log.styles.height = self._log_height
         except Exception:
             pass
 
     def action_copy_log(self) -> None:
         """Kopiert den gesamten Log-Inhalt in die Zwischenablage."""
-        if not self._log_lines:
-            self.notify("Log ist leer", severity="warning")
-            return
-        text = "\n".join(self._log_lines)
-        self.copy_to_clipboard(text)
-        self.notify(
-            f"{len(self._log_lines)} Log-Zeilen kopiert",
-            severity="information",
-        )
+        try:
+            self.query_one("#log-panel", LogPanel).copy_log()
+        except Exception:
+            self.notify(t("notify.log_empty"), severity="warning")
 
     def action_clear_log(self) -> None:
-        """Leert das Log-Fenster und den internen Puffer."""
-        try:
-            log = self.query_one("#log-panel", RichLog)
-            log.clear()
-        except Exception:
-            pass
-        self._log_lines.clear()
-        self._write_log("Log geleert")
+        """Leert das Log-Fenster."""
+        with contextlib.suppress(Exception):
+            self.query_one("#log-panel", LogPanel).clear_log()
+        self._write_log(t("log.cleared"))
 
     def action_open_log_file(self, file_id: int) -> None:
         """Oeffnet eine im Log registrierte Datei im Standard-Programm."""
         path = self._log_file_map.get(file_id)
         if path is None:
-            self.notify("Datei nicht mehr verfuegbar", severity="warning")
+            self.notify(t("notify.file_unavailable"), severity="warning")
             return
         from death_proof.services.os_utils import open_file_in_system
 
         try:
             open_file_in_system(path)
         except FileNotFoundError:
-            self.notify(f"Datei nicht gefunden: {path}", severity="error")
+            self.notify(t("notify.file_not_found", path=path), severity="error")
         except Exception as exc:
-            self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
+            self.notify(t("notify.open_file_failed", error=exc), severity="error")
 
     def _register_log_file(self, path: Path) -> int:
         """Registriert eine Datei fuer klickbare Log-Links und gibt die ID zurueck."""
@@ -438,7 +499,18 @@ class FahrtenbuchApp(App):
 
     def watch_theme(self, theme_name: str) -> None:
         """Speichert das Theme bei Aenderung persistent."""
+        if not hasattr(self, "_config"):
+            return
+        if self._config.theme == theme_name:
+            return
         self._config.theme = theme_name
+        self._config.save()
+
+    def on_log_panel_hidden(self, event: LogPanel.Hidden) -> None:  # noqa: ARG002
+        """LogPanel meldet Hide ueber Kontextmenue — Splitter mit ausblenden."""
+        with contextlib.suppress(Exception):
+            self.query_one("#log-splitter").add_class("hidden")
+        self._config.log_visible = False
         self._config.save()
 
     def on_config_panel_month_changed(self, event: ConfigPanel.MonthChanged) -> None:
@@ -519,14 +591,14 @@ class FahrtenbuchApp(App):
             try:
                 self._fahrtenbuch.database.update_trip(trip.id, trip)
             except ValueError as exc:
-                self._write_log(f"[red]Aktualisierung abgelehnt: {exc}[/red]")
-                self.notify(f"Aktualisierung abgelehnt: {exc}", severity="error")
+                self._write_log(t("log.trip_update_rejected", error=exc), level="error")
+                self.notify(t("notify.update_rejected", error=exc), severity="error")
                 return
             except Exception as exc:
-                self._write_log(f"[red]Fehler beim Aktualisieren: {exc}[/red]")
-                self.notify(f"Fehler: {exc}", severity="error")
+                self._write_log(t("log.trip_update_failed", error=exc), level="error")
+                self.notify(t("notify.update_failed", error=exc), severity="error")
                 return
-        self._write_log(f"[green]Fahrt aktualisiert: {trip.date} — {trip.purpose}[/green]")
+        self._write_log(t("log.trip_updated", date=trip.date, purpose=trip.purpose), level="success")
         self._refresh_data()
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
@@ -563,7 +635,7 @@ class FahrtenbuchApp(App):
         """
         if not changed or self._fahrtenbuch is None:
             return
-        self._write_log("[green]Blacklist aktualisiert[/green]")
+        self._write_log(t("log.blacklist_updated"), level="success")
         self._refresh_data()
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
@@ -576,14 +648,14 @@ class FahrtenbuchApp(App):
         zu verhindern.
         """
         if self._fahrtenbuch is None or self._selected_trip_id <= 0:
-            self.notify("Keine Fahrt ausgewaehlt", severity="warning")
+            self.notify(t("notify.no_trip_selected"), severity="warning")
             return
 
         db = self._fahrtenbuch.database
         # Trip anhand der ID finden (Monat oder Jahr — egal welche Liste aktiv ist)
         trip = db.get_trip_by_id(self._selected_trip_id)
         if trip is None:
-            self.notify("Fahrt nicht gefunden", severity="warning")
+            self.notify(t("notify.trip_not_found"), severity="warning")
             return
 
         from death_proof.screens.confirm_screen import ConfirmScreen
@@ -597,31 +669,35 @@ class FahrtenbuchApp(App):
         except (ValueError, IndexError):
             pass
 
-        purpose = trip.purpose.strip() or "(kein Reisezweck)"
+        purpose = trip.purpose.strip() or t("trip.no_purpose")
         destination = trip.destination.split("\n")[0].strip() if trip.destination else ""
-        trip_label = f"{date_de}\n{purpose}\nZiel: {destination}" if destination else f"{date_de}\n{purpose}"
+        if destination:
+            trip_label = f"{date_de}\n{purpose}\n{t('confirm.destination_prefix')} {destination}"
+        else:
+            trip_label = f"{date_de}\n{purpose}"
 
         documents = db.get_documents(trip_id=trip.id)
         if documents:
             count = len(documents)
-            beleg_word = "Beleg" if count == 1 else "Belege"
-            message = (
-                f"Folgende Fahrt wirklich loeschen?\n\n"
-                f"{trip_label}\n\n"
-                f"[yellow]Die Fahrt hat {count} verknuepfte{'n' if count == 1 else ''} "
-                f"{beleg_word} — Beleg-Eintraege werden mitentfernt, "
-                f"die Dateien auf der Platte bleiben.[/yellow]"
+            beleg_word = t("confirm.beleg_singular") if count == 1 else t("confirm.beleg_plural")
+            linker = t("confirm.beleg_link_n") if count == 1 else t("confirm.beleg_link_")
+            message = t(
+                "confirm.delete_trip_with_docs_msg",
+                label=trip_label,
+                count=count,
+                s=linker,
+                word=beleg_word,
             )
-            title = "Fahrt mit Belegen loeschen?"
+            title = t("confirm.delete_trip_with_docs_title")
         else:
-            message = f"Folgende Fahrt wirklich loeschen?\n\n{trip_label}"
-            title = "Fahrt loeschen?"
+            message = t("confirm.delete_trip_msg", label=trip_label)
+            title = t("confirm.delete_trip_title")
 
         self.push_screen(
             ConfirmScreen(
                 title=title,
                 message=message,
-                confirm_label="Loeschen",
+                confirm_label=t("confirm.confirm_label_delete"),
             ),
             callback=lambda confirmed: self._finalize_delete_trip(trip.id, bool(confirmed)),
         )
@@ -629,7 +705,7 @@ class FahrtenbuchApp(App):
     def _finalize_delete_trip(self, trip_id: int, confirmed: bool) -> None:
         """Callback nach dem Bestaetigungsdialog."""
         if not confirmed:
-            self.notify("Loeschen abgebrochen", severity="information")
+            self.notify(t("notify.delete_cancelled"), severity="information")
             return
         self._do_delete_trip(trip_id)
 
@@ -640,10 +716,10 @@ class FahrtenbuchApp(App):
         db = self._fahrtenbuch.database
         trip = db.get_trip_by_id(trip_id)
         if trip is None:
-            self.notify("Fahrt nicht mehr vorhanden", severity="warning")
+            self.notify(t("notify.trip_not_present"), severity="warning")
             return
         db.delete_trip(trip.id)
-        self._write_log(f"[red]Fahrt geloescht: {trip.date} — {trip.purpose}[/red]")
+        self._write_log(t("log.trip_deleted", date=trip.date, purpose=trip.purpose), level="error")
         self._selected_trip_index = -1
         self._selected_trip_id = 0
         self._refresh_data()
@@ -702,7 +778,7 @@ class FahrtenbuchApp(App):
     def action_toggle_blacklist(self) -> None:
         """Schaltet Blacklist-Markierung in Liste und Kalender ein/aus."""
         if self._fahrtenbuch is None:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         trip_table = self.query_one("#trip-table", TripTable)
@@ -712,10 +788,11 @@ class FahrtenbuchApp(App):
         trip_table_year.toggle_blacklist()
         calendar_view.toggle_blacklist()
 
-        status = "[bold red]EIN[/bold red]" if is_on else "[dim]AUS[/dim]"
-        self._write_log(f"Blacklist-Anzeige: {status}")
+        status_text = t("log.blacklist_on") if is_on else t("log.blacklist_off")
+        status = f"[bold red]{status_text}[/bold red]" if is_on else f"[dim]{status_text}[/dim]"
+        self._write_log(t("log.blacklist_status", status=status))
         self.notify(
-            f"Blacklist {'aktiv' if is_on else 'deaktiviert'}",
+            t("notify.blacklist_active") if is_on else t("notify.blacklist_inactive"),
             severity="information" if is_on else "warning",
         )
 
@@ -794,11 +871,11 @@ class FahrtenbuchApp(App):
         try:
             open_file_in_system(event.path)
         except FileNotFoundError:
-            self.notify(f"Datei nicht gefunden: {event.path}", severity="error")
-            self._write_log(f"[red]Datei nicht gefunden: {event.path}[/red]")
+            self.notify(t("notify.file_not_found", path=event.path), severity="error")
+            self._write_log(t("log.file_not_found", path=event.path), level="error")
         except Exception as exc:
-            self.notify(f"Konnte Datei nicht oeffnen: {exc}", severity="error")
-            self._write_log(f"[red]Fehler beim Oeffnen: {exc}[/red]")
+            self.notify(t("notify.open_file_failed", error=exc), severity="error")
+            self._write_log(t("log.open_file_failed", error=exc), level="error")
 
     def _refresh_worktimes_view(self) -> None:
         """Laedt die Arbeitsstunden in die WorktimesView."""
@@ -818,13 +895,16 @@ class FahrtenbuchApp(App):
             event.hours,
         )
         self._write_log(
-            f"[green]Arbeitszeit gespeichert: {event.month:02d}/{event.year} — {event.hours:.1f} Std[/green]"
+            t("log.worktime_saved", month=event.month, year=event.year, hours=event.hours),
+            level="success",
         )
 
     def action_toggle_log(self) -> None:
         """Blendet das Log-Panel ein/aus."""
         log = self.query_one("#log-panel")
+        splitter = self.query_one("#log-splitter")
         log.toggle_class("hidden")
+        splitter.toggle_class("hidden")
         self._config.log_visible = not log.has_class("hidden")
         self._config.save()
 
@@ -835,7 +915,7 @@ class FahrtenbuchApp(App):
         der Blacklist-Detail-Screen im Neu-Modus geoeffnet.
         """
         if self._fahrtenbuch is None:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         if self._current_view == "tab-blacklist":
@@ -883,14 +963,14 @@ class FahrtenbuchApp(App):
         try:
             self._fahrtenbuch.database.add_trip(trip)
         except ValueError as exc:
-            self._write_log(f"[red]Anlegen abgelehnt: {exc}[/red]")
-            self.notify(f"Anlegen abgelehnt: {exc}", severity="error")
+            self._write_log(t("log.trip_create_rejected", error=exc), level="error")
+            self.notify(t("notify.create_rejected", error=exc), severity="error")
             return
         except Exception as exc:
-            self._write_log(f"[red]Fehler beim Anlegen: {exc}[/red]")
-            self.notify(f"Fehler: {exc}", severity="error")
+            self._write_log(t("log.trip_create_failed", error=exc), level="error")
+            self.notify(t("notify.create_failed", error=exc), severity="error")
             return
-        self._write_log(f"[green]Fahrt angelegt: {trip.date} — {trip.purpose}[/green]")
+        self._write_log(t("log.trip_created", date=trip.date, purpose=trip.purpose), level="success")
         self._refresh_data()
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
@@ -898,13 +978,15 @@ class FahrtenbuchApp(App):
     def action_export_excel(self) -> None:
         """Exportiert die aktuelle Liste (Monat oder Jahr) als Excel-Datei."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         db = self._fahrtenbuch.database
         vehicle = self._fahrtenbuch.vehicle
 
-        from death_proof.services.excel_export import export_trips, month_name_de
+        from datetime import datetime
+
+        from death_proof.services.excel_export import export_trips
 
         # Fahrzeug-Info fuer Titel
         if vehicle and vehicle.name and vehicle.plate:
@@ -940,14 +1022,14 @@ class FahrtenbuchApp(App):
             group_by_month = True
         else:
             trips = db.get_trips_for_month(self._year, self._month)
-            month_label = f"{month_name_de(self._month)} {self._year}"
+            month_label = f"{month_name(self._month, lang='de')} {self._year}"
             subtitle = f"{month_label} — {lease_info}"
             filename = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part} {ts}.xlsx"
             group_by_month = False
 
         if not trips:
-            self.notify("Keine Fahrten zum Exportieren", severity="warning")
-            self._write_log("[yellow]Export abgebrochen: keine Fahrten[/yellow]")
+            self.notify(t("notify.export_no_trips"), severity="warning")
+            self._write_log(t("log.export_cancelled_no_trips"), level="warning")
             return
 
         # Anzeige-Labels der Kategorien fuer informationelle Trip-Zeilen
@@ -964,35 +1046,41 @@ class FahrtenbuchApp(App):
                 category_labels=category_labels,
             )
         except Exception as exc:
-            self._write_log(f"[red]Excel-Export fehlgeschlagen: {exc}[/red]")
-            self.notify(f"Export-Fehler: {exc}", severity="error")
+            self._write_log(t("log.export_failed", error=exc), level="error")
+            self.notify(t("notify.export_error", error=exc), severity="error")
             return
 
-        scope_label = "Jahr" if is_year_export else "Monat"
+        scope_label = t("log.export_scope_year") if is_year_export else t("log.export_scope_month")
         file_id = self._register_log_file(out_path)
+        header = t("log.export_ok", scope=scope_label, count=len(trips))
         self._write_log(
-            f"[green]Excel-Export ({scope_label}) erfolgreich: "
-            f"{len(trips)} Fahrten → "
-            f"[@click=app.open_log_file({file_id})]{out_path.name}[/][/green]"
+            f"{header}[@click=app.open_log_file({file_id})]{out_path.name}[/]",
+            level="success",
         )
-        self.notify(f"Excel-Export gespeichert: {out_path.name}", severity="information")
+        self.notify(t("notify.export_saved", file=out_path.name), severity="information")
 
     def action_show_settings(self) -> None:
         """Oeffnet die Einstellungen."""
         if self._fahrtenbuch is None:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         from death_proof.screens.settings_screen import SettingsScreen
 
         self.push_screen(
-            SettingsScreen(self._fahrtenbuch.database),
+            SettingsScreen(self._fahrtenbuch.database, self._config),
             callback=self._on_settings_closed,
         )
 
-    def _on_settings_closed(self, changed: bool | None) -> None:
-        """Callback nach dem SettingsScreen."""
-        if not changed or self._fahrtenbuch is None:
+    def _on_settings_closed(self, result: dict[str, object] | None) -> None:
+        """Callback nach dem SettingsScreen.
+
+        ``BaseSettingsScreen`` liefert das geaenderte Settings-Dict (oder
+        None bei Abbruch). Wir interessieren uns nur fuer "wurde gespeichert" —
+        Adressen/Kategorien/Fahrzeug schreibt der Screen direkt in die DB.
+        Die Sprache hat der Screen schon in GlobalConfig persistiert.
+        """
+        if result is None or self._fahrtenbuch is None:
             return
 
         # Fahrzeug-Daten und Bundesland aus DB neu laden
@@ -1007,10 +1095,10 @@ class FahrtenbuchApp(App):
         federal_state = db.get_setting("federal_state", "BB")
         self._holiday_service = HolidayService(federal_state)
 
-        self._write_log("[green]Einstellungen gespeichert[/green]")
+        self._write_log(t("log.settings_saved"), level="success")
 
         if vehicle:
-            self._write_log(f"Fahrzeug: {vehicle.name} ({vehicle.plate})")
+            self._write_log(t("log.vehicle_info", name=vehicle.name, plate=vehicle.plate))
 
         config_panel = self.query_one("#config-panel", ConfigPanel)
         config_panel.update_vehicle(vehicle, str(self._fahrtenbuch.path))
@@ -1038,18 +1126,12 @@ class FahrtenbuchApp(App):
             self._refresh_documents_view()
         elif view == "tab-worktimes":
             self._refresh_worktimes_view()
-        self.notify("Ansicht aktualisiert", severity="information")
+        self.notify(t("notify.view_refreshed"), severity="information")
 
     def action_check_plausibility(self) -> None:
-        """Fuehrt die Plausibilitaetspruefung durch.
-
-        Laedt alle Issues aus run_all_checks, schreibt sie ins Log und
-        markiert die betroffenen Trip-IDs in Monats- und Jahreslisten rot.
-        Erneutes Druecken nach Reparatur raeumt die Markierungen wieder ab,
-        falls keine Probleme mehr gefunden werden.
-        """
+        """Fuehrt die Plausibilitaetspruefung durch."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         from death_proof.services.plausibility import (
@@ -1079,21 +1161,24 @@ class FahrtenbuchApp(App):
 
         self._write_log("")
         self._write_log(
-            f"[bold]Plausibilitaetspruefung[/bold]: "
-            f"[red]{report.error_count} Fehler[/red], "
-            f"[yellow]{report.warning_count} Warnungen[/yellow], "
-            f"[dim]{report.info_count} Hinweise[/dim]"
+            t(
+                "log.plausi_header",
+                errors=report.error_count,
+                warnings=report.warning_count,
+                infos=report.info_count,
+            )
         )
         if not report.has_issues:
-            self._write_log("[green]Alle Pruefungen ohne Befund — saubere Daten.[/green]")
-            self.notify("Plausibilitaet: keine Probleme gefunden", severity="information")
+            self._write_log(t("log.plausi_clean"), level="success")
+            self.notify(t("notify.plausi_ok"), severity="information")
         else:
-            # Issues nach Severity, dann nach Datum ausgeben
             severity_order = {SEVERITY_ERROR: 0, SEVERITY_WARNING: 1}
             sorted_issues = sorted(
                 report.issues,
                 key=lambda i: (severity_order.get(i.severity, 9), i.trip_date, i.trip_id or 0),
             )
+            err_label = t("log.plausi_severity_error")
+            warn_label = t("log.plausi_severity_warning")
             for issue in sorted_issues:
                 date_de = ""
                 if issue.trip_date:
@@ -1102,45 +1187,33 @@ class FahrtenbuchApp(App):
                         date_de = f"{parts[2]}.{parts[1]}.{parts[0]}"
                     except IndexError:
                         date_de = issue.trip_date
-                prefix = "[red]FEHLER[/red]" if issue.severity == SEVERITY_ERROR else "[yellow]WARNUNG[/yellow]"
-                id_part = f"Trip #{issue.trip_id}" if issue.trip_id else "Global"
+                prefix = (
+                    f"[red]{err_label}[/red]" if issue.severity == SEVERITY_ERROR else f"[yellow]{warn_label}[/yellow]"
+                )
+                id_part = t("log.plausi_trip", id=issue.trip_id) if issue.trip_id else t("log.plausi_global")
                 self._write_log(f"  {prefix} {date_de} {id_part}: {issue.message}")
             self.notify(
-                f"Plausibilitaet: {report.error_count} Fehler, {report.warning_count} Warnungen",
+                t("notify.plausi_summary", errors=report.error_count, warnings=report.warning_count),
                 severity="warning" if report.error_count == 0 else "error",
             )
 
-        # Views mit neuen Problem-Markierungen neu laden
         self._refresh_data()
         self._refresh_year_view()
         self._refresh_year_trip_table()
 
     def action_rebuild_km(self) -> None:
-        """Baut die km-Kette nach (Datum, Uhrzeit, id) neu auf.
-
-        Die Distanzen (km_end - km_start) der einzelnen Trips bleiben erhalten;
-        es werden nur km_start und km_end so zugewiesen, dass die Kette in
-        chronologischer Reihenfolge (inkl. time_from innerhalb eines Tages)
-        lueckenlos ist. Vorher wird per ConfirmScreen abgesichert.
-        """
+        """Baut die km-Kette nach (Datum, Uhrzeit, id) neu auf."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
-            self.notify("Kein Fahrtenbuch geoeffnet", severity="warning")
+            self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
 
         from death_proof.screens.confirm_screen import ConfirmScreen
 
-        message = (
-            "Die km-Kette wird nach Datum und Uhrzeit neu aufgebaut.\n\n"
-            "Die Distanz jeder einzelnen Fahrt bleibt unveraendert — es werden "
-            "nur km_Anfang und km_Ende so zugewiesen, dass die Kette lueckenlos "
-            "in zeitlicher Reihenfolge ist.\n\n"
-            "Diese Aktion kann nicht automatisch rueckgaengig gemacht werden."
-        )
         self.push_screen(
             ConfirmScreen(
-                title="km-Kette neu aufbauen?",
-                message=message,
-                confirm_label="Neu aufbauen",
+                title=t("confirm.rebuild_title"),
+                message=t("confirm.rebuild_msg"),
+                confirm_label=t("confirm.rebuild_label"),
             ),
             callback=lambda confirmed: self._finalize_rebuild_km(bool(confirmed)),
         )
@@ -1148,7 +1221,7 @@ class FahrtenbuchApp(App):
     def _finalize_rebuild_km(self, confirmed: bool) -> None:
         """Callback nach dem Rebuild-Bestaetigungsdialog."""
         if not confirmed:
-            self.notify("km-Rebuild abgebrochen", severity="information")
+            self.notify(t("notify.rebuild_cancelled"), severity="information")
             return
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             return
@@ -1159,18 +1232,19 @@ class FahrtenbuchApp(App):
             # Plausi-Check (check_vehicle_end_limit) separat.
             changed, final_km = db.rebuild_all_km(force=True)
         except Exception as exc:
-            self._write_log(f"[red]Rebuild fehlgeschlagen: {exc}[/red]")
-            self.notify("Rebuild fehlgeschlagen", severity="error")
+            self._write_log(t("log.rebuild_failed", error=exc), level="error")
+            self.notify(t("notify.rebuild_failed"), severity="error")
             return
         vehicle = self._fahrtenbuch.vehicle
         over_limit = vehicle.end_km > 0 and final_km > vehicle.end_km if vehicle else False
-        self._write_log(f"[green]km-Kette neu aufgebaut: {changed} Fahrten, Endstand {final_km} km[/green]")
+        self._write_log(t("log.rebuild_done", changed=changed, km=final_km), level="success")
         if over_limit:
             self._write_log(
-                f"[yellow]Hinweis: Endstand {final_km} km liegt ueber dem Vertragslimit {vehicle.end_km} km[/yellow]"
+                t("log.rebuild_over_limit", km=final_km, limit=vehicle.end_km),
+                level="warning",
             )
         self.notify(
-            f"{changed} Fahrten neu verkettet (Endstand {final_km} km)",
+            t("notify.rebuild_done", changed=changed, km=final_km),
             severity="information",
         )
         self._refresh_data()
@@ -1182,6 +1256,25 @@ class FahrtenbuchApp(App):
         from death_proof.screens.info_screen import InfoScreen
 
         self.push_screen(InfoScreen())
+
+    def action_cycle_theme(self) -> None:
+        """Wechselt zum naechsten Theme (alphabetisch). Persistenz via watch_theme."""
+        names = sorted(self.available_themes.keys())
+        if not names:
+            return
+        try:
+            idx = names.index(self.theme)
+        except ValueError:
+            idx = -1
+        next_theme = names[(idx + 1) % len(names)]
+        self.theme = next_theme
+        try:
+            from textual_themes import THEME_DISPLAY_NAMES
+
+            display = THEME_DISPLAY_NAMES.get(next_theme, next_theme)
+        except ImportError:
+            display = next_theme
+        self.notify(t("notify.theme_changed", name=display))
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:  # type: ignore[override]
         """Blendet Aktionen aus wenn ModalScreen offen oder nicht verfuegbar."""

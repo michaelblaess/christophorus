@@ -10,10 +10,9 @@ from textual.events import Click
 from textual.message import Message
 from textual.widget import Widget
 
+from death_proof.i18n import t, weekday_short
 from death_proof.models.trip import MonthData, Trip, TripDay
 from death_proof.services.formatting import format_km
-
-_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 # Reduziertes Farbschema: gruen fuer geschaeftlich, rot fuer Blacklist /
 # Warnungen, alles andere neutral.
@@ -101,7 +100,7 @@ class DayTile(Widget):
         """Rendert den Inhalt der Tageskachel."""
         text = Text()
         day_num = str(self._date.day)
-        weekday = _WEEKDAYS[self._date.weekday()]
+        weekday = weekday_short(self._date.weekday())
 
         if self._is_outside:
             text.append(f"{day_num} {weekday}", style="dim")
@@ -110,43 +109,54 @@ class DayTile(Widget):
         # Blacklist: rot mit Grund anzeigen
         if self._blacklist_reason:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
-            text.append("GESPERRT\n", style=_STYLE_ERROR)
+            text.append(t("calendar.blocked"), style=_STYLE_ERROR)
+            text.append("\n")
             text.append(self._blacklist_reason, style="red italic")
             if self._trip_day and self._trip_day.has_business:
-                text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
+                text.append(
+                    f"\n{format_km(self._trip_day.km_total)} {t('calendar.km_business_warning')}",
+                    style=_STYLE_ERROR,
+                )
             elif self._trip_day and self._trip_day.trips:
                 text.append(f"\n{format_km(self._trip_day.km_total)} km", style=_STYLE_MUTED)
             return text
 
         is_weekend = self._date.weekday() >= 5
 
-        # Warnung nur wenn am Tag mindestens eine Business-Fahrt ist, die KEIN
-        # Geschaeftsessen ist — Geschaeftsessen am Wochenende/Feiertag sind OK.
         has_warnable_business = False
         if self._trip_day and self._trip_day.has_business:
             has_warnable_business = any(
-                t.category == "business" and "geschaeftsessen" not in (t.purpose or "").lower()
-                for t in self._trip_day.trips
+                trip.category == "business" and "geschaeftsessen" not in (trip.purpose or "").lower()
+                for trip in self._trip_day.trips
             )
 
         if self._holiday_name and has_warnable_business:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
-            text.append("WARNUNG", style=_STYLE_ERROR)
+            text.append(t("calendar.warning"), style=_STYLE_ERROR)
             text.append(f"\n{self._holiday_name[:22]}", style="red italic")
-            text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
+            text.append(
+                f"\n{format_km(self._trip_day.km_total)} {t('calendar.km_business_warning')}",
+                style=_STYLE_ERROR,
+            )
             return text
 
         if is_weekend and has_warnable_business:
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
-            text.append("WARNUNG", style=_STYLE_ERROR)
-            text.append(f"\n{format_km(self._trip_day.km_total)} km gesch.!", style=_STYLE_ERROR)
+            text.append(t("calendar.warning"), style=_STYLE_ERROR)
+            text.append(
+                f"\n{format_km(self._trip_day.km_total)} {t('calendar.km_business_warning')}",
+                style=_STYLE_ERROR,
+            )
             return text
 
         if self._holiday_name:
             text.append(f"{day_num} {weekday}", style=_STYLE_HOLIDAY_BOLD)
             text.append(f"\n{self._holiday_name[:22]}", style=_STYLE_HOLIDAY)
             if self._trip_day and self._trip_day.trips:
-                text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
+                text.append(
+                    f"\n{format_km(self._trip_day.km_total)} {t('calendar.km_private')}",
+                    style=_STYLE_MUTED,
+                )
                 if self._trip_day.fuel_liters > 0:
                     text.append(f"  {self._trip_day.fuel_liters:.0f}L", style="bold yellow")
             return text
@@ -154,14 +164,16 @@ class DayTile(Widget):
         if is_weekend:
             text.append(f"{day_num} {weekday}", style=_STYLE_MUTED)
             if self._trip_day and self._trip_day.trips:
-                text.append(f"\n{format_km(self._trip_day.km_total)} km privat", style=_STYLE_MUTED)
+                text.append(
+                    f"\n{format_km(self._trip_day.km_total)} {t('calendar.km_private')}",
+                    style=_STYLE_MUTED,
+                )
                 if self._trip_day.fuel_liters > 0:
                     text.append(f"  {self._trip_day.fuel_liters:.0f}L", style="bold yellow")
             return text
 
         if self._trip_day and self._trip_day.trips:
             td = self._trip_day
-            # Gruen nur bei geschaeftlich, sonst neutral
             km_style = _STYLE_BUSINESS if td.has_business else _STYLE_MUTED
             text.append(f"{day_num} {weekday} ", style="bold")
             text.append(f"{format_km(td.km_total)} km", style=f"bold {km_style}")

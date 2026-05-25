@@ -8,7 +8,7 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable
 
-_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+from death_proof.i18n import t, weekday_short
 
 
 class BlacklistView(Vertical):
@@ -51,8 +51,12 @@ class BlacklistView(Vertical):
         """Legt die Spalten an (optional mit ID-Spalte am Anfang)."""
         table = self.query_one("#blacklist-data", DataTable)
         if self._show_id:
-            table.add_column("ID", key="id", width=5)
-        table.add_columns("Datum", "Tag", "Grund / Anlass")
+            table.add_column(t("table.col.id"), key="id", width=5)
+        table.add_columns(
+            t("blacklist.column.date"),
+            t("table.col.weekday"),
+            t("blacklist.column.reason"),
+        )
 
     def set_show_id(self, value: bool) -> None:
         """Schaltet die ID-Spalte ein/aus."""
@@ -87,7 +91,7 @@ class BlacklistView(Vertical):
                 parts = date_str.split("-")
                 d = date(int(parts[0]), int(parts[1]), int(parts[2]))
                 date_de = d.strftime("%d.%m.%Y")
-                weekday = _WEEKDAYS[d.weekday()]
+                weekday = weekday_short(d.weekday())
                 is_weekend = d.weekday() >= 5
             except (ValueError, IndexError):
                 pass

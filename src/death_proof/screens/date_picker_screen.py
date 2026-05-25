@@ -12,20 +12,7 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Static
 
-_MONTH_NAMES = [
-    "Januar",
-    "Februar",
-    "Maerz",
-    "April",
-    "Mai",
-    "Juni",
-    "Juli",
-    "August",
-    "September",
-    "Oktober",
-    "November",
-    "Dezember",
-]
+from death_proof.i18n import month_name, t, weekday_short
 
 
 class _CalendarGrid(Static):
@@ -72,8 +59,8 @@ class _CalendarGrid(Static):
     def render(self) -> Text:
         """Rendert den Kalender als Rich Text."""
         text = Text()
-        headers = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-        for i, wd in enumerate(headers):
+        for i in range(7):
+            wd = weekday_short(i)
             style = "bold #cc8800" if i >= 5 else "bold dim"
             text.append(f" {wd} ", style=style)
         text.append("\n")
@@ -170,7 +157,7 @@ class DatePickerScreen(ModalScreen[str | None]):
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Abbrechen"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(self, initial_date: str = "", **kwargs: object) -> None:
@@ -194,7 +181,7 @@ class DatePickerScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Static("Datum auswaehlen", id="picker-title")
+            yield Static(t("datepicker.title"), id="picker-title")
             with Horizontal(classes="nav-row"):
                 yield Button("<<", id="btn-prev-year", classes="nav-btn")
                 yield Button("<", id="btn-prev-month", classes="nav-btn")
@@ -208,16 +195,16 @@ class DatePickerScreen(ModalScreen[str | None]):
                 id="cal-grid",
             )
             yield Static(
-                f"Heute: {self._today.strftime('%d.%m.%Y')}",
+                t("datepicker.today_hint", date=self._today.strftime("%d.%m.%Y")),
                 classes="today-hint",
             )
             with Horizontal(classes="button-row"):
-                yield Button("Heute", variant="primary", id="btn-today")
-                yield Button("Abbrechen", id="btn-cancel")
+                yield Button(t("datepicker.btn_today"), variant="primary", id="btn-today")
+                yield Button(t("datepicker.btn_cancel"), id="btn-cancel")
 
     def _format_month(self) -> str:
         """Formatiert Monat und Jahr fuer die Anzeige."""
-        return f"{_MONTH_NAMES[self._month - 1]} {self._year}"
+        return f"{month_name(self._month)} {self._year}"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Reagiert auf Navigation."""

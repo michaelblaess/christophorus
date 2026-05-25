@@ -8,6 +8,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DirectoryTree, Input, Label, Static
 
+from death_proof.i18n import t
+
 
 class FilePickerScreen(ModalScreen[Path | None]):
     """Dateiauswahl-Dialog auf Basis von DirectoryTree."""
@@ -54,7 +56,7 @@ class FilePickerScreen(ModalScreen[Path | None]):
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Abbrechen"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(self, start_path: Path, **kwargs: object) -> None:
@@ -64,17 +66,14 @@ class FilePickerScreen(ModalScreen[Path | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Static("Datei auswaehlen", id="picker-title")
+            yield Static(t("filepicker.title"), id="picker-title")
             yield DirectoryTree(str(self._start_path), id="dir-tree")
             with Horizontal(id="path-row"):
-                yield Label("Ausgewaehlt:")
-                yield Input(
-                    placeholder="(noch keine Datei ausgewaehlt)",
-                    id="selected-path",
-                )
+                yield Label(t("filepicker.label.selected"))
+                yield Input(placeholder=t("filepicker.placeholder.none"), id="selected-path")
             with Horizontal(classes="button-row"):
-                yield Button("Auswaehlen", variant="primary", id="btn-select", disabled=True)
-                yield Button("Abbrechen", id="btn-cancel")
+                yield Button(t("filepicker.btn_select"), variant="primary", id="btn-select", disabled=True)
+                yield Button(t("filepicker.btn_cancel"), id="btn-cancel")
 
     def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
         """Zeigt den gewaehlten Pfad an und aktiviert den Auswaehlen-Button."""

@@ -9,6 +9,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, Static
 
+from death_proof.i18n import t
 from death_proof.models.settings import GlobalConfig
 from death_proof.services.database import Database
 
@@ -32,7 +33,8 @@ class StartScreen(ModalScreen[StartResult | None]):
         align: center middle;
     }
     StartScreen > Vertical {
-        width: 80;
+        width: 80%;
+        max-width: 110;
         height: auto;
         max-height: 36;
         background: $surface;
@@ -85,6 +87,7 @@ class StartScreen(ModalScreen[StartResult | None]):
         margin: 0 1;
     }
     StartScreen .recent-item {
+        width: 100%;
         padding: 0 2;
         height: auto;
         margin-bottom: 0;
@@ -92,7 +95,7 @@ class StartScreen(ModalScreen[StartResult | None]):
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Abbrechen"),
+        Binding("escape", "cancel", "cancel"),
     ]
 
     def __init__(
@@ -117,16 +120,13 @@ class StartScreen(ModalScreen[StartResult | None]):
         default_base = self._config.last_base_dir or str(Path.home() / "Fahrtenbuecher")
 
         with Vertical():
-            yield Static("Fahrtenbuch verwalten", id="title")
-            yield Static(
-                "Finanzamt-konforme Fahrtenbuecher fuer Leasing-Fahrzeuge",
-                id="subtitle",
-            )
+            yield Static(t("start.title"), id="title")
+            yield Static(t("start.subtitle"), id="subtitle")
 
             with VerticalScroll():
                 # Aktuelles Fahrtenbuch + Sichern
                 if self._current_path:
-                    yield Static("Aktuell geoeffnet:", classes="section-title")
+                    yield Static(t("start.current_open"), classes="section-title")
                     current_name = Path(self._current_path).name
                     yield Static(
                         f"  {current_name}  ({self._current_path})",
@@ -134,14 +134,14 @@ class StartScreen(ModalScreen[StartResult | None]):
                     )
                     with Horizontal(classes="button-row"):
                         yield Button(
-                            "Datenbank sichern",
+                            t("start.btn_backup"),
                             variant="warning",
                             id="btn-backup",
                         )
 
                 # Zuletzt geoeffnet
                 if self._config.recent_paths:
-                    yield Static("Zuletzt geoeffnet:", classes="section-title")
+                    yield Static(t("start.recent"), classes="section-title")
                     for path_str in self._config.recent_paths[:5]:
                         p = Path(path_str)
                         btn_id = f"btn-recent-{hash(path_str) & 0xFFFFFFFF}"
@@ -154,39 +154,39 @@ class StartScreen(ModalScreen[StartResult | None]):
                         )
 
                 # Neues Fahrtenbuch
-                yield Static("Neues Fahrtenbuch anlegen:", classes="section-title")
+                yield Static(t("start.new_section"), classes="section-title")
                 with Horizontal(classes="form-row"):
-                    yield Label("Basisverzeichnis:")
+                    yield Label(t("start.label.base_dir"))
                     yield Input(
                         value=default_base,
-                        placeholder="z.B. C:\\Users\\Michael\\Fahrtenbuecher",
+                        placeholder=t("start.placeholder.base"),
                         id="input-base-dir",
                     )
                 with Horizontal(classes="form-row"):
-                    yield Label("Name:")
+                    yield Label(t("start.label.name"))
                     yield Input(
                         value="",
-                        placeholder="z.B. Mazda CX-5 2024",
+                        placeholder=t("start.placeholder.name"),
                         id="input-fb-name",
                     )
                 yield Checkbox(
-                    "Einstellungen aus bestehendem Fahrtenbuch uebernehmen",
+                    t("start.check_clone"),
                     value=False,
                     id="check-clone",
                 )
                 with Horizontal(classes="form-row"):
-                    yield Label("Quellpfad:")
+                    yield Label(t("start.label.source"))
                     yield Input(
                         value=self._current_path or "",
-                        placeholder="Pfad zum Quell-Fahrtenbuch (nur bei 'uebernehmen')",
+                        placeholder=t("start.placeholder.source"),
                         id="input-clone-source",
                         disabled=True,
                     )
 
             with Horizontal(classes="button-row"):
-                yield Button("Neu anlegen", variant="primary", id="btn-create")
-                yield Button("Pfad oeffnen...", variant="success", id="btn-open")
-                yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
+                yield Button(t("start.btn_create"), variant="primary", id="btn-create")
+                yield Button(t("start.btn_open"), variant="success", id="btn-open")
+                yield Button(t("start.btn_cancel"), variant="default", id="btn-cancel")
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         """Aktiviert/Deaktiviert das Quellpfad-Feld abhaengig von der Checkbox."""
@@ -215,10 +215,10 @@ class StartScreen(ModalScreen[StartResult | None]):
         fb_name = self.query_one("#input-fb-name", Input).value.strip()
 
         if not base_dir:
-            self.notify("Basisverzeichnis ist erforderlich", severity="error")
+            self.notify(t("start.notify.base_required"), severity="error")
             return
         if not fb_name:
-            self.notify("Name ist erforderlich", severity="error")
+            self.notify(t("start.notify.name_required"), severity="error")
             return
 
         target_path = Path(base_dir) / fb_name
@@ -227,8 +227,7 @@ class StartScreen(ModalScreen[StartResult | None]):
         # oeffnet — der User hat NEU gedrueckt, das ist eindeutig.
         if Database.has_logbook(target_path):
             self.notify(
-                f"Am Zielpfad existiert bereits ein Fahrtenbuch: {target_path}. "
-                "Waehle 'Pfad oeffnen...' oder einen anderen Namen.",
+                t("start.notify.exists_already", path=target_path),
                 severity="error",
             )
             return
@@ -242,23 +241,17 @@ class StartScreen(ModalScreen[StartResult | None]):
         if clone_enabled:
             source_str = self.query_one("#input-clone-source", Input).value.strip()
             if not source_str:
-                self.notify(
-                    "Quellpfad ist erforderlich bei 'Einstellungen uebernehmen'",
-                    severity="error",
-                )
+                self.notify(t("start.notify.source_required"), severity="error")
                 return
             source_path = Path(source_str)
             if not Database.has_logbook(source_path):
                 self.notify(
-                    f"Kein Fahrtenbuch im Quellpfad: {source_path}",
+                    t("start.notify.no_logbook_source", path=source_path),
                     severity="error",
                 )
                 return
             if source_path.resolve() == target_path.resolve():
-                self.notify(
-                    "Quelle und Ziel duerfen nicht identisch sein",
-                    severity="error",
-                )
+                self.notify(t("start.notify.source_eq_target"), severity="error")
                 return
             clone_source = str(source_path)
 
@@ -270,19 +263,16 @@ class StartScreen(ModalScreen[StartResult | None]):
         fb_name = self.query_one("#input-fb-name", Input).value.strip()
 
         if not base_dir:
-            self.notify("Basisverzeichnis ist erforderlich", severity="error")
+            self.notify(t("start.notify.base_required"), severity="error")
             return
 
         path = Path(base_dir) / fb_name if fb_name else Path(base_dir)
 
         if not path.exists():
-            self.notify(f"Verzeichnis existiert nicht: {path}", severity="error")
+            self.notify(t("start.notify.dir_missing", path=path), severity="error")
             return
         if not Database.has_logbook(path):
-            self.notify(
-                f"Kein Fahrtenbuch im Pfad: {path}. Nutze 'Neu anlegen' zum Erstellen.",
-                severity="error",
-            )
+            self.notify(t("start.notify.no_logbook", path=path), severity="error")
             return
 
         # Basisverzeichnis merken fuer den naechsten Aufruf
@@ -298,26 +288,20 @@ class StartScreen(ModalScreen[StartResult | None]):
         if not path_str:
             return
         if not Path(path_str).exists():
-            self.notify(
-                f"Verzeichnis existiert nicht mehr: {path_str}",
-                severity="warning",
-            )
+            self.notify(t("start.notify.recent_missing", path=path_str), severity="warning")
             return
         self.dismiss((path_str, None))
 
     def _run_backup(self) -> None:
         """Fuehrt das Backup des aktuellen Fahrtenbuchs durch."""
         if self._on_backup is None:
-            self.notify("Kein Fahrtenbuch zum Sichern", severity="warning")
+            self.notify(t("start.notify.backup_none"), severity="warning")
             return
         try:
             backup_path = self._on_backup()
-            self.notify(
-                f"Sicherung erstellt: {backup_path.name}",
-                severity="information",
-            )
+            self.notify(t("start.notify.backup_done", name=backup_path.name), severity="information")
         except Exception as e:
-            self.notify(f"Sicherung fehlgeschlagen: {e}", severity="error")
+            self.notify(t("start.notify.backup_failed", error=e), severity="error")
 
     def action_cancel(self) -> None:
         """Bricht ab."""

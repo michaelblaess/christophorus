@@ -8,10 +8,9 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable
 
+from death_proof.i18n import t, weekday_short
 from death_proof.models.trip import MonthData, Trip
 from death_proof.services.formatting import format_km
-
-_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 # Reduziertes Farbschema: ausschliesslich Gruen (geschaeftlich) und Rot
 # (Blacklist / Feiertag / Wochenende). Alles andere bleibt neutral.
@@ -75,27 +74,23 @@ class TripTable(Vertical):
         self._setup_columns()
 
     def _setup_columns(self) -> None:
-        """Legt die Spalten an (optional mit ID-Spalte am Anfang).
-
-        Ziel-Spalte hat eine feste Breite, damit lange Adressen sichtbar
-        bleiben.
-        """
+        """Legt die Spalten an (optional mit ID-Spalte am Anfang)."""
         table = self.query_one("#trip-data", DataTable)
         if self._show_id:
-            table.add_column("ID", key="id", width=5)
+            table.add_column(t("table.col.id"), key="id", width=5)
         if self._show_code:
-            table.add_column("Kat", key="code", width=4)
-        table.add_column("Datum", key="date")
-        table.add_column("Tag", key="weekday")
-        table.add_column("Fahrzeit", key="time")
-        table.add_column("Ziel", key="destination", width=80)
-        table.add_column("Reisezweck", key="purpose")
+            table.add_column(t("table.col.category"), key="code", width=4)
+        table.add_column(t("table.col.date"), key="date")
+        table.add_column(t("table.col.weekday"), key="weekday")
+        table.add_column(t("table.col.time"), key="time")
+        table.add_column(t("table.col.destination"), key="destination", width=80)
+        table.add_column(t("table.col.purpose"), key="purpose")
         if self._show_fuel:
-            table.add_column("Liter", key="fuel", width=8)
-        table.add_column("km Anfang", key="km_start")
-        table.add_column("km Ende", key="km_end")
-        table.add_column("geschaeftl.", key="km_business")
-        table.add_column("privat", key="km_private")
+            table.add_column(t("table.col.fuel_liters"), key="fuel", width=8)
+        table.add_column(t("table.col.km_start"), key="km_start")
+        table.add_column(t("table.col.km_end"), key="km_end")
+        table.add_column(t("table.col.km_business"), key="km_business")
+        table.add_column(t("table.col.km_private"), key="km_private")
 
     def set_show_id(self, value: bool) -> None:
         """Schaltet die ID-Spalte ein/aus. Spalten werden neu aufgebaut."""
@@ -241,7 +236,7 @@ class TripTable(Vertical):
 
         for row_idx, (d, date_str, row_type, trip, orig_idx, entry) in enumerate(combined):
             date_de = d.strftime("%d.%m.%Y") if d.year != 9999 else date_str
-            weekday = _WEEKDAYS[d.weekday()] if d.year != 9999 else ""
+            weekday = weekday_short(d.weekday()) if d.year != 9999 else ""
             row_key = str(row_idx)
 
             if row_type == "blacklist" and entry is not None:
@@ -258,7 +253,7 @@ class TripTable(Vertical):
                     Text(weekday, style=_STYLE_ERROR),
                     Text("", style=_STYLE_MUTED),
                     Text("", style=_STYLE_MUTED),
-                    Text(f"[GESPERRT: {reason}]", style=_STYLE_ERROR),
+                    Text(t("table.warning.blocked", reason=reason), style=_STYLE_ERROR),
                 ]
                 if self._show_fuel:
                     bl_cells.append(Text("", style=_STYLE_MUTED))

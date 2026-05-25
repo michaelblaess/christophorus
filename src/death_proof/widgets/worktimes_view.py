@@ -6,20 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Button, DataTable, Input, Label, Static
 
-_MONTH_NAMES = [
-    "Januar",
-    "Februar",
-    "Maerz",
-    "April",
-    "Mai",
-    "Juni",
-    "Juli",
-    "August",
-    "September",
-    "Oktober",
-    "November",
-    "Dezember",
-]
+from death_proof.i18n import month_name, t
 
 
 class WorktimesView(Vertical):
@@ -76,15 +63,19 @@ class WorktimesView(Vertical):
     def compose(self) -> ComposeResult:
         yield DataTable(id="wt-data", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="edit-row"):
-            yield Label("Stunden:")
-            yield Input(placeholder="z.B. 160", id="wt-hours-input")
-            yield Button("Speichern", variant="primary", id="btn-wt-save")
+            yield Label(t("worktimes.label.hours_input"))
+            yield Input(placeholder=t("worktimes.placeholder.hours"), id="wt-hours-input")
+            yield Button(t("worktimes.btn_save"), variant="primary", id="btn-wt-save")
             yield Static("", id="wt-year-label")
 
     def on_mount(self) -> None:
         """Spalten anlegen."""
         table = self.query_one("#wt-data", DataTable)
-        table.add_columns("Monat", "Arbeitsstunden", "Std/Tag (22 AT)")
+        table.add_columns(
+            t("worktimes.col.month"),
+            t("worktimes.col.hours"),
+            t("worktimes.col.per_day"),
+        )
 
     def load_data(self, year: int, worktimes: list[dict[str, object]]) -> None:
         """Laedt die Arbeitsstunden fuer ein Jahr."""
@@ -97,7 +88,7 @@ class WorktimesView(Vertical):
             self._worktimes[month] = hours
 
         self._rebuild_table()
-        self.query_one("#wt-year-label", Static).update(f"Jahr: {year}")
+        self.query_one("#wt-year-label", Static).update(t("worktimes.year_label", year=year))
 
     def _rebuild_table(self) -> None:
         """Baut die Tabelle neu auf."""
@@ -113,7 +104,7 @@ class WorktimesView(Vertical):
 
             style = "" if hours > 0 else "dim"
             table.add_row(
-                Text(_MONTH_NAMES[month_nr - 1], style=style),
+                Text(month_name(month_nr), style=style),
                 Text(hours_str, style="bold" if hours > 0 else "dim"),
                 Text(per_day, style=style),
                 key=str(month_nr),
@@ -122,7 +113,7 @@ class WorktimesView(Vertical):
         # Summenzeile
         avg = total_hours / 12 if total_hours > 0 else 0.0
         table.add_row(
-            Text("Gesamt / Durchschnitt", style="bold"),
+            Text(t("worktimes.total_label"), style="bold"),
             Text(f"{total_hours:.2f}", style="bold"),
             Text(f"\u00d8 {avg:.2f}", style="bold"),
             key="total",
@@ -141,7 +132,7 @@ class WorktimesView(Vertical):
         hours = self._worktimes.get(month_nr, 0.0)
         hours_input = self.query_one("#wt-hours-input", Input)
         hours_input.value = f"{hours:.2f}" if hours > 0 else ""
-        hours_input.placeholder = f"{_MONTH_NAMES[month_nr - 1]} {self._year}"
+        hours_input.placeholder = f"{month_name(month_nr)} {self._year}"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Speichert die Arbeitsstunden."""

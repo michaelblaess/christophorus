@@ -8,24 +8,11 @@ from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Static
 
+from death_proof.i18n import month_name, t
 from death_proof.models.trip import MonthData
 from death_proof.services.formatting import format_km
 
-_MONTH_NAMES = [
-    "Januar",
-    "Februar",
-    "Maerz",
-    "April",
-    "Mai",
-    "Juni",
-    "Juli",
-    "August",
-    "September",
-    "Oktober",
-    "November",
-    "Dezember",
-]
-_QUARTER_NAMES = ["Q1", "Q2", "Q3", "Q4"]
+_QUARTER_KEYS = ["year.q1", "year.q2", "year.q3", "year.q4"]
 
 
 class MonthTile(Widget):
@@ -62,17 +49,16 @@ class MonthTile(Widget):
     def render(self) -> RenderResult:
         """Rendert die Monatskachel mit Progressbar."""
         text = Text()
-        name = _MONTH_NAMES[self._month - 1]
+        name = month_name(self._month)
 
         if self._km_total == 0:
             text.append(f"{name}\n", style="bold dim")
-            text.append("keine Daten", style="dim")
+            text.append(t("year.no_data"), style="dim")
             return text
 
         pct = min(self._km_total / self._lease_km * 100, 150) if self._lease_km > 0 else 0
         biz_pct = self._km_business / self._km_total * 100 if self._km_total > 0 else 0
 
-        # Reduziertes Farbschema: gruen wenn gut, rot wenn kritisch, sonst neutral
         if pct <= 100:
             bar_style = "green"
         elif pct > 110:
@@ -91,12 +77,12 @@ class MonthTile(Widget):
         text.append("\u2591" * (bar_len - filled), style="dim")
         text.append("\n")
 
-        text.append(f"{format_km(self._km_total)} km", style="bold")
-        text.append(f" / {format_km(self._lease_km)}", style="dim")
+        text.append(t("year.month_summary", km=format_km(self._km_total)), style="bold")
+        text.append(t("year.month_lease", km=format_km(self._lease_km)), style="dim")
         text.append("\n")
 
-        text.append(f"gesch.: {biz_pct:.0f}%", style=biz_style)
-        text.append(f"  |  {self._trip_count} Fahrten", style="dim")
+        text.append(t("year.month_business", pct=biz_pct), style=biz_style)
+        text.append(t("year.month_trips", count=self._trip_count), style="dim")
 
         return text
 
@@ -146,7 +132,7 @@ class YearScreen(ModalScreen[None]):
     """
 
     BINDINGS = [
-        Binding("escape", "close", "Schliessen"),
+        Binding("escape", "close", "close"),
     ]
 
     def __init__(
@@ -164,11 +150,11 @@ class YearScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """Erstellt die Jahresuebersicht."""
         with VerticalScroll():
-            yield Static(f"Jahresuebersicht {self._year}", id="title")
+            yield Static(t("year.title", year=self._year), id="title")
 
             for q in range(4):
                 with QuarterRow():
-                    yield Static(_QUARTER_NAMES[q], classes="quarter-label")
+                    yield Static(t(_QUARTER_KEYS[q]), classes="quarter-label")
                     for m_offset in range(3):
                         month = q * 3 + m_offset + 1
                         md = self._month_data.get(month)
@@ -192,19 +178,19 @@ class YearScreen(ModalScreen[None]):
         biz_pct = total_biz / total_km * 100 if total_km > 0 else 0
 
         text = Text()
-        text.append("Jahresgesamt\n", style="bold")
-        text.append(f"km gesamt: {format_km(total_km)}", style="bold")
-        text.append(f"  |  Leasing: {format_km(total_lease)}", style="dim")
+        text.append(f"{t('year.total_title')}\n", style="bold")
+        text.append(t("year.total_km", km=format_km(total_km)), style="bold")
+        text.append(t("year.total_lease", km=format_km(total_lease)), style="dim")
 
         diff = total_km - total_lease
         diff_style = "bold red" if diff > 0 else "bold green"
         diff_sign = "+" if diff > 0 else ""
-        text.append(f"  |  Differenz: {diff_sign}{format_km(abs(diff))} km", style=diff_style)
+        text.append(t("year.total_diff", sign=diff_sign, km=format_km(abs(diff))), style=diff_style)
         text.append("\n")
 
         biz_style = "bold green" if biz_pct >= 70 else ("bold red" if biz_pct < 50 else "bold")
-        text.append(f"geschaeftl.: {format_km(total_biz)} km ({biz_pct:.1f}%)", style=biz_style)
-        text.append(f"  |  privat: {format_km(total_priv)} km ({100 - biz_pct:.1f}%)", style="bold")
+        text.append(t("year.total_business", km=format_km(total_biz), pct=biz_pct), style=biz_style)
+        text.append(t("year.total_private", km=format_km(total_priv), pct=100 - biz_pct), style="bold")
 
         return Static(text, id="year-summary")
 

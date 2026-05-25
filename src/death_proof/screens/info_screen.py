@@ -1,69 +1,22 @@
-"""Info-Dialog."""
+"""Info-Dialog — duenner Wrapper um textual_widgets.AboutScreen."""
 
-from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.containers import VerticalScroll
-from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual_widgets import AboutScreen
 
 from death_proof import __author__, __version__, __year__
+from death_proof.i18n import current_language, t
 
 
-class InfoScreen(ModalScreen[None]):
-    """About-Dialog."""
+class InfoScreen(AboutScreen):
+    """About-Dialog aus textual_widgets, vorkonfiguriert fuer Death Proof."""
 
-    DEFAULT_CSS = """
-    InfoScreen {
-        align: center middle;
-    }
-    InfoScreen > VerticalScroll {
-        width: 60;
-        height: auto;
-        max-height: 20;
-        background: $surface;
-        border: thick $accent;
-        padding: 1 2;
-    }
-    InfoScreen #title {
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-    InfoScreen #info-text {
-        text-align: center;
-    }
-    InfoScreen #quote {
-        text-align: center;
-        margin-top: 1;
-        color: $text-muted;
-        text-style: italic;
-    }
-    InfoScreen #footer-text {
-        text-align: center;
-        margin-top: 1;
-        color: $text-muted;
-    }
-    """
-
-    BINDINGS = [
-        Binding("escape", "close", "Schliessen"),
-    ]
-
-    def compose(self) -> ComposeResult:
-        with VerticalScroll():
-            yield Static(f"Death Proof v{__version__}", id="title")
-            yield Static(
-                f"von {__author__}\n\nFinanzamt-konforme Fahrtenbuecher\nfuer Leasing-Fahrzeuge\n\n(c) {__year__}",
-                id="info-text",
-            )
-            yield Static(
-                "\u201eFreiheit wird vom Unterdr\u00fccker niemals\n"
-                "freiwillig gegeben; sie muss vom\n"
-                "Unterdr\u00fcckten gefordert werden.\u201c\n"
-                "\u2014 Martin Luther King jr.",
-                id="quote",
-            )
-            yield Static("ESC = Schliessen", id="footer-text")
-
-    def action_close(self) -> None:
-        self.dismiss(None)
+    def __init__(self) -> None:
+        super().__init__(
+            app_name="death-proof",
+            version=__version__,
+            author=__author__,
+            release=__year__,
+            description=t("info.description"),
+            license="Apache-2.0",
+            lang=current_language(),
+            url="https://github.com/michaelblaess/death-proof",
+        )

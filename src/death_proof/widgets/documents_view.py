@@ -8,6 +8,8 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable
 
+from death_proof.i18n import t
+
 
 class DocumentsView(Vertical):
     """Tabelle aller Belege/Dokumente."""
@@ -47,8 +49,15 @@ class DocumentsView(Vertical):
         """Legt die Spalten an (optional mit ID-Spalte am Anfang)."""
         table = self.query_one("#docs-data", DataTable)
         if self._show_id:
-            table.add_column("ID", key="id", width=5)
-        table.add_columns("Typ", "Datum", "Uhrzeit", "Bezug", "Bemerkung", "Datei")
+            table.add_column(t("table.col.id"), key="id", width=5)
+        table.add_columns(
+            t("documents.column.type"),
+            t("documents.column.date"),
+            t("documents.column.time"),
+            t("documents.column.context"),
+            t("documents.column.note"),
+            t("documents.column.file"),
+        )
 
     def set_show_id(self, value: bool) -> None:
         """Schaltet die ID-Spalte ein/aus."""
@@ -94,8 +103,10 @@ class DocumentsView(Vertical):
             uhrzeit = ""
             bemerkung = ""
 
+            typ_kind = ""  # "trip" | "bl" | ""
             if trip_id:
-                typ = "Fahrt"
+                typ_kind = "trip"
+                typ = t("documents.type.trip")
                 trip_date = str(doc.get("trip_date", ""))
                 purpose = str(doc.get("trip_purpose", ""))
                 date_de = self._format_date(trip_date)
@@ -109,7 +120,8 @@ class DocumentsView(Vertical):
                     except (TypeError, ValueError):
                         bemerkung = ""
             elif bl_id:
-                typ = "Blacklist"
+                typ_kind = "bl"
+                typ = t("documents.type.blacklist")
                 bl_date = str(doc.get("bl_date", ""))
                 reason = str(doc.get("bl_reason", ""))
                 date_de = self._format_date(bl_date)
@@ -122,9 +134,10 @@ class DocumentsView(Vertical):
             cells: list[Text] = []
             if self._show_id:
                 cells.append(Text(doc_id, style="dim"))
+            type_style = "green" if typ_kind == "trip" else "red" if typ_kind == "bl" else "dim"
             cells.extend(
                 [
-                    Text(typ, style="green" if typ == "Fahrt" else "red" if typ == "Blacklist" else "dim"),
+                    Text(typ, style=type_style),
                     Text(date_de),
                     Text(uhrzeit, style="dim"),
                     Text(bezug),

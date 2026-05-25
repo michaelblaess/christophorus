@@ -1,9 +1,15 @@
-"""Settings-Dialog mit Tabs fuer Fahrzeug, Adressen etc."""
+"""Settings-Dialog mit Tabs fuer Fahrzeug, Adressen etc.
 
+Subklasse von ``textual_widgets.BaseSettingsScreen`` — der Basisdialog
+liefert die Aussenhuelle (Titel, Save/Cancel, Sprach-Tab, Speicherort-Tab,
+einheitliche Bindings). Wir steuern nur die app-spezifischen Tabs bei.
+"""
+
+from pathlib import Path
+
+from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     Checkbox,
@@ -11,47 +17,15 @@ from textual.widgets import (
     Label,
     Select,
     Static,
-    TabbedContent,
     TabPane,
 )
+from textual_widgets import BaseSettingsScreen
 
-from death_proof.models.settings import AddressEntry
+from death_proof.i18n import t
+from death_proof.models.settings import AddressEntry, GlobalConfig
 from death_proof.models.vehicle import Vehicle
 from death_proof.services.database import Database
 from death_proof.services.formatting import format_km, parse_km
-
-
-def _iso_to_de(iso: str) -> str:
-    """Konvertiert ISO-Datum (YYYY-MM-DD) zu deutschem Format (DD.MM.YYYY)."""
-    try:
-        parts = iso.split("-")
-        if len(parts) == 3 and len(parts[2]) > 0:
-            return f"{parts[2]}.{parts[1]}.{parts[0]}"
-    except (ValueError, IndexError):
-        pass
-    return iso
-
-
-def _de_to_iso(de: str) -> str:
-    """Konvertiert deutsches Datum (DD.MM.YYYY) zu ISO-Format (YYYY-MM-DD)."""
-    try:
-        parts = de.split(".")
-        if len(parts) == 3:
-            return f"{parts[2]}-{parts[1]}-{parts[0]}"
-    except (ValueError, IndexError):
-        pass
-    return de
-
-
-_COLOR_OPTIONS: list[tuple[str, str]] = [
-    ("Gruen", "green"),
-    ("Blau", "blue"),
-    ("Gelb", "yellow"),
-    ("Magenta", "magenta"),
-    ("Rot", "red"),
-    ("Cyan", "cyan"),
-    ("Weiss", "white"),
-]
 
 
 def _format_km(value: float) -> str:
@@ -69,11 +43,7 @@ def _format_km(value: float) -> str:
 
 
 def _format_float(value: float) -> str:
-    """Formatiert eine Gleitkommazahl fuer Eingabefelder.
-
-    Leere/Null-Werte → leer. Ganze Zahlen ohne Nachkommastellen. Sonst mit
-    deutschem Komma und bis zu 2 Nachkommastellen.
-    """
+    """Formatiert eine Gleitkommazahl fuer Eingabefelder."""
     if value is None or value <= 0:
         return ""
     if float(value).is_integer():
@@ -82,10 +52,7 @@ def _format_float(value: float) -> str:
 
 
 def _parse_float(raw: str) -> float:
-    """Parst eine Gleitkommazahl aus der UI (mit deutschem Komma).
-
-    Leere/ungueltige Eingabe → 0.0.
-    """
+    """Parst eine Gleitkommazahl aus der UI (mit deutschem Komma)."""
     s = (raw or "").strip().replace(",", ".")
     if not s:
         return 0.0
@@ -95,79 +62,65 @@ def _parse_float(raw: str) -> float:
         return 0.0
 
 
-_JOURNAL_MODE_OPTIONS: list[tuple[str, str]] = [
-    ("DELETE (Dropbox-sicher, Standard)", "DELETE"),
-    ("WAL (schneller, aber .wal/.shm)", "WAL"),
-    ("TRUNCATE", "TRUNCATE"),
-    ("PERSIST", "PERSIST"),
-    ("MEMORY (fluechtig)", "MEMORY"),
-    ("OFF (kein Journal)", "OFF"),
-]
+def _color_options() -> list[tuple[str, str]]:
+    return [
+        (t("settings.color.green"), "green"),
+        (t("settings.color.blue"), "blue"),
+        (t("settings.color.yellow"), "yellow"),
+        (t("settings.color.magenta"), "magenta"),
+        (t("settings.color.red"), "red"),
+        (t("settings.color.cyan"), "cyan"),
+        (t("settings.color.white"), "white"),
+    ]
 
 
-_STATE_OPTIONS: list[tuple[str, str]] = [
-    ("Baden-Wuerttemberg", "BW"),
-    ("Bayern", "BY"),
-    ("Berlin", "BE"),
-    ("Brandenburg", "BB"),
-    ("Bremen", "HB"),
-    ("Hamburg", "HH"),
-    ("Hessen", "HE"),
-    ("Mecklenburg-Vorpommern", "MV"),
-    ("Niedersachsen", "NI"),
-    ("Nordrhein-Westfalen", "NW"),
-    ("Rheinland-Pfalz", "RP"),
-    ("Saarland", "SL"),
-    ("Sachsen", "SN"),
-    ("Sachsen-Anhalt", "ST"),
-    ("Schleswig-Holstein", "SH"),
-    ("Thueringen", "TH"),
-]
+def _journal_mode_options() -> list[tuple[str, str]]:
+    return [
+        (t("settings.journal.delete"), "DELETE"),
+        (t("settings.journal.wal"), "WAL"),
+        (t("settings.journal.truncate"), "TRUNCATE"),
+        (t("settings.journal.persist"), "PERSIST"),
+        (t("settings.journal.memory"), "MEMORY"),
+        (t("settings.journal.off"), "OFF"),
+    ]
 
 
-class SettingsScreen(ModalScreen[bool | None]):
-    """Einstellungen mit Tabs — speichert in die SQLite-Datenbank."""
+def _state_options() -> list[tuple[str, str]]:
+    return [
+        (t("settings.state.bw"), "BW"),
+        (t("settings.state.by"), "BY"),
+        (t("settings.state.be"), "BE"),
+        (t("settings.state.bb"), "BB"),
+        (t("settings.state.hb"), "HB"),
+        (t("settings.state.hh"), "HH"),
+        (t("settings.state.he"), "HE"),
+        (t("settings.state.mv"), "MV"),
+        (t("settings.state.ni"), "NI"),
+        (t("settings.state.nw"), "NW"),
+        (t("settings.state.rp"), "RP"),
+        (t("settings.state.sl"), "SL"),
+        (t("settings.state.sn"), "SN"),
+        (t("settings.state.st"), "ST"),
+        (t("settings.state.sh"), "SH"),
+        (t("settings.state.th"), "TH"),
+    ]
+
+
+class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
+    """Einstellungen mit Tabs — speichert in die SQLite-Datenbank.
+
+    Die Persistenz laeuft NICHT ueber das settings-Dict der Basis (das
+    dient nur fuer einfache Key/Value-Settings wie Sprache). Adressen,
+    Kategorien, Fahrzeug etc. speichern wir direkt in die DB; die App
+    schaut nur, ob das Result-Dict nicht None ist und laedt selbst neu.
+    """
 
     DEFAULT_CSS = """
-    SettingsScreen {
-        align: center middle;
-    }
-    SettingsScreen > Vertical {
-        width: 95%;
-        max-width: 140;
-        height: 90%;
-        max-height: 48;
-        background: $surface;
-        border: thick $accent;
-        padding: 1 2;
-    }
-    SettingsScreen #title {
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-    SettingsScreen .form-row {
-        height: auto;
-        margin-bottom: 1;
-    }
-    SettingsScreen .form-row Label {
-        width: 22;
-        padding: 0 1;
-    }
-    SettingsScreen .form-row Input {
-        width: 1fr;
-    }
     SettingsScreen .addr-block {
         height: auto;
         margin-bottom: 1;
         padding: 0 1;
         border: solid $surface-lighten-1;
-    }
-    SettingsScreen .addr-block Label {
-        width: 12;
-    }
-    SettingsScreen .addr-block Input {
-        width: 1fr;
     }
     SettingsScreen .cat-block {
         height: auto;
@@ -175,34 +128,24 @@ class SettingsScreen(ModalScreen[bool | None]):
         padding: 0 1;
         border: solid $surface-lighten-1;
     }
+    SettingsScreen .addr-block Label,
     SettingsScreen .cat-block Label {
-        width: 22;
+        width: 16;
+        padding: 1 1;
     }
-    SettingsScreen .cat-block Input {
-        width: 1fr;
-    }
+    SettingsScreen .addr-block Input,
+    SettingsScreen .cat-block Input,
     SettingsScreen .cat-block Select {
         width: 1fr;
     }
-    SettingsScreen .button-row {
-        height: auto;
-        margin-top: 1;
-        align: center middle;
-        dock: bottom;
-    }
-    SettingsScreen Button {
-        margin: 0 1;
-    }
     """
 
-    BINDINGS = [
-        Binding("escape", "cancel", "Abbrechen"),
-        Binding("ctrl+s", "save", "Speichern"),
-    ]
-
-    def __init__(self, database: Database, **kwargs: object) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, database: Database, config: GlobalConfig) -> None:
+        # Das settings-Dict enthaelt aktuell nur die Sprache — die Basis
+        # rendert daraus den Sprach-Tab. Alles andere bleibt in der DB.
+        super().__init__({"language": config.language}, lang=config.language)
         self._database = database
+        self._config = config
         self._vehicle = database.get_vehicle()
         self._federal_state = database.get_setting("federal_state", "BB")
         self._journal_mode = database.get_setting("db_journal_mode", "DELETE").upper()
@@ -239,162 +182,217 @@ class SettingsScreen(ModalScreen[bool | None]):
                 for row in rows
             ]
 
-    def compose(self) -> ComposeResult:
-        """Erstellt die Settings-Tabs."""
+    # ------------------------------------------------------------------
+    # BaseSettingsScreen Hooks
+    # ------------------------------------------------------------------
+    def app_tabs(self) -> ComposeResult:
+        """Liefert die app-spezifischen TabPanes."""
         v = self._vehicle
         home_address = self._database.get_setting("home_address", "")
 
-        with Vertical():
-            yield Static("Einstellungen", id="title")
+        with TabPane(t("settings.tab.vehicle"), id="tab-vehicle"), VerticalScroll():
+            yield from self._vehicle_fields(v)
 
-            with TabbedContent():
-                with TabPane("Fahrzeug", id="tab-vehicle"), VerticalScroll():
-                    yield from self._vehicle_fields(v)
+        with TabPane(t("settings.tab.home"), id="tab-home"), VerticalScroll():
+            yield from self._home_fields(home_address)
 
-                with TabPane("Wohnung", id="tab-home"), VerticalScroll():
-                    yield from self._home_fields(home_address)
+        with TabPane(t("settings.tab.customers"), id="tab-customers"), VerticalScroll():
+            yield from self._address_list_fields(self._addresses.get("customer", []), "cust")
 
-                with TabPane("Kunden", id="tab-customers"), VerticalScroll():
-                    yield from self._address_list_fields(self._addresses.get("customer", []), "cust")
+        with TabPane(t("settings.tab.gas"), id="tab-gas"), VerticalScroll():
+            yield from self._address_list_fields(self._addresses.get("gas_station", []), "gas")
 
-                with TabPane("Tankstellen", id="tab-gas"), VerticalScroll():
-                    yield from self._address_list_fields(self._addresses.get("gas_station", []), "gas")
+        with TabPane(t("settings.tab.shopping"), id="tab-shopping"), VerticalScroll():
+            yield from self._address_list_fields(self._addresses.get("shopping", []), "shop")
 
-                with TabPane("Einkaufen", id="tab-shopping"), VerticalScroll():
-                    yield from self._address_list_fields(self._addresses.get("shopping", []), "shop")
+        with TabPane(t("settings.tab.tax_advisor"), id="tab-steuerberater"), VerticalScroll():
+            yield from self._steuerberater_fields()
 
-                with TabPane("Steuerberater", id="tab-steuerberater"), VerticalScroll():
-                    yield from self._steuerberater_fields()
+        with TabPane(t("settings.tab.restaurants"), id="tab-restaurants"), VerticalScroll():
+            yield from self._address_list_fields(self._addresses.get("restaurant", []), "rest")
 
-                with TabPane("Restaurants", id="tab-restaurants"), VerticalScroll():
-                    yield from self._address_list_fields(self._addresses.get("restaurant", []), "rest")
+        with TabPane(t("settings.tab.other"), id="tab-other"), VerticalScroll():
+            yield from self._address_list_fields(self._addresses.get("other", []), "other")
 
-                with TabPane("Sonstige", id="tab-other"), VerticalScroll():
-                    yield from self._address_list_fields(self._addresses.get("other", []), "other")
+        with TabPane(t("settings.tab.categories"), id="tab-categories"), VerticalScroll():
+            yield from self._category_fields()
 
-                with TabPane("Kategorien", id="tab-categories"), VerticalScroll():
-                    yield from self._category_fields()
+        with TabPane(t("settings.tab.database"), id="tab-database"), VerticalScroll():
+            yield from self._database_fields()
 
-                with TabPane("Datenbank", id="tab-database"), VerticalScroll():
-                    yield from self._database_fields()
+    def storage_paths(self) -> list[tuple[str, Path]]:
+        """Pfade fuer den Speicherort-Tab der Basis."""
+        return [
+            (t("settings.storage.config"), GlobalConfig.CONFIG_FILE),
+            (t("settings.storage.db"), Path(self._database.path)),
+        ]
 
-            with Horizontal(classes="button-row"):
-                yield Button("Speichern (Ctrl+S)", variant="primary", id="btn-save")
-                yield Button("Abbrechen (Esc)", variant="default", id="btn-cancel")
+    def collect_app_settings(self, settings: dict[str, object]) -> None:
+        """Schreibt alle Werte direkt in die DB.
 
+        Das settings-Dict bekommt nur die Sprache (steht schon drin). Die
+        App liest die Sprache nach dem Save aus dem Dict und persistiert sie
+        in GlobalConfig.
+        """
+        # Fahrzeug speichern
+        vehicle = Vehicle(
+            name=self._get_input("v-name"),
+            plate=self._get_input("v-plate"),
+            contract_number=self._get_input("v-contract"),
+            lease_km_per_month=parse_km(self._get_input("v-lease-km"), 1500),
+            start_km=parse_km(self._get_input("v-start-km"), 0),
+            end_km=parse_km(self._get_input("v-end-km"), 0),
+            start_date=self._get_input("v-start-date"),
+            end_date=self._get_input("v-end-date"),
+            lease_months=self._parse_int("v-lease-months", 12),
+            tank_capacity_l=_parse_float(self._get_input("v-tank-capacity")),
+            consumption_l_100km=_parse_float(self._get_input("v-consumption")),
+        )
+        self._database.save_vehicle(vehicle)
+
+        # Bundesland
+        state_select = self.query_one("#select-federal-state", Select)
+        if state_select.value != Select.BLANK:
+            self._database.set_setting("federal_state", str(state_select.value))
+
+        # Journal-Modus
+        journal_select = self.query_one("#select-journal-mode", Select)
+        if journal_select.value != Select.BLANK:
+            self._database.set_setting("db_journal_mode", str(journal_select.value))
+
+        # Anzeige-Toggles
+        self._database.set_setting("show_id_column", "1" if self._get_checkbox("check-show-id-column") else "0")
+        self._database.set_setting("show_code_column", "1" if self._get_checkbox("check-show-code-column") else "0")
+        self._database.set_setting("show_fuel_column", "1" if self._get_checkbox("check-show-fuel-column") else "0")
+
+        # Plausi-Checks
+        self._database.set_setting("check_ghost_trips", "1" if self._get_checkbox("check-ghost-trips") else "0")
+        self._database.set_setting(
+            "fuel_winter_tolerance", "1" if self._get_checkbox("check-fuel-winter-tolerance") else "0"
+        )
+
+        # Excel-Export
+        self._database.set_setting(
+            "export_include_prev_december",
+            "1" if self._get_checkbox("check-export-include-prev-december") else "0",
+        )
+
+        # Wohnadresse
+        self._database.set_setting("home_address", self._get_input("home-address"))
+
+        # Adressen
+        self._save_address_list("customer", "cust")
+        self._save_address_list("gas_station", "gas")
+        self._save_address_list("shopping", "shop")
+        self._save_address_list("restaurant", "rest")
+        self._save_address_list("other", "other")
+        self._save_steuerberaterin()
+
+        # Kategorien
+        self._save_categories()
+
+        # Sprache aus dem Dict in den GlobalConfig persistieren — die App liest
+        # spaeter den GlobalConfig (oder das Result-Dict) und entscheidet ob
+        # ein Restart-Hinweis noetig ist.
+        lang = str(settings.get("language", self._config.language))
+        if lang in ("de", "en") and lang != self._config.language:
+            self._config.language = lang
+            self._config.save()
+
+    # ------------------------------------------------------------------
+    # Tab content builders
+    # ------------------------------------------------------------------
     def _vehicle_fields(self, v: Vehicle) -> ComposeResult:
         """Felder fuer das Fahrzeug-Tab."""
-        with Horizontal(classes="form-row"):
-            yield Label("Fahrzeug-Name:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.vehicle_name"))
             yield Input(value=v.name, id="v-name")
-        with Horizontal(classes="form-row"):
-            yield Label("Kennzeichen:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.plate"))
             yield Input(value=v.plate, id="v-plate")
-        with Horizontal(classes="form-row"):
-            yield Label("Vertragsnummer:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.contract_no"))
             yield Input(value=v.contract_number, id="v-contract")
-        with Horizontal(classes="form-row"):
-            yield Label("km/Monat (Inklusiv):")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.km_per_month"))
             yield Input(value=format_km(v.lease_km_per_month), id="v-lease-km")
-        with Horizontal(classes="form-row"):
-            yield Label("Start-km:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.start_km"))
             yield Input(value=format_km(v.start_km) if v.start_km > 0 else "", id="v-start-km")
-        with Horizontal(classes="form-row"):
-            yield Label("End-km:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.end_km"))
             yield Input(value=format_km(v.end_km) if v.end_km > 0 else "", id="v-end-km")
-        with Horizontal(classes="form-row"):
-            yield Label("Leasingbeginn:")
-            yield Input(
-                value=v.start_date,
-                placeholder="DD.MM.YYYY",
-                id="v-start-date",
-            )
-        with Horizontal(classes="form-row"):
-            yield Label("Leasingende:")
-            yield Input(
-                value=v.end_date,
-                placeholder="DD.MM.YYYY",
-                id="v-end-date",
-            )
-        with Horizontal(classes="form-row"):
-            yield Label("Leasingdauer (Monate):")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.start_date"))
+            yield Input(value=v.start_date, placeholder=t("settings.placeholder.date_de"), id="v-start-date")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.end_date"))
+            yield Input(value=v.end_date, placeholder=t("settings.placeholder.date_de"), id="v-end-date")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.lease_months"))
             yield Input(value=str(v.lease_months), id="v-lease-months")
-        with Horizontal(classes="form-row"):
-            yield Label("Tankinhalt (Liter):")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.tank_capacity"))
             yield Input(
                 value=_format_float(v.tank_capacity_l),
-                placeholder="z.B. 54",
+                placeholder=t("settings.placeholder.tank"),
                 id="v-tank-capacity",
             )
-        with Horizontal(classes="form-row"):
-            yield Label("Verbrauch (l/100km):")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.consumption"))
             yield Input(
                 value=_format_float(v.consumption_l_100km),
-                placeholder="z.B. 9",
+                placeholder=t("settings.placeholder.consumption"),
                 id="v-consumption",
             )
-        with Horizontal(classes="form-row"):
-            yield Label("Bundesland:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.federal_state"))
             yield Select(
-                options=_STATE_OPTIONS,
+                options=_state_options(),
                 value=self._federal_state,
                 id="select-federal-state",
             )
 
     def _home_fields(self, home_address: str) -> ComposeResult:
-        """Felder fuer die Wohnadresse."""
-        with Horizontal(classes="form-row"):
-            yield Label("Wohnadresse:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.home_address"))
             yield Input(
                 value=home_address,
-                placeholder="Strasse, PLZ Ort",
+                placeholder=t("settings.placeholder.address"),
                 id="home-address",
             )
 
     def _address_list_fields(self, entries: list[AddressEntry], prefix: str) -> ComposeResult:
-        """Felder fuer eine Adressliste."""
         for i, entry in enumerate(entries):
             with Vertical(classes="addr-block"):
-                with Horizontal(classes="form-row"):
-                    yield Label("Name:")
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.address_name"))
                     yield Input(value=entry.name, id=f"{prefix}-name-{i}")
-                with Horizontal(classes="form-row"):
-                    yield Label("Adresse:")
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.address_addr"))
                     yield Input(value=entry.address, id=f"{prefix}-addr-{i}")
-                with Horizontal(classes="form-row"):
-                    yield Label("Entfernung km:")
-                    yield Input(
-                        value=_format_km(entry.km),
-                        id=f"{prefix}-km-{i}",
-                    )
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.address_km"))
+                    yield Input(value=_format_km(entry.km), id=f"{prefix}-km-{i}")
 
-        yield Button(
-            "+ Hinzufuegen",
-            variant="success",
-            id=f"btn-add-{prefix}",
-        )
+        yield Button(t("settings.btn_add"), variant="success", id=f"btn-add-{prefix}")
 
     def _steuerberater_fields(self) -> ComposeResult:
-        """Felder fuer Steuerberater(in)."""
         st_list = self._addresses.get("steuerberaterin", [])
         st = st_list[0] if st_list else AddressEntry()
 
         with Vertical(classes="addr-block"):
-            with Horizontal(classes="form-row"):
-                yield Label("Name:")
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.label.address_name"))
                 yield Input(value=st.name, id="st-name")
-            with Horizontal(classes="form-row"):
-                yield Label("Adresse:")
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.label.address_addr"))
                 yield Input(value=st.address, id="st-addr")
-            with Horizontal(classes="form-row"):
-                yield Label("Entfernung km:")
-                yield Input(
-                    value=_format_km(st.km),
-                    id="st-km",
-                )
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.label.address_km"))
+                yield Input(value=_format_km(st.km), id="st-km")
 
     def _category_fields(self) -> ComposeResult:
-        """Felder fuer das Kategorien-Tab."""
         for i, cat in enumerate(self._categories):
             int(cat.get("id", 0))
             name = str(cat.get("name", ""))
@@ -403,119 +401,92 @@ class SettingsScreen(ModalScreen[bool | None]):
             color = str(cat.get("color", "green"))
 
             with Vertical(classes="cat-block"):
-                with Horizontal(classes="form-row"):
-                    yield Label("Schluessel (intern):")
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.category_key"))
                     yield Input(value=name, id=f"cat-name-{i}")
-                with Horizontal(classes="form-row"):
-                    yield Label("Anzeigename:")
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.category_display"))
                     yield Input(value=display_name, id=f"cat-display-{i}")
-                with Horizontal(classes="form-row"):
-                    yield Label("Farbe:")
-                    yield Select(
-                        options=_COLOR_OPTIONS,
-                        value=color,
-                        id=f"cat-color-{i}",
-                    )
-                with Horizontal(classes="form-row"):
+                with Horizontal(classes="settings-row"):
+                    yield Label(t("settings.label.category_color"))
+                    yield Select(options=_color_options(), value=color, id=f"cat-color-{i}")
+                with Horizontal(classes="settings-row"):
                     yield Label("")
-                    yield Checkbox(
-                        "Zaehlt als geschaeftlich",
-                        value=counts_biz,
-                        id=f"cat-biz-{i}",
-                    )
-                with Horizontal(classes="form-row"):
+                    yield Checkbox(t("settings.cat.business"), value=counts_biz, id=f"cat-biz-{i}")
+                with Horizontal(classes="settings-row"):
                     yield Label("")
-                    yield Button(
-                        "Loeschen",
-                        variant="error",
-                        id=f"btn-del-cat-{i}",
-                    )
+                    yield Button(t("settings.btn_delete"), variant="error", id=f"btn-del-cat-{i}")
 
-        yield Button(
-            "+ Kategorie hinzufuegen",
-            variant="success",
-            id="btn-add-cat",
-        )
+        yield Button(t("settings.btn_add_category"), variant="success", id="btn-add-cat")
 
     def _database_fields(self) -> ComposeResult:
-        """Felder fuer das Datenbank-Tab."""
-        # journal_mode auf dem zugelassenen Set normalisieren, sonst bleibt
-        # der Select leer wenn die DB einen exotischen Wert enthaelt.
-        allowed = {opt[1] for opt in _JOURNAL_MODE_OPTIONS}
+        allowed = {opt[1] for opt in _journal_mode_options()}
         current = self._journal_mode if self._journal_mode in allowed else "DELETE"
 
-        with Horizontal(classes="form-row"):
-            yield Label("Journal-Modus:")
-            yield Select(
-                options=_JOURNAL_MODE_OPTIONS,
-                value=current,
-                id="select-journal-mode",
-            )
-        yield Static(
-            "DELETE legt keine .wal/.shm-Dateien an und ist damit\n"
-            "sicher fuer Cloud-Ordner wie Dropbox oder OneDrive.\n"
-            "WAL ist schneller, erzeugt aber zwei Begleitdateien,\n"
-            "die beim Sync unbedingt zusammen uebertragen werden muessen.\n\n"
-            "Die Aenderung wird beim naechsten Programmstart aktiv.",
-            classes="addr-block",
-        )
-        with Horizontal(classes="form-row"):
-            yield Label("Anzeige:")
-            yield Checkbox(
-                "ID-Spalte in Tabellen anzeigen (nur TUI, nicht im Export)",
-                value=self._show_id_column,
-                id="check-show-id-column",
-            )
-        with Horizontal(classes="form-row"):
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.journal_mode"))
+            yield Select(options=_journal_mode_options(), value=current, id="select-journal-mode")
+        yield Static(t("settings.journal_hint"), classes="settings-hint")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.display"))
+            yield Checkbox(t("settings.show_id_column"), value=self._show_id_column, id="check-show-id-column")
+        with Horizontal(classes="settings-row"):
+            yield Label("")
+            yield Checkbox(t("settings.show_code_column"), value=self._show_code_column, id="check-show-code-column")
+        with Horizontal(classes="settings-row"):
+            yield Label("")
+            yield Checkbox(t("settings.show_fuel_column"), value=self._show_fuel_column, id="check-show-fuel-column")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.plausi_checks"))
+            yield Checkbox(t("settings.check_ghost_trips"), value=self._check_ghost_trips, id="check-ghost-trips")
+        with Horizontal(classes="settings-row"):
             yield Label("")
             yield Checkbox(
-                "Kategorie-Code in Listen (G/P/T)",
-                value=self._show_code_column,
-                id="check-show-code-column",
-            )
-        with Horizontal(classes="form-row"):
-            yield Label("")
-            yield Checkbox(
-                "Tankliter in Listen anzeigen",
-                value=self._show_fuel_column,
-                id="check-show-fuel-column",
-            )
-        with Horizontal(classes="form-row"):
-            yield Label("Plausi-Checks:")
-            yield Checkbox(
-                "Ghost-Trips pruefen (gleiche Strecke/km innerhalb 30 Tage)",
-                value=self._check_ghost_trips,
-                id="check-ghost-trips",
-            )
-        with Horizontal(classes="form-row"):
-            yield Label("")
-            yield Checkbox(
-                "Winter-Toleranz fuer Verbrauchs-Check (Nov-Maerz +15 %)",
+                t("settings.fuel_winter_tolerance"),
                 value=self._fuel_winter_tolerance,
                 id="check-fuel-winter-tolerance",
             )
-        with Horizontal(classes="form-row"):
-            yield Label("Excel-Export:")
+        with Horizontal(classes="settings-row"):
+            yield Label(t("settings.label.excel_export"))
             yield Checkbox(
-                "Dezember des Vorjahrs in Jahres-Export einschliessen",
+                t("settings.export_include_prev_december"),
                 value=self._export_include_prev_december,
                 id="check-export-include-prev-december",
             )
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Reagiert auf Button-Klicks."""
+    # ------------------------------------------------------------------
+    # Button handlers — App-eigene Buttons IMMER via @on (NICHT
+    # on_button_pressed-Override, sonst MRO-Crash mit der Basis).
+    # ------------------------------------------------------------------
+    @on(Button.Pressed, "#btn-add-cust")
+    def _on_add_cust(self) -> None:
+        self._add_address_entry("cust")
+
+    @on(Button.Pressed, "#btn-add-gas")
+    def _on_add_gas(self) -> None:
+        self._add_address_entry("gas")
+
+    @on(Button.Pressed, "#btn-add-shop")
+    def _on_add_shop(self) -> None:
+        self._add_address_entry("shop")
+
+    @on(Button.Pressed, "#btn-add-rest")
+    def _on_add_rest(self) -> None:
+        self._add_address_entry("rest")
+
+    @on(Button.Pressed, "#btn-add-other")
+    def _on_add_other(self) -> None:
+        self._add_address_entry("other")
+
+    @on(Button.Pressed, "#btn-add-cat")
+    def _on_add_cat(self) -> None:
+        self._add_category_entry()
+
+    @on(Button.Pressed)
+    def _on_dynamic_button(self, event: Button.Pressed) -> None:
+        """Faengt dynamische del-cat-N-Buttons ab."""
         btn_id = event.button.id or ""
-        if btn_id == "btn-save":
-            self.action_save()
-        elif btn_id == "btn-cancel":
-            self.action_cancel()
-        elif btn_id.startswith("btn-add-"):
-            prefix = btn_id.replace("btn-add-", "")
-            if prefix == "cat":
-                self._add_category_entry()
-            else:
-                self._add_address_entry(prefix)
-        elif btn_id.startswith("btn-del-cat-"):
+        if btn_id.startswith("btn-del-cat-"):
             self._delete_category_entry(btn_id)
 
     def _add_address_entry(self, prefix: str) -> None:
@@ -536,33 +507,31 @@ class SettingsScreen(ModalScreen[bool | None]):
         self._addresses[cat].append(AddressEntry(category=cat))
         i = len(self._addresses[cat]) - 1
 
-        # Neuen addr-Block direkt vor dem Hinzufuegen-Button einfuegen
         btn = self.query_one(f"#btn-add-{prefix}", Button)
         new_block = Vertical(
             Horizontal(
-                Label("Name:"),
+                Label(t("settings.label.address_name")),
                 Input(id=f"{prefix}-name-{i}"),
-                classes="form-row",
+                classes="settings-row",
             ),
             Horizontal(
-                Label("Adresse:"),
+                Label(t("settings.label.address_addr")),
                 Input(id=f"{prefix}-addr-{i}"),
-                classes="form-row",
+                classes="settings-row",
             ),
             Horizontal(
-                Label("Entfernung km:"),
+                Label(t("settings.label.address_km")),
                 Input(id=f"{prefix}-km-{i}"),
-                classes="form-row",
+                classes="settings-row",
             ),
             classes="addr-block",
         )
         btn.parent.mount(new_block, before=btn)
-        # Zum neuen Block scrollen und Name-Feld fokussieren
         new_block.scroll_visible()
         self.set_focus(self.query_one(f"#{prefix}-name-{i}", Input))
 
     def _add_category_entry(self) -> None:
-        """Fuegt eine neue leere Kategorie hinzu."""
+        """Mountet einen neuen Kategorie-Block direkt vor dem Add-Button."""
         new_cat: dict[str, object] = {
             "id": 0,
             "name": "",
@@ -571,10 +540,42 @@ class SettingsScreen(ModalScreen[bool | None]):
             "color": "green",
         }
         self._categories.append(new_cat)
-        self.notify("Kategorie hinzugefuegt — bitte Speichern und neu oeffnen")
+        i = len(self._categories) - 1
+
+        btn = self.query_one("#btn-add-cat", Button)
+        new_block = Vertical(
+            Horizontal(
+                Label(t("settings.label.category_key")),
+                Input(id=f"cat-name-{i}"),
+                classes="settings-row",
+            ),
+            Horizontal(
+                Label(t("settings.label.category_display")),
+                Input(id=f"cat-display-{i}"),
+                classes="settings-row",
+            ),
+            Horizontal(
+                Label(t("settings.label.category_color")),
+                Select(options=_color_options(), value="green", id=f"cat-color-{i}"),
+                classes="settings-row",
+            ),
+            Horizontal(
+                Label(""),
+                Checkbox(t("settings.cat.business"), value=True, id=f"cat-biz-{i}"),
+                classes="settings-row",
+            ),
+            Horizontal(
+                Label(""),
+                Button(t("settings.btn_delete"), variant="error", id=f"btn-del-cat-{i}"),
+                classes="settings-row",
+            ),
+            classes="cat-block",
+        )
+        btn.parent.mount(new_block, before=btn)
+        new_block.scroll_visible()
+        self.set_focus(self.query_one(f"#cat-name-{i}", Input))
 
     def _delete_category_entry(self, btn_id: str) -> None:
-        """Loescht eine Kategorie anhand des Button-IDs."""
         try:
             idx = int(btn_id.replace("btn-del-cat-", ""))
         except ValueError:
@@ -591,85 +592,17 @@ class SettingsScreen(ModalScreen[bool | None]):
             self._database.delete_category(cat_id)
 
         self._categories.pop(idx)
-        self.notify(f"Kategorie '{cat_name}' geloescht — bitte Speichern und neu oeffnen")
+        self.notify(t("settings.category_deleted_hint", name=cat_name))
 
-    def action_save(self) -> None:
-        """Speichert alle Settings in die SQLite-Datenbank."""
-        # Fahrzeug speichern
-        vehicle = Vehicle(
-            name=self._get_input("v-name"),
-            plate=self._get_input("v-plate"),
-            contract_number=self._get_input("v-contract"),
-            lease_km_per_month=parse_km(self._get_input("v-lease-km"), 1500),
-            start_km=parse_km(self._get_input("v-start-km"), 0),
-            end_km=parse_km(self._get_input("v-end-km"), 0),
-            start_date=self._get_input("v-start-date"),
-            end_date=self._get_input("v-end-date"),
-            lease_months=self._parse_int("v-lease-months", 12),
-            tank_capacity_l=_parse_float(self._get_input("v-tank-capacity")),
-            consumption_l_100km=_parse_float(self._get_input("v-consumption")),
-        )
-        self._database.save_vehicle(vehicle)
-
-        # Bundesland speichern
-        state_select = self.query_one("#select-federal-state", Select)
-        if state_select.value != Select.BLANK:
-            self._database.set_setting("federal_state", str(state_select.value))
-
-        # Journal-Modus speichern (wirkt beim naechsten Oeffnen)
-        journal_select = self.query_one("#select-journal-mode", Select)
-        if journal_select.value != Select.BLANK:
-            self._database.set_setting("db_journal_mode", str(journal_select.value))
-
-        # ID-Spalte in Tabellen
-        show_id = self._get_checkbox("check-show-id-column")
-        self._database.set_setting("show_id_column", "1" if show_id else "0")
-
-        # Kategorie-Code in Listen
-        show_code = self._get_checkbox("check-show-code-column")
-        self._database.set_setting("show_code_column", "1" if show_code else "0")
-
-        # Tankliter in Listen
-        show_fuel = self._get_checkbox("check-show-fuel-column")
-        self._database.set_setting("show_fuel_column", "1" if show_fuel else "0")
-
-        # Ghost-Trips Plausi-Check
-        ghost = self._get_checkbox("check-ghost-trips")
-        self._database.set_setting("check_ghost_trips", "1" if ghost else "0")
-
-        # Winter-Toleranz fuer Verbrauchs-Check
-        winter = self._get_checkbox("check-fuel-winter-tolerance")
-        self._database.set_setting("fuel_winter_tolerance", "1" if winter else "0")
-
-        # Dezember des Vorjahrs in Jahres-Export
-        prev_dec = self._get_checkbox("check-export-include-prev-december")
-        self._database.set_setting("export_include_prev_december", "1" if prev_dec else "0")
-
-        # Wohnadresse speichern
-        self._database.set_setting("home_address", self._get_input("home-address"))
-
-        # Adressen speichern
-        self._save_address_list("customer", "cust")
-        self._save_address_list("gas_station", "gas")
-        self._save_address_list("shopping", "shop")
-        self._save_address_list("restaurant", "rest")
-        self._save_address_list("other", "other")
-
-        # Steuerberaterin speichern
-        self._save_steuerberaterin()
-
-        # Kategorien speichern
-        self._save_categories()
-
-        self.dismiss(True)
-
+    # ------------------------------------------------------------------
+    # Save helpers
+    # ------------------------------------------------------------------
     def _save_address_list(self, category: str, prefix: str) -> None:
-        """Speichert eine Adressliste in die Datenbank."""
         entries = self._addresses.get(category, [])
         for i, entry in enumerate(entries):
             name = self._get_input(f"{prefix}-name-{i}")
             address = self._get_input(f"{prefix}-addr-{i}")
-            km = self._parse_float(f"{prefix}-km-{i}")
+            km = self._parse_float_field(f"{prefix}-km-{i}")
 
             if entry.id > 0:
                 self._database.update_address(entry.id, name, address, km)
@@ -678,11 +611,10 @@ class SettingsScreen(ModalScreen[bool | None]):
                     self._database.add_address(category, name, address, km)
 
     def _save_steuerberaterin(self) -> None:
-        """Speichert die Steuerberaterin-Adresse."""
         st_list = self._addresses.get("steuerberaterin", [])
         name = self._get_input("st-name")
         address = self._get_input("st-addr")
-        km = self._parse_float("st-km")
+        km = self._parse_float_field("st-km")
 
         if st_list and st_list[0].id > 0:
             self._database.update_address(st_list[0].id, name, address, km)
@@ -691,7 +623,6 @@ class SettingsScreen(ModalScreen[bool | None]):
                 self._database.add_address("steuerberaterin", name, address, km)
 
     def _save_categories(self) -> None:
-        """Speichert alle Kategorien in die Datenbank."""
         for i, cat in enumerate(self._categories):
             cat_id = int(cat.get("id", 0))
             name = self._get_input(f"cat-name-{i}")
@@ -710,8 +641,10 @@ class SettingsScreen(ModalScreen[bool | None]):
             else:
                 self._database.add_category(name, display_name, counts_biz, color)
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
     def _query_select(self, select_id: str) -> str:
-        """Liest einen Select-Wert sicher aus."""
         try:
             select = self.query_one(f"#{select_id}", Select)
             if select.value != Select.BLANK:
@@ -721,38 +654,26 @@ class SettingsScreen(ModalScreen[bool | None]):
         return ""
 
     def _get_checkbox(self, checkbox_id: str) -> bool:
-        """Liest einen Checkbox-Wert sicher aus."""
         try:
             return self.query_one(f"#{checkbox_id}", Checkbox).value
         except Exception:
             return False
 
     def _get_input(self, input_id: str) -> str:
-        """Liest einen Input-Wert sicher aus."""
         try:
             return self.query_one(f"#{input_id}", Input).value.strip()
         except Exception:
             return ""
 
     def _parse_int(self, input_id: str, default: int = 0) -> int:
-        """Liest einen Integer-Wert sicher aus."""
         try:
             return int(self._get_input(input_id) or str(default))
         except ValueError:
             return default
 
-    def _parse_float(self, input_id: str) -> float:
-        """Liest einen Float-Wert sicher aus.
-
-        Akzeptiert sowohl deutsches Komma (3,5) als auch Punkt (3.5) als
-        Dezimaltrenner. Leere Eingabe ergibt 0.0.
-        """
+    def _parse_float_field(self, input_id: str) -> float:
         raw = (self._get_input(input_id) or "0").strip().replace(",", ".")
         try:
             return float(raw)
         except ValueError:
             return 0.0
-
-    def action_cancel(self) -> None:
-        """Bricht ab."""
-        self.dismiss(None)

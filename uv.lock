@@ -139,7 +139,7 @@ wheels = [
 
 [[package]]
 name = "death-proof"
-version = "1.2.0"
+version = "1.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "holidays" },
@@ -649,8 +649,8 @@ dependencies = [
 
 [[package]]
 name = "textual-widgets"
-version = "0.8.0"
-source = { git = "https://github.com/michaelblaess/textual-widgets.git#66c90b6c41a2877509034b06344e074cfaa1d287" }
+version = "0.25.1"
+source = { git = "https://github.com/michaelblaess/textual-widgets.git#23b84cd543ee5e84cab3e6a5d5e81092f6d39eaf" }
 dependencies = [
     { name = "rich" },
     { name = "textual" },

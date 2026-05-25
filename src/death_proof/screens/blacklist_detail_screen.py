@@ -10,6 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static
 
+from death_proof.i18n import t
 from death_proof.services.database import Database
 
 
@@ -115,7 +116,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
     """
 
     BINDINGS = [
-        Binding("escape", "cancel", "Schliessen"),
+        Binding("escape", "cancel", "close"),
     ]
 
     def __init__(
@@ -134,32 +135,32 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
         self._is_new = entry_id <= 0
 
     def compose(self) -> ComposeResult:
-        title = "Neuer Blacklist-Eintrag" if self._is_new else "Blacklist-Eintrag bearbeiten"
+        title = t("blacklist_detail.title_new") if self._is_new else t("blacklist_detail.title_edit")
         date_de = _iso_to_de(self._date_str)
         with Vertical():
             yield Static(title, classes="detail-title")
-            yield Static("Datum (TT.MM.JJJJ):", classes="detail-label")
+            yield Static(t("blacklist_detail.label.date"), classes="detail-label")
             with Horizontal(classes="date-row"):
                 yield Input(
                     value=date_de,
-                    placeholder="TT.MM.JJJJ",
+                    placeholder=t("blacklist_detail.placeholder.date"),
                     id="input-date",
                 )
                 yield Button("...", id="btn-date-picker")
-            yield Static("Grund / Anlass:", classes="detail-label")
+            yield Static(t("blacklist_detail.label.reason"), classes="detail-label")
             yield Input(
                 value=self._reason,
-                placeholder="z.B. Urlaub, Krankheit, privater Ausflug",
+                placeholder=t("blacklist_detail.placeholder.reason"),
                 id="input-reason",
             )
-            yield Static("Belege:", id="docs-title")
+            yield Static(t("trip.docs_title"), id="docs-title")
             yield Vertical(id="docs-list")
             with Horizontal(classes="button-row"):
-                yield Button("+ Beleg", variant="success", id="btn-add-doc")
-                yield Button("Speichern", variant="primary", id="btn-save")
+                yield Button(t("trip.btn_add_doc"), variant="success", id="btn-add-doc")
+                yield Button(t("blacklist_detail.btn_save"), variant="primary", id="btn-save")
                 if not self._is_new:
-                    yield Button("Loeschen", variant="error", id="btn-delete")
-                yield Button("Abbrechen", id="btn-cancel")
+                    yield Button(t("blacklist_detail.btn_delete"), variant="error", id="btn-delete")
+                yield Button(t("blacklist_detail.btn_cancel"), id="btn-cancel")
 
     def on_mount(self) -> None:
         self._refresh_docs()
@@ -176,7 +177,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
             child.remove()
 
         if self._is_new or self._entry_id <= 0:
-            docs_list.mount(Static("  (erst nach Speichern moeglich)", classes="doc-name"))
+            docs_list.mount(Static(f"  {t('blacklist_detail.docs_after_save')}", classes="doc-name"))
             # Beleg-Button deaktivieren bis gespeichert
             with contextlib.suppress(Exception):
                 self.query_one("#btn-add-doc", Button).disabled = True
@@ -200,7 +201,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
             )
 
         if not docs:
-            docs_list.mount(Static("  (keine Belege)", classes="doc-name"))
+            docs_list.mount(Static(f"  {t('blacklist_detail.docs_empty')}", classes="doc-name"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id or ""
@@ -224,13 +225,10 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
 
         iso = _de_to_iso(date_de)
         if not iso:
-            self.app.notify(
-                "Ungueltiges Datum (Format: TT.MM.JJJJ)",
-                severity="error",
-            )
+            self.app.notify(t("blacklist_detail.notify.date_invalid"), severity="error")
             return
         if not reason:
-            self.app.notify("Grund / Anlass darf nicht leer sein", severity="error")
+            self.app.notify(t("blacklist_detail.notify.reason_required"), severity="error")
             return
 
         try:
@@ -239,16 +237,14 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
                 self._is_new = False
                 self._date_str = iso
                 self._reason = reason
-                self.app.notify("Blacklist-Eintrag angelegt", severity="information")
-                # Nach Speichern: Titel aktualisieren, Loeschen-Button nachmontieren,
-                # Belege freischalten. Einfacher: Dialog schliessen.
+                self.app.notify(t("blacklist_detail.notify.created"), severity="information")
                 self.dismiss(True)
             else:
                 self._database.update_blacklist_entry(self._entry_id, iso, reason)
-                self.app.notify("Blacklist-Eintrag aktualisiert", severity="information")
+                self.app.notify(t("blacklist_detail.notify.updated"), severity="information")
                 self.dismiss(True)
         except Exception as exc:
-            self.app.notify(f"Fehler beim Speichern: {exc}", severity="error")
+            self.app.notify(t("blacklist_detail.notify.save_failed", error=exc), severity="error")
 
     def _delete(self) -> None:
         """Loescht den aktuellen Eintrag."""
@@ -256,10 +252,10 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
             return
         try:
             self._database.delete_blacklist_entry(self._entry_id)
-            self.app.notify("Blacklist-Eintrag geloescht", severity="warning")
+            self.app.notify(t("blacklist_detail.notify.deleted"), severity="warning")
             self.dismiss(True)
         except Exception as exc:
-            self.app.notify(f"Fehler beim Loeschen: {exc}", severity="error")
+            self.app.notify(t("blacklist_detail.notify.delete_failed", error=exc), severity="error")
 
     def _open_date_picker(self) -> None:
         """Oeffnet den Kalender-Dialog zur Datumsauswahl."""
@@ -280,10 +276,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
     def _open_file_picker(self) -> None:
         """Oeffnet den File-Picker-Screen."""
         if self._is_new or self._entry_id <= 0:
-            self.app.notify(
-                "Erst speichern, dann koennen Belege hinzugefuegt werden",
-                severity="warning",
-            )
+            self.app.notify(t("blacklist_detail.notify.save_before_docs"), severity="warning")
             return
         from death_proof.screens.file_picker_screen import FilePickerScreen
 
