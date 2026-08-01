@@ -1,27 +1,22 @@
-"""Zusammenfassungspanel mit km-Statistiken."""
+"""Zusammenfassung der km-Statistiken als Statusleiste."""
 
-from rich.text import Text
-from textual.app import RenderResult
-from textual.widget import Widget
+from textual_widgets import StatusBar, StatusItem
 
 from death_proof.i18n import t
 from death_proof.models.trip import MonthData
 from death_proof.services.formatting import format_km
 
 
-class SummaryPanel(Widget):
-    """Zeigt km-Zusammenfassung fuer den aktuellen Monat."""
+class SummaryPanel(StatusBar):  # type: ignore[misc]
+    """km gesamt, geschaeftlich, privat und Leasing fuer den Monat.
 
-    DEFAULT_CSS = """
-    SummaryPanel {
-        height: 1;
-        padding: 0 1;
-        background: $surface;
-    }
+    Rahmen und Trenner kommen aus der StatusBar in textual-widgets - damit
+    sieht die Leiste in allen Anwendungen gleich aus. Hier steht nur, welche
+    Zahlen erscheinen.
     """
 
     def __init__(self, **kwargs: object) -> None:
-        super().__init__(**kwargs)
+        super().__init__(hint=t("summary.empty_hint"), **kwargs)
         self._month_data: MonthData | None = None
         self._lease_km: int = 1500
 
@@ -29,34 +24,33 @@ class SummaryPanel(Widget):
         """Aktualisiert die Zusammenfassung."""
         self._month_data = month_data
         self._lease_km = lease_km
-        self.refresh()
+        if month_data is None or not month_data.trips:
+            self.clear()
+            return
+        self.set_items(self._items_bauen(month_data))
 
-    def render(self) -> RenderResult:
-        """Rendert die Zusammenfassung."""
-        if self._month_data is None or not self._month_data.trips:
-            return Text(t("summary.empty_hint"), style="dim")
-
-        md = self._month_data
-        text = Text()
-        text.append(t("summary.km_total"), style="dim")
-        text.append(format_km(md.km_total), style="bold")
-        text.append("  |  ", style="dim")
-
-        text.append(t("summary.business"), style="dim")
+    def _items_bauen(self, md: MonthData) -> list[StatusItem]:
         biz_pct = md.business_percentage
-        # Gruen fuer gute Quote, rot fuer kritisch — alles andere neutral
+        # Gruen fuer gute Quote, rot fuer kritisch - alles andere neutral.
         biz_style = "bold green" if biz_pct >= 70 else ("bold red" if biz_pct < 50 else "bold")
-        text.append(t("summary.percent_of", km=format_km(md.km_business), pct=biz_pct), style=biz_style)
-        text.append("  |  ", style="dim")
-
-        text.append(t("summary.private"), style="dim")
         priv_pct = 100 - biz_pct if md.km_total > 0 else 0
-        text.append(t("summary.percent_of", km=format_km(md.km_private), pct=priv_pct), style="bold")
-        text.append("  |  ", style="dim")
-
-        text.append(t("summary.leasing"), style="dim")
         lease_pct = md.km_total / self._lease_km * 100 if self._lease_km > 0 else 0
         lease_style = "bold red" if lease_pct > 110 else "bold"
-        text.append(t("summary.percent_of", km=format_km(self._lease_km), pct=lease_pct), style=lease_style)
 
-        return text
+        return [
+            StatusItem(t("summary.km_total"), format_km(md.km_total)),
+            StatusItem(
+                t("summary.business"),
+                t("summary.percent_of", km=format_km(md.km_business), pct=biz_pct),
+                value_style=biz_style,
+            ),
+            StatusItem(
+                t("summary.private"),
+                t("summary.percent_of", km=format_km(md.km_private), pct=priv_pct),
+            ),
+            StatusItem(
+                t("summary.leasing"),
+                t("summary.percent_of", km=format_km(self._lease_km), pct=lease_pct),
+                value_style=lease_style,
+            ),
+        ]

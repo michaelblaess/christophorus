@@ -1,6 +1,5 @@
 {
   "app.title": "Death Proof v{version} ({year})",
-
   "binding.quit": "Beenden",
   "binding.new_trip": "Neue Fahrt",
   "binding.delete": "löschen",
@@ -26,7 +25,6 @@
   "binding.close": "Schließen",
   "binding.yes": "Ja",
   "binding.no": "Nein",
-
   "tab.list_month": "Liste (Monat)",
   "tab.list_year": "Liste (Jahr)",
   "tab.calendar": "Kalender",
@@ -34,7 +32,6 @@
   "tab.blacklist": "Blacklist",
   "tab.documents": "Belege",
   "tab.worktimes": "Arbeitszeit",
-
   "tooltip.quit": "Schließt die Anwendung",
   "tooltip.new_trip": "Legt eine neue Fahrt an (auf dem Blacklist-Tab: neuer Sperreintrag)",
   "tooltip.delete": "Löscht die aktuell ausgewählte Fahrt (mit Bestätigungsdialog)",
@@ -54,7 +51,6 @@
   "tooltip.log_clear": "Leert das Log-Fenster",
   "tooltip.info": "Zeigt Programminformationen",
   "tooltip.theme": "Schaltet zum nächsten Theme (alphabetisch)",
-
   "config.label.vehicle": "  Fahrzeug:   ",
   "config.label.leasing": "  Leasing:    ",
   "config.label.km_state": "  km-Stand:   ",
@@ -69,7 +65,6 @@
   "config.lease_from": "ab {start}",
   "config.nav_hint": "   [<] Zurück  [>] Vor",
   "config.open_dir": "↗ Öffnen",
-
   "month.january": "Januar",
   "month.february": "Februar",
   "month.march": "März",
@@ -82,7 +77,6 @@
   "month.october": "Oktober",
   "month.november": "November",
   "month.december": "Dezember",
-
   "log.app_started": "Death Proof v{version} gestartet",
   "log.fahrtenbuch_opened": "Fahrtenbuch geöffnet: {path}",
   "log.fahrtenbuch_created": "Neues Fahrtenbuch erstellt: {path}",
@@ -127,7 +121,6 @@
   "log.rebuild_failed": "Rebuild fehlgeschlagen: {error}",
   "log.rebuild_done": "km-Kette neu aufgebaut: {changed} Fahrten, Endstand {km} km",
   "log.rebuild_over_limit": "Hinweis: Endstand {km} km liegt über dem Vertragslimit {limit} km",
-
   "notify.no_fahrtenbuch": "Kein Fahrtenbuch geöffnet",
   "notify.no_trip_selected": "Keine Fahrt ausgewählt",
   "notify.trip_not_found": "Fahrt nicht gefunden",
@@ -156,14 +149,12 @@
   "notify.update_failed": "Fehler: {error}",
   "notify.create_rejected": "Anlegen abgelehnt: {error}",
   "notify.create_failed": "Fehler: {error}",
-
   "summary.empty_hint": "  Drücke [N] um eine neue Fahrt anzulegen",
-  "summary.km_total": "km gesamt: ",
-  "summary.business": "geschäftl.: ",
-  "summary.private": "privat: ",
-  "summary.leasing": "Leasing: ",
+  "summary.km_total": "km gesamt",
+  "summary.business": "geschäftl.",
+  "summary.private": "privat",
+  "summary.leasing": "Leasing",
   "summary.percent_of": "{km} ({pct:.0f}%)",
-
   "table.col.id": "ID",
   "table.col.category": "Kat",
   "table.col.date": "Datum",
@@ -177,7 +168,6 @@
   "table.col.km_business": "geschäftl.",
   "table.col.km_private": "privat",
   "table.warning.blocked": "[GESPERRT: {reason}]",
-
   "settings.title": "Einstellungen",
   "settings.tab.vehicle": "Fahrzeug",
   "settings.tab.home": "Wohnung",
@@ -265,10 +255,8 @@
   "settings.state.st": "Sachsen-Anhalt",
   "settings.state.sh": "Schleswig-Holstein",
   "settings.state.th": "Thüringen",
-
   "settings.storage.config": "App-Konfiguration",
   "settings.storage.db": "Aktuelle Datenbank",
-
   "trip.title_new": "Neue Fahrt",
   "trip.title_edit": "Fahrt bearbeiten",
   "trip.label.date": "Datum:",
@@ -322,7 +310,6 @@
   "trip.purpose.tax_advisor_default": "Steuerberaterin",
   "trip.purpose.restaurant_default": "Geschäftsessen",
   "trip.no_purpose": "(kein Reisezweck)",
-
   "confirm.destination_prefix": "Ziel:",
   "confirm.delete_trip_title": "Fahrt löschen?",
   "confirm.delete_trip_with_docs_title": "Fahrt mit Belegen löschen?",
@@ -334,11 +321,9 @@
   "confirm.beleg_link_": "",
   "confirm.confirm_label_delete": "Löschen",
   "confirm.cancel_label": "Abbrechen",
-
   "confirm.rebuild_title": "km-Kette neu aufbauen?",
   "confirm.rebuild_msg": "Die km-Kette wird nach Datum und Uhrzeit neu aufgebaut.\n\nDie Distanz jeder einzelnen Fahrt bleibt unverändert — es werden nur km_Anfang und km_Ende so zugewiesen, dass die Kette lückenlos in zeitlicher Reihenfolge ist.\n\nDiese Aktion kann nicht automatisch rückgängig gemacht werden.",
   "confirm.rebuild_label": "Neu aufbauen",
-
   "start.title": "Fahrtenbuch verwalten",
   "start.subtitle": "Finanzamt-konforme Fahrtenbücher für Leasing-Fahrzeuge",
   "start.current_open": "Aktuell geöffnet:",
@@ -367,12 +352,10 @@
   "start.notify.backup_none": "Kein Fahrtenbuch zum Sichern",
   "start.notify.backup_done": "Sicherung erstellt: {name}",
   "start.notify.backup_failed": "Sicherung fehlgeschlagen: {error}",
-
   "info.title": "Death Proof v{version}",
   "info.description": "Finanzamt-konforme Fahrtenbücher\nfür Leasing-Fahrzeuge",
   "info.quote": "„Freiheit wird vom Unterdrücker niemals\nfreiwillig gegeben; sie muss vom\nUnterdrückten gefordert werden.\"\n— Martin Luther King jr.",
   "info.footer": "ESC = Schließen",
-
   "year.title": "Jahresübersicht {year}",
   "year.no_data": "keine Daten",
   "year.problem_findings": "{count} Plausi-Befunde",
@@ -390,7 +373,6 @@
   "year.total_diff": "  |  Differenz: {sign}{km} km",
   "year.total_business": "geschäftl.: {km} km ({pct:.1f}%)",
   "year.total_private": "  |  privat: {km} km ({pct:.1f}%)",
-
   "blacklist.title": "Blacklist",
   "blacklist.column.date": "Datum",
   "blacklist.column.reason": "Grund",
@@ -414,7 +396,6 @@
   "blacklist_detail.notify.save_before_docs": "Erst speichern, dann können Belege hinzugefügt werden",
   "blacklist_detail.docs_after_save": "(erst nach Speichern möglich)",
   "blacklist_detail.docs_empty": "(keine Belege)",
-
   "documents.title": "Belege",
   "documents.column.type": "Typ",
   "documents.column.date": "Datum",
@@ -427,7 +408,6 @@
   "documents.empty": "Keine Belege erfasst.",
   "documents.type.trip": "Fahrt",
   "documents.type.blacklist": "Blacklist",
-
   "worktimes.title": "Arbeitszeit {year}",
   "worktimes.label.hours": "Stunden",
   "worktimes.label.hours_input": "Stunden:",
@@ -438,7 +418,6 @@
   "worktimes.col.per_day": "Std/Tag (22 AT)",
   "worktimes.total_label": "Gesamt / Durchschnitt",
   "worktimes.year_label": "Jahr: {year}",
-
   "calendar.blocked": "GESPERRT",
   "calendar.warning": "WARNUNG",
   "calendar.km_business_warning": "km gesch.!",
@@ -450,12 +429,10 @@
   "calendar.weekday.fr": "Fr",
   "calendar.weekday.sa": "Sa",
   "calendar.weekday.so": "So",
-
   "datepicker.title": "Datum auswählen",
   "datepicker.today_hint": "Heute: {date}",
   "datepicker.btn_today": "Heute",
   "datepicker.btn_cancel": "Abbrechen",
-
   "filepicker.title": "Datei auswählen",
   "filepicker.label.path": "Pfad:",
   "filepicker.label.selected": "Ausgewählt:",

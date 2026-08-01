@@ -1,6 +1,5 @@
 {
   "app.title": "Death Proof v{version} ({year})",
-
   "binding.quit": "Quit",
   "binding.new_trip": "New trip",
   "binding.delete": "delete",
@@ -26,7 +25,6 @@
   "binding.close": "Close",
   "binding.yes": "Yes",
   "binding.no": "No",
-
   "tab.list_month": "List (month)",
   "tab.list_year": "List (year)",
   "tab.calendar": "Calendar",
@@ -34,7 +32,6 @@
   "tab.blacklist": "Blacklist",
   "tab.documents": "Receipts",
   "tab.worktimes": "Working hours",
-
   "tooltip.quit": "Closes the application",
   "tooltip.new_trip": "Creates a new trip (on the Blacklist tab: new blocked-day entry)",
   "tooltip.delete": "Deletes the currently selected trip (with confirmation)",
@@ -54,7 +51,6 @@
   "tooltip.log_clear": "Clears the log panel",
   "tooltip.info": "Shows program information",
   "tooltip.theme": "Cycles to the next theme (alphabetical)",
-
   "config.label.vehicle": "  Vehicle:    ",
   "config.label.leasing": "  Lease:      ",
   "config.label.km_state": "  Odometer:   ",
@@ -69,7 +65,6 @@
   "config.lease_from": "from {start}",
   "config.nav_hint": "   [<] Prev  [>] Next",
   "config.open_dir": "↗ Open",
-
   "month.january": "January",
   "month.february": "February",
   "month.march": "March",
@@ -82,7 +77,6 @@
   "month.october": "October",
   "month.november": "November",
   "month.december": "December",
-
   "log.app_started": "Death Proof v{version} started",
   "log.fahrtenbuch_opened": "Logbook opened: {path}",
   "log.fahrtenbuch_created": "New logbook created: {path}",
@@ -127,7 +121,6 @@
   "log.rebuild_failed": "Rebuild failed: {error}",
   "log.rebuild_done": "km chain rebuilt: {changed} trips, end odometer {km} km",
   "log.rebuild_over_limit": "Note: end odometer {km} km exceeds contract limit {limit} km",
-
   "notify.no_fahrtenbuch": "No logbook open",
   "notify.no_trip_selected": "No trip selected",
   "notify.trip_not_found": "Trip not found",
@@ -156,14 +149,12 @@
   "notify.update_failed": "Error: {error}",
   "notify.create_rejected": "Create rejected: {error}",
   "notify.create_failed": "Error: {error}",
-
   "summary.empty_hint": "  Press [N] to add a new trip",
-  "summary.km_total": "km total: ",
-  "summary.business": "business: ",
-  "summary.private": "private: ",
-  "summary.leasing": "lease: ",
+  "summary.km_total": "km total",
+  "summary.business": "business",
+  "summary.private": "private",
+  "summary.leasing": "lease",
   "summary.percent_of": "{km} ({pct:.0f}%)",
-
   "table.col.id": "ID",
   "table.col.category": "Cat",
   "table.col.date": "Date",
@@ -177,7 +168,6 @@
   "table.col.km_business": "business",
   "table.col.km_private": "private",
   "table.warning.blocked": "[BLOCKED: {reason}]",
-
   "settings.title": "Settings",
   "settings.tab.vehicle": "Vehicle",
   "settings.tab.home": "Home",
@@ -265,10 +255,8 @@
   "settings.state.st": "Saxony-Anhalt",
   "settings.state.sh": "Schleswig-Holstein",
   "settings.state.th": "Thuringia",
-
   "settings.storage.config": "App configuration",
   "settings.storage.db": "Current database",
-
   "trip.title_new": "New trip",
   "trip.title_edit": "Edit trip",
   "trip.label.date": "Date:",
@@ -322,7 +310,6 @@
   "trip.purpose.tax_advisor_default": "Tax advisor",
   "trip.purpose.restaurant_default": "Business lunch",
   "trip.no_purpose": "(no purpose)",
-
   "confirm.destination_prefix": "Destination:",
   "confirm.delete_trip_title": "Delete trip?",
   "confirm.delete_trip_with_docs_title": "Delete trip with receipts?",
@@ -334,11 +321,9 @@
   "confirm.beleg_link_": "",
   "confirm.confirm_label_delete": "Delete",
   "confirm.cancel_label": "Cancel",
-
   "confirm.rebuild_title": "Rebuild km chain?",
   "confirm.rebuild_msg": "The km chain will be rebuilt by date and time.\n\nThe distance of each individual trip stays unchanged — only km_start and km_end are reassigned so the chain is contiguous in chronological order.\n\nThis action cannot be undone automatically.",
   "confirm.rebuild_label": "Rebuild",
-
   "start.title": "Manage logbook",
   "start.subtitle": "Tax-compliant logbooks for leased vehicles",
   "start.current_open": "Currently open:",
@@ -367,12 +352,10 @@
   "start.notify.backup_none": "No logbook to back up",
   "start.notify.backup_done": "Backup created: {name}",
   "start.notify.backup_failed": "Backup failed: {error}",
-
   "info.title": "Death Proof v{version}",
   "info.description": "Tax-compliant logbooks\nfor leased vehicles",
   "info.quote": "\"Freedom is never voluntarily given by\nthe oppressor; it must be demanded\nby the oppressed.\"\n— Martin Luther King jr.",
   "info.footer": "ESC = Close",
-
   "year.title": "Year overview {year}",
   "year.no_data": "no data",
   "year.problem_findings": "{count} plausi findings",
@@ -390,7 +373,6 @@
   "year.total_diff": "  |  difference: {sign}{km} km",
   "year.total_business": "business: {km} km ({pct:.1f}%)",
   "year.total_private": "  |  private: {km} km ({pct:.1f}%)",
-
   "blacklist.title": "Blacklist",
   "blacklist.column.date": "Date",
   "blacklist.column.reason": "Reason",
@@ -414,7 +396,6 @@
   "blacklist_detail.notify.save_before_docs": "Save the entry first, then add receipts",
   "blacklist_detail.docs_after_save": "(available after saving)",
   "blacklist_detail.docs_empty": "(no receipts)",
-
   "documents.title": "Receipts",
   "documents.column.type": "Type",
   "documents.column.date": "Date",
@@ -427,7 +408,6 @@
   "documents.empty": "No receipts.",
   "documents.type.trip": "Trip",
   "documents.type.blacklist": "Blacklist",
-
   "worktimes.title": "Working hours {year}",
   "worktimes.label.hours": "Hours",
   "worktimes.label.hours_input": "Hours:",
@@ -438,7 +418,6 @@
   "worktimes.col.per_day": "h/day (22 work days)",
   "worktimes.total_label": "Total / average",
   "worktimes.year_label": "Year: {year}",
-
   "calendar.blocked": "BLOCKED",
   "calendar.warning": "WARNING",
   "calendar.km_business_warning": "km biz!",
@@ -450,12 +429,10 @@
   "calendar.weekday.fr": "Fri",
   "calendar.weekday.sa": "Sat",
   "calendar.weekday.so": "Sun",
-
   "datepicker.title": "Pick date",
   "datepicker.today_hint": "Today: {date}",
   "datepicker.btn_today": "Today",
   "datepicker.btn_cancel": "Cancel",
-
   "filepicker.title": "Pick file",
   "filepicker.label.path": "Path:",
   "filepicker.label.selected": "Selected:",

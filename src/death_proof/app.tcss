@@ -56,8 +56,9 @@ BlacklistView {
     border: solid $accent;
 }
 
+/* Keine Hoehenvorgabe: die StatusBar steht auf height: auto, weil ihr
+   Rahmen zwei Zeilen mehr braucht. Mit height: 1 waere er abgeschnitten. */
 SummaryPanel {
-    height: 1;
     margin-top: 0;
 }
 
