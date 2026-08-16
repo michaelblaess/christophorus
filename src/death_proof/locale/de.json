@@ -354,7 +354,6 @@
   "start.notify.backup_failed": "Sicherung fehlgeschlagen: {error}",
   "info.title": "Death Proof v{version}",
   "info.description": "Finanzamt-konforme Fahrtenbücher\nfür Leasing-Fahrzeuge",
-  "info.quote": "„Freiheit wird vom Unterdrücker niemals\nfreiwillig gegeben; sie muss vom\nUnterdrückten gefordert werden.\"\n— Martin Luther King jr.",
   "info.footer": "ESC = Schließen",
   "year.title": "Jahresübersicht {year}",
   "year.no_data": "keine Daten",

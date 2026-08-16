@@ -354,7 +354,6 @@
   "start.notify.backup_failed": "Backup failed: {error}",
   "info.title": "Death Proof v{version}",
   "info.description": "Tax-compliant logbooks\nfor leased vehicles",
-  "info.quote": "\"Freedom is never voluntarily given by\nthe oppressor; it must be demanded\nby the oppressed.\"\n— Martin Luther King jr.",
   "info.footer": "ESC = Close",
   "year.title": "Year overview {year}",
   "year.no_data": "no data",
