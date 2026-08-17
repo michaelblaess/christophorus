@@ -107,7 +107,15 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
         except ImportError:
             pass
 
-        self.theme = self._config.theme
+        # Ein Theme aus der Konfiguration kann verschwunden sein: die Bibliothek
+        # wurde herabgestuft, das Theme umbenannt, oder es kam aus einer noch
+        # nicht veroeffentlichten Fassung. Ohne diese Pruefung wirft Textual
+        # InvalidThemeError und die Anwendung startet gar nicht mehr.
+        self._verworfenes_theme = ""
+        if self._config.theme in self.available_themes:
+            self.theme = self._config.theme
+        elif self._config.theme:
+            self._verworfenes_theme = self._config.theme
 
         self._year = year_override or date.today().year
         self._month = date.today().month
@@ -523,6 +531,9 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
             anzeige = THEME_DISPLAY_NAMES.get(name, name)
             beschriftung = f"{anzeige} ({name})" if anzeige != name else name
             self._write_log(t("log.theme_active", name=beschriftung))
+            if self._verworfenes_theme:
+                self._write_log(t("log.theme_unknown", name=self._verworfenes_theme), "warning")
+                self._verworfenes_theme = ""
 
     def on_log_panel_hidden(self, event: LogPanel.Hidden) -> None:  # noqa: ARG002
         """LogPanel meldet Hide ueber Kontextmenue — Splitter mit ausblenden."""
