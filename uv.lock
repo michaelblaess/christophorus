@@ -640,8 +640,8 @@ wheels = [
 
 [[package]]
 name = "textual-themes"
-version = "0.12.2"
-source = { git = "https://github.com/michaelblaess/textual-themes.git#e7a40d424431ee8682293009349017c1b216644b" }
+version = "0.12.3"
+source = { git = "https://github.com/michaelblaess/textual-themes.git#9b0d3cfb1ad81e60748b40ff3b2e97de3790b1d9" }
 dependencies = [
     { name = "textual" },
 ]
