@@ -78,6 +78,7 @@
   "month.november": "November",
   "month.december": "Dezember",
   "log.app_started": "Death Proof v{version} gestartet",
+  "log.theme_active": "Theme: {name}",
   "log.fahrtenbuch_opened": "Fahrtenbuch geöffnet: {path}",
   "log.fahrtenbuch_created": "Neues Fahrtenbuch erstellt: {path}",
   "log.fahrtenbuch_closed_hint": "Kein Fahrtenbuch geöffnet. Drücke [V] zum Verwalten.",

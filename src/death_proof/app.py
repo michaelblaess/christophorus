@@ -166,6 +166,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
             self.query_one("#log-splitter").add_class("hidden")
 
         self._write_log(t("log.app_started", version=__version__))
+        self._log_theme()
 
         # Versuche zuletzt geoeffnetes Fahrtenbuch zu oeffnen
         last_path = self._config.last_opened_path
@@ -498,13 +499,30 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
         self.exit()
 
     def watch_theme(self, theme_name: str) -> None:
-        """Speichert das Theme bei Aenderung persistent."""
+        """Speichert das Theme bei Aenderung persistent und meldet es im Log."""
         if not hasattr(self, "_config"):
             return
         if self._config.theme == theme_name:
             return
         self._config.theme = theme_name
         self._config.save()
+        self._log_theme()
+
+    def _log_theme(self) -> None:
+        """Schreibt das aktive Theme ins Log.
+
+        Textual zeigt nirgends an, welches Theme gerade laeuft - nach einem
+        Neustart weiss man also nicht, was man vor sich hat. Der technische
+        Name steht mit dabei, weil er in den Einstellungen und in der
+        Befehlspalette auftaucht.
+        """
+        with contextlib.suppress(Exception):
+            from textual_themes import THEME_DISPLAY_NAMES
+
+            name = self.theme or ""
+            anzeige = THEME_DISPLAY_NAMES.get(name, name)
+            beschriftung = f"{anzeige} ({name})" if anzeige != name else name
+            self._write_log(t("log.theme_active", name=beschriftung))
 
     def on_log_panel_hidden(self, event: LogPanel.Hidden) -> None:  # noqa: ARG002
         """LogPanel meldet Hide ueber Kontextmenue — Splitter mit ausblenden."""
