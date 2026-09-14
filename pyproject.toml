@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "death-proof"
 version = "1.2.1"
-description = "Death Proof — Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher"
+description = "Death Proof - Fahrtenbuch als Terminal-Anwendung mit Plausibilitätsprüfung"
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
     "textual>=0.40",

@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from textual_widgets import DisclaimerStore
 
 from death_proof.i18n import load_locale
 from death_proof.models.settings import HOME_ENV_VAR
@@ -29,6 +30,9 @@ def _isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     home = tmp_path / "death-proof-home"
     home.mkdir()
     monkeypatch.setenv(HOME_ENV_VAR, str(home))
+    # Die Zustimmung zum Haftungshinweis gilt in Tests als erteilt - sonst laege
+    # der Dialog vor jedem App-Test. tests/test_disclaimer.py nimmt sie gezielt weg.
+    DisclaimerStore(home / "disclaimer.json").record()
     return home
 
 

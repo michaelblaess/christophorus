@@ -1,4 +1,4 @@
-"""Fahrtenbuch TUI — Finanzamt-konforme Fahrtenbuecher."""
+"""Fahrtenbuch TUI - Fahrtenbuecher fuer Leasing-Fahrzeuge."""
 
 __version__ = "1.2.1"
 __author__ = "Michael Blaess"

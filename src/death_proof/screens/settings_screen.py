@@ -264,6 +264,7 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
         return [
             (t("settings.storage.config"), self._config.CONFIG_FILE),
             (t("settings.storage.db"), Path(self._database.path)),
+            (t("settings.storage.disclaimer"), self._config.CONFIG_DIR / "disclaimer.json"),
         ]
 
     def collect_app_settings(self, settings: dict[str, object]) -> None:

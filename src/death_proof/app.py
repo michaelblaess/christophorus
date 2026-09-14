@@ -9,17 +9,20 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.widgets import ContentSwitcher, Footer, Header, Tab, Tabs
 from textual_widgets import (
+    DISCLAIMER_VERSION,
     CrashGuard,
+    DisclaimerScreen,
+    DisclaimerStore,
     HorizontalSplitter,
     LogPanel,
     LogRouter,
 )
 
-from death_proof import __version__, __year__, keymap
+from death_proof import __author__, __version__, __year__, keymap
 from death_proof.i18n import current_language, month_name, t
 from death_proof.models.export_job import ExportJob
 from death_proof.models.fahrtenbuch import Fahrtenbuch
-from death_proof.models.settings import GlobalConfig
+from death_proof.models.settings import GlobalConfig, config_dir
 from death_proof.models.trip import (
     Trip,
     set_business_categories,
@@ -41,7 +44,7 @@ from death_proof.widgets.year_view import YearView
 
 
 class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
-    """Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher."""
+    """Fahrtenbuch TUI fuer Leasing-Fahrzeuge."""
 
     CSS_PATH = "app.tcss"
     TITLE = f"Death Proof v{__version__} ({__year__})"
@@ -53,6 +56,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
     def __init__(self, year_override: int | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._config = GlobalConfig.load()
+        # Zustimmung zum Haftungshinweis liegt neben der Konfiguration.
+        self._disclaimer = DisclaimerStore(config_dir() / "disclaimer.json")
         # CrashGuard liest dieses Attribut fuer den Fehler-Dialog
         self.crash_guard_lang = current_language()
 
@@ -148,6 +153,40 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             self._open_fahrtenbuch(last_path)
         else:
             self._show_start_screen()
+
+        # Zuletzt, damit der Hinweis ueber dem Start-Screen liegt.
+        self._ask_disclaimer()
+
+    def _ask_disclaimer(self) -> None:
+        """Holt den Haftungshinweis ein, solange er in dieser Fassung nicht bestaetigt ist."""
+        if self._disclaimer.accepted_version == DISCLAIMER_VERSION:
+            return
+        self.push_screen(
+            DisclaimerScreen(
+                app_name=f"Death Proof {__version__}",
+                lang=current_language(),
+                author=__author__,
+                # Der Standardtext des Widgets beschreibt Scanner, die Last auf
+                # fremden Servern erzeugen. Hier geht es um steuerliche
+                # Anerkennung und personenbezogene Daten - daher eigener Wortlaut.
+                title=t("disclaimer.title"),
+                intro=t("disclaimer.intro"),
+                duties=(
+                    t("disclaimer.duty_entries"),
+                    t("disclaimer.duty_personal_data"),
+                    t("disclaimer.duty_backup"),
+                ),
+                footer=f"© {__year__} {__author__} · github.com/michaelblaess/death-proof",
+            ),
+            callback=self._on_disclaimer,
+        )
+
+    def _on_disclaimer(self, accepted: bool | None) -> None:
+        """Ohne Zustimmung wird das Programm beendet - der Hinweis ist nicht optional."""
+        if not accepted:
+            self.exit()
+            return
+        self._disclaimer.record()
 
     @property
     def vim_navigation(self) -> bool:

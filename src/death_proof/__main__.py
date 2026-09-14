@@ -17,7 +17,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="death-proof",
-        description="Death Proof — Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher",
+        description="Death Proof - Fahrtenbuch als Terminal-Anwendung mit Plausibilitaetspruefung",
     )
     parser.add_argument(
         "--year",
