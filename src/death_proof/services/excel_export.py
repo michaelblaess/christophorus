@@ -196,7 +196,7 @@ def export_trips(
 
     trips: Liste der zu exportierenden Fahrten (sortiert nach Datum)
     out_path: Zielpfad der .xlsx-Datei
-    title_line1: Haupttitel (z.B. 'Fahrtenbuch Audi A5 Cabrio (B-TT 1)')
+    title_line1: Haupttitel (z.B. 'Fahrtenbuch Musterwagen (B-TT 1)')
     subtitle: Untertitel (z.B. 'Mai 2024' oder '2024 — 1.500 km/Monat Leasing')
     group_by_month: bei True werden Monats-Zwischensummen eingefuegt (Jahresexport)
     """
