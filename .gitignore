@@ -9,3 +9,14 @@ __pycache__/
 *.db-shm
 *.db-wal
 .claude/
+.import_linter_cache/
+
+# Nutzdaten - gehoeren nicht ins Repo. Am 14.09.2026 aus der gesamten
+# Historie entfernt, damit das Repo veroeffentlicht werden kann. Die
+# Fahrzeugordner (Datenbank, Belegbilder) sind ueber *.db und die
+# Bildendungen oben schon ausgeschlossen.
+/*.xlsx
+/Kundenrechnungen*.md
+/Blacklist*.md
+/PLAN*.md
+/import_trips.py
