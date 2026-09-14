@@ -17,6 +17,7 @@ from textual_widgets import (
 
 from death_proof import __version__, __year__, keymap
 from death_proof.i18n import current_language, month_name, t
+from death_proof.models.export_job import ExportJob
 from death_proof.models.fahrtenbuch import Fahrtenbuch
 from death_proof.models.settings import GlobalConfig
 from death_proof.models.trip import (
@@ -86,6 +87,9 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         self._problem_trip_ids: set[int] = set()
         self._problem_months: dict[int, int] = {}  # month -> count (nur aktuelles Jahr)
         self._log_height: int = 10
+        # Auftrag, der auf den Speichern-Dialog wartet. Zusammengestellt wird
+        # er beim Oeffnen, damit der Dialog nur mit echten Fahrten aufgeht.
+        self._pending_export: ExportJob | None = None
 
         # Beanstandungen aus der Tastenbelegung. Sie gehoeren ins Log, nicht in
         # einen Dialog - sie betreffen die Konfigurationsdatei, nicht den
@@ -1049,17 +1053,100 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             self._refresh_year_trip_table()
 
     def action_export(self) -> None:
-        """Exportiert die aktuelle Liste (Monat oder Jahr) als Excel-Datei."""
+        """Oeffnet den Speichern-Dialog fuer die aktuelle Liste (Monat oder Jahr).
+
+        Das Format waehlt der Anwender im Dialog: Excel, JSON oder Markdown.
+        Bis v1.2.1 schrieb die Taste ohne Rueckfrage eine Excel-Datei neben die
+        Datenbank - das Verzeichnis des Fahrtenbuchs ist deshalb weiterhin der
+        Startpunkt, solange noch kein Export woanders hin ging.
+        """
+        from death_proof.models.export_format import DEFAULT_FORMAT, suggested_name
+        from death_proof.screens.export_save_screen import ExportSaveScreen
+
+        prepared = self._build_export_job()
+        if prepared is None:
+            return
+        job, stem = prepared
+        self._pending_export = job
+        self.push_screen(
+            ExportSaveScreen(
+                location=self._save_dialog_location(),
+                default_file=suggested_name(DEFAULT_FORMAT, stem),
+                start_format=DEFAULT_FORMAT,
+            ),
+            callback=self._do_export,
+        )
+
+    def _save_dialog_location(self) -> str:
+        """Das Verzeichnis, in dem der Speichern-Dialog aufgeht.
+
+        Der Reihe nach: das zuletzt genutzte Ziel, das Verzeichnis des
+        Fahrtenbuchs, der Schreibtisch, das Heimatverzeichnis. Geprueft wird
+        jedes Mal, ob es den Pfad wirklich gibt - `textual_fspicker` geht bei
+        einem nicht vorhandenen Startverzeichnis mit einem Fehlerbildschirm
+        hoch. In jira-timesheet ist genau das auf dem Linux-Runner der CI
+        passiert, wo es kein Verzeichnis "Desktop" gibt.
+
+        Returns:
+            Ein Verzeichnis, das existiert.
+        """
+        kandidaten = [self._config.last_export_dir]
+        if self._fahrtenbuch is not None:
+            kandidaten.append(str(self._fahrtenbuch.path))
+        kandidaten += [str(Path.home() / "Desktop"), str(Path.home())]
+        for kandidat in kandidaten:
+            if kandidat and Path(kandidat).is_dir():
+                return kandidat
+        return str(Path.cwd())
+
+    def _do_export(self, path: Path | None) -> None:
+        """Schreibt den wartenden Auftrag im Format, das die Endung vorgibt.
+
+        Args:
+            path: Der im Dialog gewaehlte Pfad, oder None beim Abbrechen.
+        """
+        from death_proof.models.export_format import DEFAULT_FORMAT, format_for_path
+        from death_proof.services.exporters import write_export
+
+        job = self._pending_export
+        self._pending_export = None
+        if path is None or job is None:
+            return
+
+        export_format = format_for_path(path) or DEFAULT_FORMAT
+        format_name = t(export_format.name_key)
+        try:
+            write_export(export_format, job, path)
+        except Exception as exc:
+            self._write_log(t("log.export_failed", format=format_name, error=exc), level="error")
+            self.notify(t("notify.export_error", error=exc), severity="error")
+            return
+
+        self._config.last_export_dir = str(path.parent)
+        self._config.save()
+
+        scope_label = t("log.export_scope_year") if job.month is None else t("log.export_scope_month")
+        file_id = self._register_log_file(path)
+        header = t("log.export_ok", format=format_name, scope=scope_label, count=len(job.trips))
+        self._write_log(
+            f"{header}[@click=app.open_log_file({file_id})]{path.name}[/]",
+            level="success",
+        )
+        self.notify(t("notify.export_saved", format=format_name, file=path.name), severity="information")
+
+    def _build_export_job(self) -> tuple[ExportJob, str] | None:
+        """Stellt zusammen, was exportiert wird, samt sprechendem Dateinamen.
+
+        Returns:
+            Auftrag und Namensstamm, oder None wenn es nichts zu exportieren
+            gibt - der Hinweis dazu ist dann schon ausgegeben.
+        """
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             self.notify(t("notify.no_fahrtenbuch"), severity="warning")
-            return
+            return None
 
         db = self._fahrtenbuch.database
         vehicle = self._fahrtenbuch.vehicle
-
-        from datetime import datetime
-
-        from death_proof.services.excel_export import export_trips
 
         # Fahrzeug-Info fuer Titel
         if vehicle and vehicle.name and vehicle.plate:
@@ -1078,10 +1165,6 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         # Aktuell aktiver Tab bestimmt den Export-Scope
         is_year_export = self._current_view == "tab-list-year"
 
-        # Timestamp-Suffix vermeidet Permission-Denied, falls eine
-        # vorherige Export-Datei noch in Excel offen ist.
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-
         if is_year_export:
             trips = db.get_trips_for_year(self._year)
             # Optional Dezember des Vorjahrs vorn anhaengen, damit die
@@ -1091,46 +1174,33 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
                 if prev_trips:
                     trips = prev_trips + trips
             subtitle = f"{self._year} — {lease_info}"
-            filename = f"Fahrtenbuch {self._year}{plate_part} {ts}.xlsx"
+            stem = f"Fahrtenbuch {self._year}{plate_part}"
             group_by_month = True
         else:
             trips = db.get_trips_for_month(self._year, self._month)
             month_label = f"{month_name(self._month, lang='de')} {self._year}"
             subtitle = f"{month_label} — {lease_info}"
-            filename = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part} {ts}.xlsx"
+            stem = f"Fahrtenbuch {self._year}-{self._month:02d}{plate_part}"
             group_by_month = False
 
         if not trips:
             self.notify(t("notify.export_no_trips"), severity="warning")
             self._write_log(t("log.export_cancelled_no_trips"), level="warning")
-            return
+            return None
 
-        # Anzeige-Labels der Kategorien fuer informationelle Trip-Zeilen
-        category_labels = {code: label for label, code in db.get_category_options()}
-
-        out_path = Path(db.path) / filename
-        try:
-            export_trips(
-                trips=trips,
-                out_path=out_path,
-                title_line1=title_line1,
-                subtitle=subtitle,
-                group_by_month=group_by_month,
-                category_labels=category_labels,
-            )
-        except Exception as exc:
-            self._write_log(t("log.export_failed", error=exc), level="error")
-            self.notify(t("notify.export_error", error=exc), severity="error")
-            return
-
-        scope_label = t("log.export_scope_year") if is_year_export else t("log.export_scope_month")
-        file_id = self._register_log_file(out_path)
-        header = t("log.export_ok", scope=scope_label, count=len(trips))
-        self._write_log(
-            f"{header}[@click=app.open_log_file({file_id})]{out_path.name}[/]",
-            level="success",
+        job = ExportJob(
+            trips=trips,
+            title=title_line1,
+            subtitle=subtitle,
+            year=self._year,
+            month=None if is_year_export else self._month,
+            group_by_month=group_by_month,
+            # Anzeige-Labels der Kategorien fuer informationelle Trip-Zeilen
+            category_labels={code: label for label, code in db.get_category_options()},
+            vehicle_name=vehicle.name if vehicle else "",
+            vehicle_plate=vehicle.plate if vehicle else "",
         )
-        self.notify(t("notify.export_saved", file=out_path.name), severity="information")
+        return job, stem
 
     def action_show_settings(self) -> None:
         """Oeffnet die Einstellungen."""

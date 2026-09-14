@@ -92,6 +92,8 @@ class GlobalConfig:
     # Eigene Belegungen je Aktion, z.B. {"toggle_log": ["alt+l"]}. Geprueft
     # wird erst in textual_widgets.keymap.parse_overrides - Fehler landen im Log.
     keymap_custom: dict[str, Any] = field(default_factory=dict)
+    # Zuletzt benutztes Exportverzeichnis, Startpunkt des Speichern-Dialogs.
+    last_export_dir: str = ""
 
     # default_factory statt festem Wert: ein Default wird beim Import in das
     # erzeugte __init__ eingebacken und liesse sich danach nicht mehr umbiegen.
@@ -125,6 +127,7 @@ class GlobalConfig:
             "keymap_style": self.keymap_style,
             "keymap_vim": self.keymap_vim,
             "keymap_custom": self.keymap_custom,
+            "last_export_dir": self.last_export_dir,
         }
         with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -173,6 +176,7 @@ class GlobalConfig:
             config.keymap_vim = bool(data.get("keymap_vim", False))
             raw_custom = data.get("keymap_custom")
             config.keymap_custom = raw_custom if isinstance(raw_custom, dict) else {}
+            config.last_export_dir = str(data.get("last_export_dir", "") or "")
         except (json.JSONDecodeError, KeyError):
             pass
 

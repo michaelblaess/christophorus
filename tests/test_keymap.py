@@ -197,6 +197,7 @@ def test_tastenbelegung_ueberlebt_speichern_und_laden(monkeypatch: pytest.Monkey
     config.keymap_style = "function_keys"
     config.keymap_vim = True
     config.keymap_custom = {"toggle_log": ["alt+l"]}
+    config.last_export_dir = str(tmp_path)
     config.save()
 
     geladen = GlobalConfig.load()
@@ -204,6 +205,7 @@ def test_tastenbelegung_ueberlebt_speichern_und_laden(monkeypatch: pytest.Monkey
     assert geladen.keymap_style == "function_keys"
     assert geladen.keymap_vim is True
     assert geladen.keymap_custom == {"toggle_log": ["alt+l"]}
+    assert geladen.last_export_dir == str(tmp_path)
 
 
 # --- Die Vim-Ebene am Widget ----------------------------------------------------

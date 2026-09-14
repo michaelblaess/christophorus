@@ -1,6 +1,7 @@
-"""Tastenbelegung und Einstellungen an der echten App.
+"""Tastenbelegung, Export-Dialog und Einstellungen an der echten App.
 
-Die Einzelteile sind in test_keymap geprueft. Hier geht es darum, ob sie in der laufenden
+Die Einzelteile sind in test_keymap, test_export_formats und
+test_export_save_screen geprueft. Hier geht es darum, ob sie in der laufenden
 Anwendung ankommen - genau das faellt sonst erst beim Anwender auf.
 
 Die Konfiguration liegt dank conftest in einem Wegwerf-Verzeichnis, das echte
@@ -13,12 +14,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from textual.widgets import Checkbox, Select
+from textual.widgets import Checkbox, Input, Select
 
 from death_proof.app import FahrtenbuchApp
 from death_proof.models.fahrtenbuch import Fahrtenbuch
 from death_proof.models.settings import GlobalConfig
 from death_proof.models.vehicle import Vehicle
+from death_proof.screens.export_save_screen import ExportSaveScreen
 from death_proof.screens.keymap_screen import KeymapScreen
 from tests.conftest import make_trip
 
@@ -112,6 +114,66 @@ async def test_fragezeichen_oeffnet_die_uebersicht(fahrtenbuch: Path) -> None:
         await pilot.press("question_mark")
         await _settle(pilot)
         assert isinstance(app.screen, KeymapScreen)
+
+
+# --- Export ---------------------------------------------------------------------
+
+
+async def test_export_schreibt_markdown_und_merkt_das_verzeichnis(fahrtenbuch: Path) -> None:
+    app = FahrtenbuchApp()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await _settle(pilot)
+        assert app._fahrtenbuch is not None
+        app._year, app._month = 2024, 5
+
+        app.action_export()
+        await _settle(pilot)
+        assert isinstance(app.screen, ExportSaveScreen), type(app.screen).__name__
+
+        feld = app.screen.query_one(Input)
+        assert feld.value.startswith("Fahrtenbuch 2024-05 (Testwagen - B-TT 1) ")
+        assert feld.value.endswith(".xlsx")
+
+        feld.value = "Auswertung.md"
+        feld.focus()
+        await pilot.pause()
+        await pilot.press("enter")
+        await _settle(pilot)
+
+    ziel = fahrtenbuch / "Auswertung.md"
+    assert ziel.is_file()
+    text = ziel.read_text(encoding="utf-8")
+    assert "| 02.05.2024 |" in text
+    assert "Kunde Nord" in text
+    assert GlobalConfig.load().last_export_dir == str(fahrtenbuch)
+
+
+async def test_export_ohne_fahrten_oeffnet_keinen_dialog(fahrtenbuch: Path) -> None:
+    app = FahrtenbuchApp()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await _settle(pilot)
+        app._year, app._month = 2023, 1
+        app.action_export()
+        await _settle(pilot)
+        assert not isinstance(app.screen, ExportSaveScreen)
+        assert app._pending_export is None
+
+
+async def test_dialog_geht_ohne_schreibtisch_auf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auf einem Rechner ohne Verzeichnis "Desktop" darf der Dialog nicht abstuerzen.
+
+    In jira-timesheet ist genau das auf dem Linux-Runner der CI passiert.
+    """
+    heim = tmp_path / "heim-ohne-schreibtisch"
+    heim.mkdir()
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: heim))
+
+    app = FahrtenbuchApp()
+    async with app.run_test() as pilot:
+        await _settle(pilot)
+        assert app._fahrtenbuch is None
+        app._config.last_export_dir = str(heim / "gibt-es-nicht")
+        assert app._save_dialog_location() == str(heim)
 
 
 # --- Einstellungen --------------------------------------------------------------

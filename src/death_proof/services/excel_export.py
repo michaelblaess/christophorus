@@ -1,6 +1,5 @@
 """Excel-Export fuer Fahrtenbuch-Listen (Monat / Jahr)."""
 
-from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -8,6 +7,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.worksheet import Worksheet
 
 from death_proof.models.trip import Trip, get_informational_categories
+from death_proof.services.export_rows import format_time_range as _format_time_range
+from death_proof.services.export_rows import is_untimed_private as _is_untimed_private
+from death_proof.services.export_rows import iso_to_date as _iso_to_date
 
 # Layout orientiert am Vorlage-Fahrtenbuch
 _COLUMN_WIDTHS = {
@@ -26,25 +28,6 @@ _HEADER_FILL = PatternFill(start_color="FFCCCCCC", end_color="FFCCCCCC", fill_ty
 _TOTAL_FILL = PatternFill(start_color="FFEEEEEE", end_color="FFEEEEEE", fill_type="solid")
 _THIN = Side(style="thin", color="FF999999")
 _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
-
-
-def _iso_to_date(iso: str) -> datetime | None:
-    """Konvertiert YYYY-MM-DD zu datetime.date, None bei Fehler."""
-    try:
-        return datetime.strptime(iso, "%Y-%m-%d")
-    except (ValueError, TypeError):
-        return None
-
-
-def _format_time_range(time_from: str, time_to: str) -> str:
-    """Formatiert Fahrzeit als 'HH:MM - HH:MM' oder einzeln."""
-    if time_from and time_to:
-        return f"{time_from} - {time_to}"
-    if time_from:
-        return time_from
-    if time_to:
-        return time_to
-    return ""
 
 
 def _write_header_block(ws: Worksheet, title_line1: str, subtitle: str) -> None:
@@ -88,17 +71,6 @@ def _write_header_block(ws: Worksheet, title_line1: str, subtitle: str) -> None:
 
     ws.row_dimensions[4].height = 18
     ws.row_dimensions[5].height = 18
-
-
-def _is_untimed_private(trip: Trip) -> bool:
-    """Privater Sammeleintrag ohne Zeit UND ohne Ziel — Mehrtages-Aggregat.
-
-    Wird im Export ohne Datum ausgegeben (Vorlage zeigt nur den Reisezweck
-    plus km), weil das exakte Startdatum bei solchen Fahrten nicht sinnvoll
-    ist. Privatfahrten mit konkretem Ziel (z.B. Supermarkt) behalten ihr
-    Datum, auch wenn die Uhrzeit fehlt.
-    """
-    return trip.category == "private" and not trip.time_from.strip() and not trip.destination.strip()
 
 
 def _write_trip_row(
