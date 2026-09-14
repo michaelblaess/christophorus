@@ -1,6 +1,7 @@
 """Blacklist-Ansicht als einbettbares Widget."""
 
 from datetime import date
+from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -34,9 +35,9 @@ class BlacklistView(Vertical):
             self.date_str = date_str
             self.reason = reason
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._row_entries: dict[str, dict[str, object]] = {}
+        self._row_entries: dict[str, dict[str, Any]] = {}
         self._last_entries: list[dict[str, object]] = []
         self._show_id: bool = False
 

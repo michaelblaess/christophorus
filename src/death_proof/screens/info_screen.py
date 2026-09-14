@@ -6,7 +6,7 @@ from death_proof import __author__, __version__, __year__
 from death_proof.i18n import current_language, t
 
 
-class InfoScreen(AboutScreen):
+class InfoScreen(AboutScreen):  # type: ignore[misc]
     """About-Dialog aus textual_widgets, vorkonfiguriert fuer Death Proof."""
 
     def __init__(self) -> None:

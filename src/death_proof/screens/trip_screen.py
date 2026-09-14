@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -166,7 +167,7 @@ class TripScreen(ModalScreen[Trip | None]):
         trip: Trip | None = None,
         last_km_end: int = 0,
         default_date: str = "",
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._database = database

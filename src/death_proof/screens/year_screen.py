@@ -1,5 +1,7 @@
 """Jahresuebersicht mit 12 Monatskacheln."""
 
+from typing import Any
+
 from rich.text import Text
 from textual.app import ComposeResult, RenderResult
 from textual.binding import Binding
@@ -36,7 +38,7 @@ class MonthTile(Widget):
         km_private: int = 0,
         lease_km: int = 1500,
         trip_count: int = 0,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._month = month
@@ -140,7 +142,7 @@ class YearScreen(ModalScreen[None]):
         year: int,
         month_data: dict[int, MonthData],
         lease_km: int = 1500,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._year = year

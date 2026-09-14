@@ -2,8 +2,25 @@
 
 import contextlib
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# Biegt das Konfigurationsverzeichnis um. Gedacht fuer Tests (auch in
+# Unterprozessen), damit sie nie die echte ~/.death-proof/config.json lesen
+# oder das zuletzt geoeffnete Fahrtenbuch oeffnen.
+HOME_ENV_VAR = "DEATH_PROOF_HOME"
+
+
+def config_dir() -> Path:
+    """Liefert das Konfigurationsverzeichnis.
+
+    Wird bei jedem Aufruf neu gelesen und nicht beim Import eingefroren - sonst
+    liesse sich die Umgebungsvariable im Test nicht mehr umhaengen.
+    """
+    override = os.environ.get(HOME_ENV_VAR, "").strip()
+    return Path(override) if override else Path.home() / ".death-proof"
+
 
 # textual-themes 0.5 hat 25 Themes umbenannt (trademark-safety pass).
 # Config-Files aelterer Versionen koennen alte Slugs gespeichert haben —
@@ -69,8 +86,10 @@ class GlobalConfig:
     last_base_dir: str = ""
     language: str = "de"
 
-    CONFIG_DIR: Path = Path.home() / ".death-proof"
-    CONFIG_FILE: Path = CONFIG_DIR / "config.json"
+    # default_factory statt festem Wert: ein Default wird beim Import in das
+    # erzeugte __init__ eingebacken und liesse sich danach nicht mehr umbiegen.
+    CONFIG_DIR: Path = field(default_factory=config_dir)
+    CONFIG_FILE: Path = field(default_factory=lambda: config_dir() / "config.json")
 
     # Alter Settings-Ordner vor der Umbenennung auf "Death Proof". Wird beim
     # Laden transparent auf CONFIG_DIR migriert (siehe _migrate_legacy_dir).
@@ -107,7 +126,12 @@ class GlobalConfig:
         Migriert nur, wenn der neue Ordner noch nicht existiert. Schlaegt die
         Umbenennung fehl (z.B. Rechte), wird der Fehler verschluckt — die App
         startet dann mit Default-Settings.
+
+        Bei umgebogenem Verzeichnis (Tests) wird nichts migriert - sonst
+        wuerde ein Testlauf den echten Heimatordner anfassen.
         """
+        if os.environ.get(HOME_ENV_VAR, "").strip():
+            return
         legacy = Path.home() / ".fahrtenbuch"
         new = Path.home() / ".death-proof"
         if legacy.exists() and not new.exists():

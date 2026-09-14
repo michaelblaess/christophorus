@@ -733,8 +733,8 @@ def check_blacklist_business(database: Database) -> list[PlausibilityIssue]:
         try:
             date_str = str(entry.get("date", ""))
             parts = date_str.split("-")
-            d = date(int(parts[0]), int(parts[1]), int(parts[2]))
-            bl_map[d] = str(entry.get("reason", ""))
+            bl_day = date(int(parts[0]), int(parts[1]), int(parts[2]))
+            bl_map[bl_day] = str(entry.get("reason", ""))
         except (ValueError, IndexError):
             continue
 

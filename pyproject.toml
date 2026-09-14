@@ -25,6 +25,10 @@ dev = [
     "mypy>=1.8",
     "poethepoet>=0.29",
     "ruff>=0.3",
+    # Prueft die Schichtgrenzen. Ohne ihn ist "der Kern kennt keine
+    # Oberflaeche" eine Konvention, an die man sich erinnern muss.
+    "import-linter>=2.0",
+    "types-openpyxl>=3.1.5.20260518",
 ]
 
 [project.scripts]
@@ -39,6 +43,45 @@ typecheck = { cmd = "mypy src", help = "mypy strict ueber src/" }
 lint = { cmd = "ruff check .", help = "Ruff Linting" }
 fmt = { cmd = "ruff format .", help = "Ruff Formatting" }
 fix = { cmd = "ruff check --fix .", help = "Ruff Auto-Fix" }
+layers = { cmd = "lint-imports", help = "Prueft die Schichtgrenzen (import-linter)" }
+
+[tool.importlinter]
+root_package = "death_proof"
+# Fuer die Regel "der Kern zieht kein Textual" muss der Linter auch Pakete
+# ausserhalb des Projekts sehen.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Schichten von oben nach unten"
+type = "layers"
+layers = [
+    "death_proof.app",
+    "death_proof.screens",
+    "death_proof.widgets",
+    "death_proof.services",
+    "death_proof.models",
+]
+# Bekannte Altlast (Stand 14.09.2026): das Fahrtenbuch-Modell haelt die
+# Database selbst. Sauber waere, Fahrtenbuch nach services/ zu ziehen - bis
+# dahin ist genau diese eine Kante erlaubt, jede weitere bricht den Vertrag.
+ignore_imports = [
+    "death_proof.models.fahrtenbuch -> death_proof.services.database",
+]
+
+[[tool.importlinter.contracts]]
+name = "Der Kern kennt keine Oberflaeche"
+type = "forbidden"
+source_modules = [
+    "death_proof.services",
+    "death_proof.models",
+]
+forbidden_modules = [
+    "death_proof.app",
+    "death_proof.screens",
+    "death_proof.widgets",
+    "textual",
+    "textual_widgets",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -52,6 +95,11 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+# textual-widgets liefert (noch) keinen py.typed-Marker.
+[[tool.mypy.overrides]]
+module = "textual_widgets.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

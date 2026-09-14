@@ -6,6 +6,7 @@ einheitliche Bindings). Wir steuern nur die app-spezifischen Tabs bei.
 """
 
 from pathlib import Path
+from typing import Any
 
 from textual import on
 from textual.app import ComposeResult
@@ -157,7 +158,7 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
         self._export_include_prev_december = database.get_setting("export_include_prev_december", "0") == "1"
         self._addresses: dict[str, list[AddressEntry]] = {}
         self._load_addresses()
-        self._categories: list[dict[str, object]] = database.get_categories()
+        self._categories: list[dict[str, Any]] = database.get_categories()
 
     def _load_addresses(self) -> None:
         """Laedt alle Adressen aus der Datenbank gruppiert nach Kategorie."""
@@ -223,7 +224,7 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
     def storage_paths(self) -> list[tuple[str, Path]]:
         """Pfade fuer den Speicherort-Tab der Basis."""
         return [
-            (t("settings.storage.config"), GlobalConfig.CONFIG_FILE),
+            (t("settings.storage.config"), self._config.CONFIG_FILE),
             (t("settings.storage.db"), Path(self._database.path)),
         ]
 
@@ -655,13 +656,13 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
 
     def _get_checkbox(self, checkbox_id: str) -> bool:
         try:
-            return self.query_one(f"#{checkbox_id}", Checkbox).value
+            return bool(self.query_one(f"#{checkbox_id}", Checkbox).value)
         except Exception:
             return False
 
     def _get_input(self, input_id: str) -> str:
         try:
-            return self.query_one(f"#{input_id}", Input).value.strip()
+            return str(self.query_one(f"#{input_id}", Input).value.strip())
         except Exception:
             return ""
 

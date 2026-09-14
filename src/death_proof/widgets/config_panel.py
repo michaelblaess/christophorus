@@ -7,6 +7,7 @@ Render-Code lebt in der Library.
 import os
 import subprocess
 import sys
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.containers import Vertical
@@ -49,7 +50,7 @@ class ConfigPanel(Vertical):
         year: int,
         month: int,
         fb_path: str = "",
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._vehicle = vehicle

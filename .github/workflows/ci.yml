@@ -22,5 +22,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Lint (ruff)
         run: uv run --extra dev ruff check .
+      # Bis zum 14.09.2026 nicht in der CI: mypy lief nur lokal ueber
+      # "poe typecheck" und stand auf 86 Fehlern, ohne dass es auffiel.
+      - name: Typen (mypy)
+        run: uv run --extra dev mypy src
+      # Haelt die Schichtgrenzen fest: der Kern zieht keine Oberflaeche und
+      # kein Textual. Ohne die Pruefung ist das eine Konvention.
+      - name: Schichten (import-linter)
+        run: uv run --extra dev lint-imports
       - name: Tests (pytest)
         run: uv run --extra dev pytest -q

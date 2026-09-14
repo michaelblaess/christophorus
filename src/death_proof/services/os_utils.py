@@ -12,7 +12,8 @@ def open_file_in_system(path: Path) -> None:
         raise FileNotFoundError(str(path))
     system = platform.system()
     if system == "Windows":
-        os.startfile(str(path))  # type: ignore[attr-defined]
+        # startfile gibt es nur unter Windows - auf Linux/macOS braucht mypy das Ignore
+        os.startfile(str(path))  # type: ignore[attr-defined, unused-ignore]
     elif system == "Darwin":
         subprocess.Popen(["open", str(path)])
     else:

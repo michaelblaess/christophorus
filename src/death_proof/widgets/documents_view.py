@@ -1,6 +1,7 @@
 """Belege-Ansicht als einbettbares Widget."""
 
 from pathlib import Path
+from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -32,9 +33,9 @@ class DocumentsView(Vertical):
             super().__init__()
             self.path = path
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._documents: list[dict[str, object]] = []
+        self._documents: list[dict[str, Any]] = []
         self._base_path: Path = Path(".")
         self._show_id: bool = False
 

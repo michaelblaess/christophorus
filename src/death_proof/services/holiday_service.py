@@ -31,12 +31,12 @@ class HolidayService:
         if federal_state not in _STATE_NAMES:
             federal_state = "BB"
         self._state = federal_state
-        self._cache: dict[int, holidays.Germany] = {}
+        self._cache: dict[int, holidays.HolidayBase] = {}
 
-    def _get_holidays(self, year: int) -> holidays.Germany:
+    def _get_holidays(self, year: int) -> holidays.HolidayBase:
         """Gibt die Feiertage fuer ein Jahr zurueck (gecacht)."""
         if year not in self._cache:
-            self._cache[year] = holidays.Germany(subdiv=self._state, years=year)
+            self._cache[year] = holidays.country_holidays("DE", subdiv=self._state, years=year)
         return self._cache[year]
 
     def is_holiday(self, d: date) -> bool:
@@ -46,7 +46,7 @@ class HolidayService:
     def get_holiday_name(self, d: date) -> str:
         """Gibt den Feiertagsnamen zurueck oder leeren String."""
         h = self._get_holidays(d.year)
-        return h.get(d, "")
+        return str(h.get(d, ""))
 
     def is_weekend(self, d: date) -> bool:
         """Prueft ob ein Datum ein Wochenende ist."""

@@ -3,6 +3,7 @@
 import contextlib
 import os
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -125,7 +126,7 @@ class BlacklistDetailScreen(ModalScreen[bool | None]):
         entry_id: int = 0,
         date_str: str = "",
         reason: str = "",
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._database = database

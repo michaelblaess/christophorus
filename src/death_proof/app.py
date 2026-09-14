@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -38,7 +39,7 @@ from death_proof.widgets.worktimes_view import WorktimesView
 from death_proof.widgets.year_view import YearView
 
 
-class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
+class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
     """Fahrtenbuch TUI fuer Finanzamt-konforme Fahrtenbuecher."""
 
     CSS_PATH = "app.tcss"
@@ -94,7 +95,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
         "show_info": "info",
     }
 
-    def __init__(self, year_override: int | None = None, **kwargs: object) -> None:
+    def __init__(self, year_override: int | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._config = GlobalConfig.load()
         # CrashGuard liest dieses Attribut fuer den Fehler-Dialog
@@ -324,12 +325,13 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
             return
         db = self._fahrtenbuch.database
         show_id = db.get_setting("show_id_column", "0") == "1"
-        for widget_id, cls in (
+        show_id_widgets: tuple[tuple[str, type[TripTable | BlacklistView | DocumentsView]], ...] = (
             ("#trip-table", TripTable),
             ("#trip-table-year", TripTable),
             ("#blacklist-view", BlacklistView),
             ("#documents-view", DocumentsView),
-        ):
+        )
+        for widget_id, cls in show_id_widgets:
             with contextlib.suppress(Exception):
                 self.query_one(widget_id, cls).set_show_id(show_id)
 
@@ -498,7 +500,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
         self._log_file_map[file_id] = path
         return file_id
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         """Speichert den aktuellen Monat und beendet die App."""
         if self._fahrtenbuch is not None and self._fahrtenbuch.is_open:
             db = self._fahrtenbuch.database
@@ -615,6 +617,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
             return
         if trip is None or self._fahrtenbuch is None:
             return
+        assert isinstance(trip, Trip), f"Unerwartetes Ergebnis aus dem TripScreen: {trip!r}"
         # Trip hat eine ID — direkt in der DB aktualisieren
         if trip.id > 0:
             try:
@@ -1268,6 +1271,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
         over_limit = vehicle.end_km > 0 and final_km > vehicle.end_km if vehicle else False
         self._write_log(t("log.rebuild_done", changed=changed, km=final_km), level="success")
         if over_limit:
+            assert vehicle is not None, "over_limit setzt ein Fahrzeug voraus"
             self._write_log(
                 t("log.rebuild_over_limit", km=final_km, limit=vehicle.end_km),
                 level="warning",
@@ -1305,7 +1309,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App):  # type: ignore[misc]
             display = next_theme
         self.notify(t("notify.theme_changed", name=display))
 
-    def check_action(self, action: str, parameters: tuple) -> bool | None:  # type: ignore[override]
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Blendet Aktionen aus wenn ModalScreen offen oder nicht verfuegbar."""
         # ModalScreen offen → alle App-Bindings deaktivieren
         if len(self.screen_stack) > 1:

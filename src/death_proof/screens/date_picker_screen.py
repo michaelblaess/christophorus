@@ -2,6 +2,7 @@
 
 import calendar
 from datetime import date
+from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -32,7 +33,7 @@ class _CalendarGrid(Static):
         year: int,
         month: int,
         selected_day: int = 0,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._year = year
@@ -160,7 +161,7 @@ class DatePickerScreen(ModalScreen[str | None]):
         Binding("escape", "cancel", "cancel"),
     ]
 
-    def __init__(self, initial_date: str = "", **kwargs: object) -> None:
+    def __init__(self, initial_date: str = "", **kwargs: Any) -> None:
         super().__init__(**kwargs)
         today = date.today()
         self._today = today

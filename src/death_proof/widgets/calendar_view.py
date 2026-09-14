@@ -2,6 +2,7 @@
 
 import calendar
 from datetime import date
+from typing import Any
 
 from rich.text import Text
 from textual.app import RenderResult
@@ -66,7 +67,7 @@ class DayTile(Widget):
         is_outside: bool = False,
         holiday_name: str = "",
         blacklist_reason: str = "",
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._date = day
@@ -131,6 +132,7 @@ class DayTile(Widget):
             )
 
         if self._holiday_name and has_warnable_business:
+            assert self._trip_day is not None, "has_warnable_business setzt einen TripDay voraus"
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
             text.append(t("calendar.warning"), style=_STYLE_ERROR)
             text.append(f"\n{self._holiday_name[:22]}", style="red italic")
@@ -141,6 +143,7 @@ class DayTile(Widget):
             return text
 
         if is_weekend and has_warnable_business:
+            assert self._trip_day is not None, "has_warnable_business setzt einen TripDay voraus"
             text.append(f"{day_num} {weekday} ", style=_STYLE_ERROR)
             text.append(t("calendar.warning"), style=_STYLE_ERROR)
             text.append(
@@ -234,7 +237,7 @@ class CalendarView(Vertical):
     }
     """
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._last_month_data: MonthData | None = None
         self._last_holidays: dict[date, str] = {}

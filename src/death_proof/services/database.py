@@ -5,6 +5,7 @@ import getpass
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from death_proof.models.trip import MonthData, Trip
 from death_proof.models.vehicle import Vehicle
@@ -483,7 +484,7 @@ class Database:
     # Categories
     # ------------------------------------------------------------------
 
-    def get_categories(self) -> list[dict[str, object]]:
+    def get_categories(self) -> list[dict[str, Any]]:
         """Gibt alle Kategorien zurueck."""
         conn = self._get_conn()
         rows = conn.execute("SELECT * FROM categories ORDER BY id").fetchall()
@@ -1243,7 +1244,7 @@ class Database:
     # Addresses
     # ------------------------------------------------------------------
 
-    def get_addresses(self, category: str | None = None) -> list[dict[str, object]]:
+    def get_addresses(self, category: str | None = None) -> list[dict[str, Any]]:
         """Gibt Adressen zurueck, optional gefiltert nach Kategorie."""
         conn = self._get_conn()
         if category:
@@ -1322,7 +1323,7 @@ class Database:
     # Blacklist
     # ------------------------------------------------------------------
 
-    def get_blacklist(self) -> list[dict[str, object]]:
+    def get_blacklist(self) -> list[dict[str, Any]]:
         """Gibt alle Blacklist-Eintraege zurueck."""
         conn = self._get_conn()
         rows = conn.execute("SELECT * FROM blacklist ORDER BY date").fetchall()
@@ -1392,7 +1393,7 @@ class Database:
         self,
         trip_id: int | None = None,
         blacklist_id: int | None = None,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Gibt alle Dokumente fuer einen Trip oder Blacklist-Eintrag zurueck."""
         conn = self._get_conn()
         if trip_id is not None:
@@ -1438,7 +1439,7 @@ class Database:
         conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
         conn.commit()
 
-    def get_all_documents(self) -> list[dict[str, object]]:
+    def get_all_documents(self) -> list[dict[str, Any]]:
         """Gibt alle Dokumente zurueck, mit Trip/Blacklist-Referenz."""
         conn = self._get_conn()
         rows = conn.execute("""
@@ -1459,7 +1460,7 @@ class Database:
     # Worktimes (Arbeitsstunden pro Monat)
     # ------------------------------------------------------------------
 
-    def get_worktimes(self, year: int) -> list[dict[str, object]]:
+    def get_worktimes(self, year: int) -> list[dict[str, Any]]:
         """Gibt alle Arbeitsstunden eines Jahres zurueck."""
         conn = self._get_conn()
         rows = conn.execute(

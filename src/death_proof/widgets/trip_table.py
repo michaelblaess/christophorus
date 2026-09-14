@@ -1,6 +1,7 @@
 """Fahrten-Tabelle (Hauptansicht)."""
 
 from datetime import date
+from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -49,7 +50,7 @@ class TripTable(Vertical):
             self.date_str = date_str
             self.reason = reason
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._row_trips: dict[str, tuple[Trip | None, int]] = {}
         self._bl_only_rows: dict[str, tuple[int, str, str]] = {}  # row_key → (id, date_str, reason)
@@ -57,7 +58,7 @@ class TripTable(Vertical):
         self._last_holidays_map: dict[date, str] = {}
         self._last_category_colors: dict[str, str] | None = None
         self._blacklist_map: dict[date, str] = {}
-        self._blacklist_entries_by_date: dict[date, dict[str, object]] = {}
+        self._blacklist_entries_by_date: dict[date, dict[str, Any]] = {}
         self._show_blacklist: bool = False
         self._year_mode: bool = False
         self._problem_trip_ids: set[int] = set()
@@ -201,6 +202,10 @@ class TripTable(Vertical):
         holidays_map = self._last_holidays_map
         active_blacklist = self._blacklist_map if self._show_blacklist else {}
 
+        # trip/entry werden unten auch fuer Zeilen ohne Trip bzw. ohne Blacklist-Eintrag genutzt
+        trip: Trip | None
+        entry: dict[str, Any] | None
+
         # Sammle Trip-Daten mit Datum fuer spaeters Sortieren
         trip_dates: set[date] = set()
         trip_rows: list[tuple[date, str, Trip, int]] = []  # (date, date_str, trip, original_idx)
@@ -214,7 +219,7 @@ class TripTable(Vertical):
                 trip_rows.append((date(9999, 1, 1), trip.date, trip, idx))
 
         # Blacklist-Nur-Eintraege fuer den aktuellen Monat/Jahr (Tage ohne Trip)
-        bl_only_rows: list[tuple[date, dict[str, object]]] = []
+        bl_only_rows: list[tuple[date, dict[str, Any]]] = []
         if self._show_blacklist:
             for d, entry in self._blacklist_entries_by_date.items():
                 if d in trip_dates:
@@ -227,7 +232,7 @@ class TripTable(Vertical):
                         bl_only_rows.append((d, entry))
 
         # Kombiniert sortieren nach Datum
-        combined: list[tuple[date, str, str, Trip | None, int, dict[str, object] | None]] = []
+        combined: list[tuple[date, str, str, Trip | None, int, dict[str, Any] | None]] = []
         for d, date_str, trip, idx in trip_rows:
             combined.append((d, date_str, "trip", trip, idx, None))
         for d, entry in bl_only_rows:

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -103,7 +104,7 @@ class StartScreen(ModalScreen[StartResult | None]):
         config: GlobalConfig,
         current_path: str | None = None,
         on_backup: Callable[[], Path] | None = None,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._config = config

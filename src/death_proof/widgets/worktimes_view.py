@@ -1,5 +1,7 @@
 """Arbeitsstunden-Ansicht als einbettbares Widget."""
 
+from typing import Any
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -54,7 +56,7 @@ class WorktimesView(Vertical):
             self.month = month
             self.hours = hours
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._year = 0
         self._worktimes: dict[int, float] = {}
@@ -77,7 +79,7 @@ class WorktimesView(Vertical):
             t("worktimes.col.per_day"),
         )
 
-    def load_data(self, year: int, worktimes: list[dict[str, object]]) -> None:
+    def load_data(self, year: int, worktimes: list[dict[str, Any]]) -> None:
         """Laedt die Arbeitsstunden fuer ein Jahr."""
         self._year = year
         self._worktimes.clear()

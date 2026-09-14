@@ -1,6 +1,7 @@
 """File-Picker-Screen mit DirectoryTree."""
 
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -59,7 +60,7 @@ class FilePickerScreen(ModalScreen[Path | None]):
         Binding("escape", "cancel", "cancel"),
     ]
 
-    def __init__(self, start_path: Path, **kwargs: object) -> None:
+    def __init__(self, start_path: Path, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._start_path = start_path
         self._selected: Path | None = None

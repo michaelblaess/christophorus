@@ -1,5 +1,7 @@
 """Jahresuebersicht als Widget (nicht Modal)."""
 
+from typing import Any
+
 from rich.text import Text
 from textual.app import ComposeResult, RenderResult
 from textual.containers import Horizontal, VerticalScroll
@@ -34,7 +36,7 @@ class MonthTile(Widget):
         km_private: int = 0,
         lease_km: int = 1500,
         trip_count: int = 0,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._month = month
@@ -130,7 +132,7 @@ class YearView(VerticalScroll):
     }
     """
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._title_widget = Static("", classes="year-title")
         self._summary_widget = Static("", classes="year-summary")

@@ -166,12 +166,14 @@ def _write_trip_row(
 
     # Zellen-Styling: Borders + Wrap fuer Ziel/Zweck
     for col in range(1, 10):
-        cell = ws.cell(row=row, column=col)
-        cell.border = _BORDER
+        # Eigener Name: "cell" ist oben schon als Cell gebunden, ws.cell()
+        # liefert laut Stubs aber Cell | MergedCell.
+        zelle = ws.cell(row=row, column=col)
+        zelle.border = _BORDER
         if col in (3, 4):
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            zelle.alignment = Alignment(wrap_text=True, vertical="top")
         else:
-            cell.alignment = Alignment(vertical="top")
+            zelle.alignment = Alignment(vertical="top")
 
 
 def _write_total_row(

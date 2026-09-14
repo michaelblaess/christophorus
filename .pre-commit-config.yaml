@@ -21,6 +21,17 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  # Schichtgrenzen - laeuft nur, wenn Quellcode oder die Vertraege sich
+  # aendern. Der Lauf dauert wenige Sekunden.
+  - repo: local
+    hooks:
+      - id: import-linter
+        name: import-linter
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        files: '^(src/.*\.py|pyproject\.toml)$'
+
   # Lokaler pytest-Lauf - faengt Regressionen vor dem Commit ab (~schnell).
   - repo: local
     hooks:

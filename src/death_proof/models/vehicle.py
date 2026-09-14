@@ -1,6 +1,7 @@
 """Fahrzeug-Modell."""
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -34,7 +35,7 @@ class Vehicle:
         """Ueberschreitung der Inklusivkilometer (negativ = unter Limit)."""
         return self.total_driven_km - self.total_lease_km
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialisierung fuer JSON."""
         return {
             "name": self.name,
@@ -51,7 +52,7 @@ class Vehicle:
         }
 
     @staticmethod
-    def from_dict(data: dict) -> "Vehicle":
+    def from_dict(data: dict[str, Any]) -> "Vehicle":
         """Deserialisierung aus JSON."""
         return Vehicle(
             name=data.get("name", ""),
