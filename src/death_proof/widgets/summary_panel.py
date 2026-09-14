@@ -1,5 +1,7 @@
 """Zusammenfassung der km-Statistiken als Statusleiste."""
 
+from typing import Any
+
 from textual_widgets import StatusBar, StatusItem
 
 from death_proof.i18n import t
@@ -15,8 +17,10 @@ class SummaryPanel(StatusBar):  # type: ignore[misc]
     Zahlen erscheinen.
     """
 
-    def __init__(self, **kwargs: object) -> None:
-        super().__init__(hint=t("summary.empty_hint"), **kwargs)
+    def __init__(self, hint: str = "", **kwargs: Any) -> None:
+        # Den Hinweis liefert die App: welche Taste darin steht, weiss nur die
+        # aufgeloeste Tastenbelegung, und die kennt das Widget nicht.
+        super().__init__(hint=hint, **kwargs)
         self._month_data: MonthData | None = None
         self._lease_km: int = 1500
 

@@ -21,6 +21,7 @@ from textual.widgets import (
     TabPane,
 )
 from textual_widgets import BaseSettingsScreen
+from textual_widgets.keymap import KeymapStyle
 
 from death_proof.i18n import t
 from death_proof.models.settings import AddressEntry, GlobalConfig
@@ -83,6 +84,23 @@ def _journal_mode_options() -> list[tuple[str, str]]:
         (t("settings.journal.persist"), "PERSIST"),
         (t("settings.journal.memory"), "MEMORY"),
         (t("settings.journal.off"), "OFF"),
+    ]
+
+
+def _keymap_style_options() -> list[tuple[str, str]]:
+    """Baut die Auswahl der Belegungsstile.
+
+    Als Funktion und nicht als Konstante, weil `t()` sonst beim Import
+    ausgewertet wuerde und ein Sprachwechsel die Beschriftungen nicht erreichte.
+
+    Returns:
+        Paare aus Beschriftung und gespeichertem Wert. Der leere Wert heisst
+        "nach Betriebssystem" und ist die Vorgabe.
+    """
+    return [
+        (t("settings.keymap_style_auto"), ""),
+        (t("settings.keymap_style_classic"), KeymapStyle.CLASSIC.value),
+        (t("settings.keymap_style_function_keys"), KeymapStyle.FUNCTION_KEYS.value),
     ]
 
 
@@ -221,6 +239,26 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
         with TabPane(t("settings.tab.database"), id="tab-database"), VerticalScroll():
             yield from self._database_fields()
 
+        with TabPane(t("settings.tab.keyboard"), id="tab-keyboard"), VerticalScroll():
+            yield from self._keyboard_fields()
+
+    def _keyboard_fields(self) -> ComposeResult:
+        """Felder fuer den Reiter Tastatur (Stil und Vim-Navigation)."""
+        yield Static(t("settings.keymap_intro"), classes="hint")
+        with Horizontal(classes="field-row"):
+            yield Label(t("settings.keymap_style"), classes="field-label")
+            yield Select(
+                options=_keymap_style_options(),
+                value=self._config.keymap_style or "",
+                allow_blank=False,
+                id="set-keymap-style",
+                classes="field-input",
+            )
+        checkbox = Checkbox(t("settings.keymap_vim"), value=self._config.keymap_vim, id="set-keymap-vim")
+        checkbox.tooltip = t("settings.keymap_vim_tip")
+        yield checkbox
+        yield Static(t("settings.keymap_custom_hint"), classes="hint")
+
     def storage_paths(self) -> list[tuple[str, Path]]:
         """Pfade fuer den Speicherort-Tab der Basis."""
         return [
@@ -298,6 +336,16 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
         lang = str(settings.get("language", self._config.language))
         if lang in ("de", "en") and lang != self._config.language:
             self._config.language = lang
+            self._config.save()
+
+        # Tastenbelegung ebenfalls in GlobalConfig - sie gilt fuer alle
+        # Fahrtenbuecher und wird beim naechsten Start gebunden.
+        style_value = self.query_one("#set-keymap-style", Select).value
+        keymap_style = style_value if isinstance(style_value, str) else ""
+        keymap_vim = bool(self.query_one("#set-keymap-vim", Checkbox).value)
+        if (keymap_style, keymap_vim) != (self._config.keymap_style, self._config.keymap_vim):
+            self._config.keymap_style = keymap_style
+            self._config.keymap_vim = keymap_vim
             self._config.save()
 
     # ------------------------------------------------------------------

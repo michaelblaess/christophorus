@@ -12,6 +12,7 @@ from textual.widgets import DataTable
 from death_proof.i18n import t, weekday_short
 from death_proof.models.trip import MonthData, Trip
 from death_proof.services.formatting import format_km
+from death_proof.widgets.navigable_data_table import NavigableDataTable
 
 # Reduziertes Farbschema: ausschliesslich Gruen (geschaeftlich) und Rot
 # (Blacklist / Feiertag / Wochenende). Alles andere bleibt neutral.
@@ -68,7 +69,7 @@ class TripTable(Vertical):
         self._category_codes: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
-        yield DataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
+        yield NavigableDataTable(id="trip-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Tabellenspalten erstellen."""

@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from textual.app import App, ComposeResult
-from textual.binding import Binding
 from textual.widgets import ContentSwitcher, Footer, Header, Tab, Tabs
 from textual_widgets import (
     CrashGuard,
@@ -16,7 +15,7 @@ from textual_widgets import (
     LogRouter,
 )
 
-from death_proof import __version__, __year__
+from death_proof import __version__, __year__, keymap
 from death_proof.i18n import current_language, month_name, t
 from death_proof.models.fahrtenbuch import Fahrtenbuch
 from death_proof.models.settings import GlobalConfig
@@ -26,6 +25,7 @@ from death_proof.models.trip import (
     set_informational_categories,
 )
 from death_proof.models.vehicle import Vehicle
+from death_proof.screens.keymap_screen import KeymapScreen
 from death_proof.services.database import Database
 from death_proof.services.formatting import format_km
 from death_proof.services.holiday_service import HolidayService
@@ -45,55 +45,9 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
     CSS_PATH = "app.tcss"
     TITLE = f"Death Proof v{__version__} ({__year__})"
 
-    # Class-level BINDINGS koennen kein t() — Strings sind hier noch nicht
-    # geladen. Wir setzen die Default-Labels auf die internen Action-Namen
-    # und uebersetzen + tooltippen in on_mount per dataclasses.replace.
-    BINDINGS = [
-        Binding("q,Q", "quit", "quit", key_display="q"),
-        Binding("n,N", "new_trip", "new_trip", key_display="n"),
-        Binding("delete", "delete_trip", "delete", key_display="DEL"),
-        Binding("e,E", "export_excel", "export_excel", key_display="e"),
-        Binding("s,S", "show_settings", "settings", key_display="s"),
-        Binding("v,V", "open_fahrtenbuch", "manage", key_display="v"),
-        Binding("b,B", "toggle_blacklist", "blacklist", key_display="b"),
-        # Monatsnavigation: weiter per "," / "." bedienbar, aber NICHT im
-        # Footer anzeigen — die InfoHeader-Pfeile zeigen die Funktion schon.
-        Binding("comma", "prev_month", "month_prev", show=False),
-        Binding("full_stop", "next_month", "month_next", show=False),
-        Binding("f5", "refresh_view", "refresh"),
-        Binding("p,P", "check_plausibility", "plausibility", key_display="p"),
-        Binding("r,R", "rebuild_km", "rebuild_km", key_display="r"),
-        Binding("l,L", "toggle_log", "log_toggle", key_display="l"),
-        Binding("plus", "log_bigger", "log_bigger", show=False),
-        Binding("minus", "log_smaller", "log_smaller", show=False),
-        Binding("c,C", "copy_log", "log_copy", show=False),
-        Binding("ctrl+l", "clear_log", "log_clear", show=False),
-        Binding("t,T", "cycle_theme", "theme", key_display="t"),
-        Binding("i,I", "show_info", "info", key_display="i"),
-    ]
-
-    # Mapping action -> i18n-Key (sowohl fuer description als auch tooltip).
-    _BINDING_I18N: dict[str, str] = {
-        "quit": "quit",
-        "new_trip": "new_trip",
-        "delete_trip": "delete",
-        "export_excel": "export_excel",
-        "show_settings": "settings",
-        "open_fahrtenbuch": "manage",
-        "toggle_blacklist": "blacklist",
-        "prev_month": "month_prev",
-        "next_month": "month_next",
-        "refresh_view": "refresh",
-        "check_plausibility": "plausibility",
-        "rebuild_km": "rebuild_km",
-        "toggle_log": "log_toggle",
-        "log_bigger": "log_bigger",
-        "log_smaller": "log_smaller",
-        "copy_log": "log_copy",
-        "clear_log": "log_clear",
-        "cycle_theme": "theme",
-        "show_info": "info",
-    }
+    # Kein class-level BINDINGS: welche Taste welche Aktion ausloest, haengt
+    # am Stil aus der Konfiguration und wird in __init__ gebunden - siehe
+    # _apply_keymap und death_proof.keymap.
 
     def __init__(self, year_override: int | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -133,6 +87,14 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         self._problem_months: dict[int, int] = {}  # month -> count (nur aktuelles Jahr)
         self._log_height: int = 10
 
+        # Beanstandungen aus der Tastenbelegung. Sie gehoeren ins Log, nicht in
+        # einen Dialog - sie betreffen die Konfigurationsdatei, nicht den
+        # Vorgang. Beim Binden gibt es das LogPanel noch nicht, deshalb erst
+        # in on_mount.
+        self._keymap_problems: tuple[Any, ...] = ()
+        self._keymap: dict[str, Any] = {}
+        self._apply_keymap()
+
     def compose(self) -> ComposeResult:
         """Erstellt das UI-Layout."""
         yield Header()
@@ -161,21 +123,20 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             yield BlacklistView(id="blacklist-view")
             yield DocumentsView(id="documents-view")
             yield WorktimesView(id="worktimes-view")
-        yield SummaryPanel(id="summary-panel")
+        yield SummaryPanel(hint=t("summary.empty_hint", shortcut=self._key_hint("new_trip")), id="summary-panel")
         yield HorizontalSplitter(target_id="main", min_size=10, id="log-splitter")
         yield LogPanel(lang=current_language(), export_name="death-proof", id="log-panel")
         yield Footer()
 
     def on_mount(self) -> None:
         """Wird nach dem Starten aufgerufen."""
-        self._apply_binding_i18n()
-
         if not self._config.log_visible:
             self.query_one("#log-panel").add_class("hidden")
             self.query_one("#log-splitter").add_class("hidden")
 
         self._write_log(t("log.app_started", version=__version__))
         self._log_theme()
+        self._log_keymap_problems()
 
         # Versuche zuletzt geoeffnetes Fahrtenbuch zu oeffnen
         last_path = self._config.last_opened_path
@@ -184,24 +145,98 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         else:
             self._show_start_screen()
 
-    def _apply_binding_i18n(self) -> None:
-        """Setzt description + tooltip aller Bindings zur Laufzeit aus i18n.
+    @property
+    def vim_navigation(self) -> bool:
+        """Ob die Vim-Navigation in Tabellen aktiv ist.
 
-        BINDINGS auf Klassenebene koennen kein t() (Strings noch nicht
-        geladen). Hier patchen wir jeden Binding via dataclasses.replace,
-        weil Binding frozen ist.
+        Die Tabellen fragen das beim Einhaengen ueber `self.app` ab, statt die
+        Konfiguration selbst zu laden - so bleibt der Zustand an einer Stelle.
         """
+        return bool(self._config.keymap_vim)
+
+    def _key_hint(self, action: str) -> str:
+        """Liefert die Taste einer Aktion, so wie sie in einer Meldung stehen soll.
+
+        Meldungen wie "Druecke S um das Fahrzeug zu konfigurieren" duerfen die
+        Taste nicht fest eingebaut haben - sie haengt am gewaehlten Stil und an
+        den eigenen Belegungen.
+
+        Args:
+            action: Der Name der Aktion.
+
+        Returns:
+            Die erste Taste der Aktion in Footer-Schreibweise, einzelne
+            Buchstaben gross. Leer, wenn die Aktion keine Taste hat - dann
+            steht in der Meldung nichts statt einer falschen Taste.
+        """
+        binding = self._keymap.get(action)
+        if binding is None:
+            return ""
+        taste = keymap.key_display(binding.keys[0])
+        return taste.upper() if len(taste) == 1 else taste
+
+    def _apply_keymap(self) -> None:
+        """Bindet die Tasten der aktiven Belegung.
+
+        Class-level ``BINDINGS`` scheiden aus zwei Gruenden aus: Sie koennen
+        kein ``t()`` nutzen, und der Stil steht erst fest, wenn die
+        Konfiguration geladen ist.
+        """
+        resolved = keymap.resolve(self._config)
+        self._keymap_problems = tuple(resolved.problems)
+        self._keymap = dict(resolved.bindings)
+        # Stand beim Binden. Aendert er sich im Einstellungsdialog, gilt die
+        # neue Belegung erst nach einem Neustart - das sagt das Log dann auch.
+        self._keymap_signature: tuple[str, bool] = (self._config.keymap_style, self._config.keymap_vim)
+
+        for action, binding in resolved.bindings.items():
+            self._bindings.bind(
+                ",".join(binding.keys),
+                action,
+                t(keymap.LABEL_KEYS.get(action, action)),
+                key_display=keymap.key_display(binding.keys[0]),
+                show=binding.show,
+                priority=binding.priority,
+            )
+        self._apply_binding_tooltips()
+
+    def _apply_binding_tooltips(self) -> None:
+        """Ergaenzt jedes Binding um seinen lokalisierten Tooltip.
+
+        ``BindingsMap.bind()`` akzeptiert kein ``tooltip``-Argument, also wird
+        nachtraeglich ueber ``key_to_bindings`` iteriert und das Feld via
+        ``dataclasses.replace`` ersetzt (``Binding`` ist frozen).
+        """
+        tooltips = {action: t(key) for action, key in keymap.TOOLTIP_KEYS.items()}
         for key, bindings_list in self._bindings.key_to_bindings.items():
             for i, binding in enumerate(bindings_list):
-                action = binding.action
-                key_i18n = self._BINDING_I18N.get(action)
-                if key_i18n is None:
-                    continue
-                self._bindings.key_to_bindings[key][i] = dataclasses.replace(
-                    binding,
-                    description=t(f"binding.{key_i18n}"),
-                    tooltip=t(f"tooltip.{key_i18n}"),
-                )
+                tooltip = tooltips.get(binding.action)
+                if tooltip:
+                    self._bindings.key_to_bindings[key][i] = dataclasses.replace(binding, tooltip=tooltip)
+
+    def action_keymap_overview(self) -> None:
+        """Zeigt die aktuell geltende Tastenbelegung.
+
+        Die Seite bekommt das fertige Ergebnis mit, nicht die Konfiguration -
+        so zeigt sie zwangslaeufig das, was tatsaechlich gebunden ist.
+        """
+        self.push_screen(
+            KeymapScreen(
+                keymap.resolve(self._config),
+                keymap.style_from_settings(self._config),
+                self.vim_navigation,
+            )
+        )
+
+    def _log_keymap_problems(self) -> None:
+        """Meldet, was beim Zusammenbau der Tastenbelegung auffiel.
+
+        Typische Faelle: eine eigene Belegung nennt eine Aktion, die es nicht
+        gibt, oder die Vim-Navigation verdeckt eine Aktion der Anwendung. Beides
+        waere sonst unsichtbar - die Taste tut dann einfach nichts.
+        """
+        for problem in self._keymap_problems:
+            self._write_log(f"[!] {problem.message}", level="warning")
 
     def _show_start_screen(self) -> None:
         """Zeigt den Start-Screen zum Oeffnen/Erstellen/Sichern eines Fahrtenbuchs."""
@@ -237,7 +272,10 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         """
         if result is None:
             if self._fahrtenbuch is None:
-                self._write_log(t("log.fahrtenbuch_closed_hint"), level="warning")
+                self._write_log(
+                    t("log.fahrtenbuch_closed_hint", shortcut=self._key_hint("open_fahrtenbuch")),
+                    level="warning",
+                )
             return
         target_path, clone_source = result
         self._open_fahrtenbuch(target_path, clone_source=clone_source)
@@ -271,7 +309,10 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
                     except Exception as exc:
                         self._write_log(t("log.clone_failed", error=exc), level="error")
                         self.notify(t("notify.clone_failed", error=exc), severity="error")
-                self._write_log(t("log.configure_vehicle_hint"), level="warning")
+                self._write_log(
+                    t("log.configure_vehicle_hint", shortcut=self._key_hint("show_settings")),
+                    level="warning",
+                )
         except Exception as exc:
             self._write_log(t("log.open_failed", error=exc), level="error")
             self.notify(t("notify.error_generic", error=exc), severity="error")
@@ -1007,7 +1048,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         if self._current_view == "tab-list-year":
             self._refresh_year_trip_table()
 
-    def action_export_excel(self) -> None:
+    def action_export(self) -> None:
         """Exportiert die aktuelle Liste (Monat oder Jahr) als Excel-Datei."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             self.notify(t("notify.no_fahrtenbuch"), severity="warning")
@@ -1128,6 +1169,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         self._holiday_service = HolidayService(federal_state)
 
         self._write_log(t("log.settings_saved"), level="success")
+        if (self._config.keymap_style, self._config.keymap_vim) != self._keymap_signature:
+            self._write_log(t("log.keymap_changed"), level="warning")
 
         if vehicle:
             self._write_log(t("log.vehicle_info", name=vehicle.name, plate=vehicle.plate))
@@ -1146,7 +1189,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         tabs = self.query_one("#view-tabs", Tabs)
         tabs.active = "tab-year"
 
-    def action_refresh_view(self) -> None:
+    def action_refresh(self) -> None:
         """Aktualisiert die aktuelle Ansicht (F5)."""
         self._refresh_data()
         view = self._current_view
@@ -1284,7 +1327,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         self._refresh_year_view()
         self._refresh_year_trip_table()
 
-    def action_show_info(self) -> None:
+    def action_show_about(self) -> None:
         """Zeigt den Info-Dialog."""
         from death_proof.screens.info_screen import InfoScreen
 
@@ -1314,7 +1357,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         # ModalScreen offen → alle App-Bindings deaktivieren
         if len(self.screen_stack) > 1:
             return None
-        if action == "export_excel" and self._fahrtenbuch is None:
+        if action == "export" and self._fahrtenbuch is None:
             return None
         if action == "rebuild_km" and self._fahrtenbuch is None:
             return None

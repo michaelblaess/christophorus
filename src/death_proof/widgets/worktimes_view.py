@@ -9,6 +9,7 @@ from textual.message import Message
 from textual.widgets import Button, DataTable, Input, Label, Static
 
 from death_proof.i18n import month_name, t
+from death_proof.widgets.navigable_data_table import NavigableDataTable
 
 
 class WorktimesView(Vertical):
@@ -63,7 +64,7 @@ class WorktimesView(Vertical):
         self._selected_month: int = 0
 
     def compose(self) -> ComposeResult:
-        yield DataTable(id="wt-data", cursor_type="row", zebra_stripes=True)
+        yield NavigableDataTable(id="wt-data", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="edit-row"):
             yield Label(t("worktimes.label.hours_input"))
             yield Input(placeholder=t("worktimes.placeholder.hours"), id="wt-hours-input")

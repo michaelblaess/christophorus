@@ -5,6 +5,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 # Biegt das Konfigurationsverzeichnis um. Gedacht fuer Tests (auch in
 # Unterprozessen), damit sie nie die echte ~/.death-proof/config.json lesen
@@ -85,6 +86,12 @@ class GlobalConfig:
     log_visible: bool = True
     last_base_dir: str = ""
     language: str = "de"
+    # Tastenbelegung: "" = nach Betriebssystem, "classic" oder "function_keys".
+    keymap_style: str = ""
+    keymap_vim: bool = False
+    # Eigene Belegungen je Aktion, z.B. {"toggle_log": ["alt+l"]}. Geprueft
+    # wird erst in textual_widgets.keymap.parse_overrides - Fehler landen im Log.
+    keymap_custom: dict[str, Any] = field(default_factory=dict)
 
     # default_factory statt festem Wert: ein Default wird beim Import in das
     # erzeugte __init__ eingebacken und liesse sich danach nicht mehr umbiegen.
@@ -115,6 +122,9 @@ class GlobalConfig:
             "log_visible": self.log_visible,
             "last_base_dir": self.last_base_dir,
             "language": self.language,
+            "keymap_style": self.keymap_style,
+            "keymap_vim": self.keymap_vim,
+            "keymap_custom": self.keymap_custom,
         }
         with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -159,6 +169,10 @@ class GlobalConfig:
             config.log_visible = data.get("log_visible", True)
             config.last_base_dir = data.get("last_base_dir", "")
             config.language = data.get("language", "de")
+            config.keymap_style = str(data.get("keymap_style", "") or "")
+            config.keymap_vim = bool(data.get("keymap_vim", False))
+            raw_custom = data.get("keymap_custom")
+            config.keymap_custom = raw_custom if isinstance(raw_custom, dict) else {}
         except (json.JSONDecodeError, KeyError):
             pass
 

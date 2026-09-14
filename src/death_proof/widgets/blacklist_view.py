@@ -10,6 +10,7 @@ from textual.message import Message
 from textual.widgets import DataTable
 
 from death_proof.i18n import t, weekday_short
+from death_proof.widgets.navigable_data_table import NavigableDataTable
 
 
 class BlacklistView(Vertical):
@@ -42,7 +43,7 @@ class BlacklistView(Vertical):
         self._show_id: bool = False
 
     def compose(self) -> ComposeResult:
-        yield DataTable(id="blacklist-data", cursor_type="row", zebra_stripes=True)
+        yield NavigableDataTable(id="blacklist-data", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
         """Spalten anlegen."""
