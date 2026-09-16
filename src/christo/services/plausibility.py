@@ -12,6 +12,7 @@ sowohl testbar als auch gefahrlos wiederholt aufrufbar.
 from dataclasses import dataclass, field
 from datetime import date
 
+from christo.i18n import month_name, t, weekday_long
 from christo.models.trip import (
     Trip,
     get_business_categories,
@@ -243,9 +244,7 @@ def check_chain_ascending(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
                 category=CAT_CHAIN_BREAK,
-                message=(
-                    f"Erste Fahrt startet bei {first.km_start} km, aber Fahrzeug-Anfangsstand ist {vehicle.start_km} km"
-                ),
+                message=t("plausi.first_trip_start", km_start=first.km_start, start_km=vehicle.start_km),
                 trip_id=first.id,
                 trip_date=first.date,
                 year=d.year if d else None,
@@ -262,7 +261,7 @@ def check_chain_ascending(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_ERROR,
                     category=CAT_NEGATIVE_DISTANCE,
-                    message=(f"Fahrt hat negative Distanz: km_start={trip.km_start} > km_end={trip.km_end}"),
+                    message=t("plausi.negative_distance", km_start=trip.km_start, km_end=trip.km_end),
                     trip_id=trip.id,
                     trip_date=trip.date,
                     year=d.year if d else None,
@@ -282,11 +281,7 @@ def check_chain_ascending(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_ERROR,
                     category=CAT_CHAIN_BACKWARD,
-                    message=(
-                        f"Kette bricht: Vorgaenger endet bei {prev.km_end} km, "
-                        f"diese Fahrt startet aber bei {curr.km_start} km "
-                        f"({delta} km Rueckwaerts-Sprung)"
-                    ),
+                    message=t("plausi.chain_backwards", prev_end=prev.km_end, curr_start=curr.km_start, delta=delta),
                     trip_id=curr.id,
                     trip_date=curr.date,
                     year=d.year if d else None,
@@ -299,11 +294,7 @@ def check_chain_ascending(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_WARNING,
                     category=CAT_CHAIN_BREAK,
-                    message=(
-                        f"Luecke in der km-Kette: Vorgaenger endet bei "
-                        f"{prev.km_end} km, diese Fahrt startet bei "
-                        f"{curr.km_start} km (+{delta} km)"
-                    ),
+                    message=t("plausi.chain_gap", prev_end=prev.km_end, curr_start=curr.km_start, delta=delta),
                     trip_id=curr.id,
                     trip_date=curr.date,
                     year=d.year if d else None,
@@ -337,11 +328,7 @@ def check_distance_matches_columns(database: Database) -> list[PlausibilityIssue
             PlausibilityIssue(
                 severity=SEVERITY_WARNING,
                 category=CAT_DISTANCE_MISMATCH,
-                message=(
-                    f"Distanz stimmt nicht mit Spalten ueberein: "
-                    f"km_end-km_start={distance} km, "
-                    f"business+private={columns} km"
-                ),
+                message=t("plausi.distance_columns", distance=distance, columns=columns),
                 trip_id=trip.id,
                 trip_date=trip.date,
                 year=d.year if d else None,
@@ -372,7 +359,7 @@ def check_vehicle_end_limit(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_ERROR,
                     category=CAT_OVER_LIMIT,
-                    message=(f"Fahrt endet bei {trip.km_end} km — ueber Vertragslimit von {vehicle.end_km} km"),
+                    message=t("plausi.over_contract_limit", km_end=trip.km_end, end_km=vehicle.end_km),
                     trip_id=trip.id,
                     trip_date=trip.date,
                     year=d.year if d else None,
@@ -387,10 +374,8 @@ def check_vehicle_end_limit(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
                 category=CAT_OVER_LIMIT,
-                message=(
-                    f"Gesamt {overshoot} km zu viel eingetragen: letzte Fahrt "
-                    f"endet bei {last_over.km_end} km, erlaubt max {vehicle.end_km} km "
-                    f"— Trip-km um {overshoot} km nach unten korrigieren"
+                message=t(
+                    "plausi.total_overshoot", overshoot=overshoot, km_end=last_over.km_end, end_km=vehicle.end_km
                 ),
                 trip_id=last_over.id,
                 trip_date=last_over.date,
@@ -425,11 +410,7 @@ def check_vehicle_end_reached(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_WARNING,
                 category=CAT_END_MISMATCH,
-                message=(
-                    f"Fahrten-Summe erreicht Endstand nicht: letzte Fahrt endet "
-                    f"bei {last.km_end} km, erwartet {vehicle.end_km} km "
-                    f"(Luecke {diff} km)"
-                ),
+                message=t("plausi.end_not_reached", km_end=last.km_end, end_km=vehicle.end_km, diff=diff),
                 trip_id=last.id,
                 trip_date=last.date,
                 year=d.year if d else None,
@@ -455,11 +436,7 @@ def check_empty_trips(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_ERROR,
                     category=CAT_EMPTY_TRIP,
-                    message=(
-                        f"Fahrt hat 0 km Distanz, aber "
-                        f"business={trip.km_business} / private={trip.km_private} km "
-                        f"gebucht"
-                    ),
+                    message=t("plausi.zero_distance_booked", business=trip.km_business, private=trip.km_private),
                     trip_id=trip.id,
                     trip_date=trip.date,
                     year=d.year if d else None,
@@ -504,9 +481,9 @@ def check_time_range_valid(database: Database) -> list[PlausibilityIssue]:
         d = _parse_trip_date(trip)
         if has_from != has_to:
             if has_from:
-                msg = f"Uhrzeit unvollstaendig: Startzeit {trip.time_from} ohne Endzeit"
+                msg = t("plausi.time_incomplete_from", time=trip.time_from)
             else:
-                msg = f"Uhrzeit unvollstaendig: Endzeit {trip.time_to} ohne Startzeit"
+                msg = t("plausi.time_incomplete_to", time=trip.time_to)
             issues.append(
                 PlausibilityIssue(
                     severity=SEVERITY_WARNING,
@@ -530,7 +507,7 @@ def check_time_range_valid(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_WARNING,
                     category=CAT_TIME_REVERSED,
-                    message=(f"Uhrzeit verdreht: {trip.time_from} - {trip.time_to} (Ende liegt vor Start)"),
+                    message=t("plausi.time_reversed", time_from=trip.time_from, time_to=trip.time_to),
                     trip_id=trip.id,
                     trip_date=trip.date,
                     year=d.year if d else None,
@@ -582,11 +559,12 @@ def check_time_overlap(database: Database) -> list[PlausibilityIssue]:
                         PlausibilityIssue(
                             severity=SEVERITY_ERROR,
                             category=CAT_TIME_OVERLAP,
-                            message=(
-                                f"Ueberschneidung mit Trip #{prev_trip.id} "
-                                f"({prev_trip.time_from}-{prev_trip.time_to}): "
-                                f"diese Fahrt startet um {curr_trip.time_from}, "
-                                f"der Vorgaenger endet erst um {prev_trip.time_to}"
+                            message=t(
+                                "plausi.time_overlap",
+                                prev_id=prev_trip.id,
+                                prev_from=prev_trip.time_from,
+                                prev_to=prev_trip.time_to,
+                                curr_from=curr_trip.time_from,
                             ),
                             trip_id=curr_trip.id,
                             trip_date=curr_trip.date,
@@ -623,10 +601,7 @@ def check_category_column_match(database: Database) -> list[PlausibilityIssue]:
                     PlausibilityIssue(
                         severity=SEVERITY_WARNING,
                         category=CAT_CATEGORY_COLUMN_MISMATCH,
-                        message=(
-                            f"Kategorie '{trip.category}' ist geschaeftlich, aber "
-                            f"km_private={trip.km_private} km ist gesetzt"
-                        ),
+                        message=t("plausi.category_business_with_private", category=trip.category, km=trip.km_private),
                         trip_id=trip.id,
                         trip_date=trip.date,
                         year=d.year if d else None,
@@ -640,10 +615,7 @@ def check_category_column_match(database: Database) -> list[PlausibilityIssue]:
                     PlausibilityIssue(
                         severity=SEVERITY_WARNING,
                         category=CAT_CATEGORY_COLUMN_MISMATCH,
-                        message=(
-                            f"Kategorie '{trip.category}' ist privat, aber "
-                            f"km_business={trip.km_business} km ist gesetzt"
-                        ),
+                        message=t("plausi.category_private_with_business", category=trip.category, km=trip.km_business),
                         trip_id=trip.id,
                         trip_date=trip.date,
                         year=d.year if d else None,
@@ -674,7 +646,7 @@ def check_weekend_business(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_WARNING,
                 category=CAT_WEEKEND_BUSINESS,
-                message=(f"Geschaeftliche Fahrt am {_weekday_de(d)}: {trip.purpose}"),
+                message=t("plausi.business_weekend", weekday=weekday_long(d.weekday()), purpose=trip.purpose),
                 trip_id=trip.id,
                 trip_date=trip.date,
                 year=d.year,
@@ -711,7 +683,7 @@ def check_holiday_business(
             PlausibilityIssue(
                 severity=SEVERITY_WARNING,
                 category=CAT_HOLIDAY_BUSINESS,
-                message=(f"Geschaeftliche Fahrt am Feiertag ({holiday_name}): {trip.purpose}"),
+                message=t("plausi.business_holiday", holiday=holiday_name, purpose=trip.purpose),
                 trip_id=trip.id,
                 trip_date=trip.date,
                 year=d.year,
@@ -752,7 +724,7 @@ def check_blacklist_business(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
                 category=CAT_BLACKLIST_BUSINESS,
-                message=(f"Geschaeftliche Fahrt an gesperrtem Tag ({reason}): {trip.purpose}"),
+                message=t("plausi.business_blocked", reason=reason, purpose=trip.purpose),
                 trip_id=trip.id,
                 trip_date=trip.date,
                 year=d.year,
@@ -825,12 +797,14 @@ def check_worktime_trip_ratio(database: Database) -> list[PlausibilityIssue]:
                     PlausibilityIssue(
                         severity=SEVERITY_WARNING,
                         category=CAT_WORKTIME_RATIO,
-                        message=(
-                            f"{_MONTH_NAMES_DE[month - 1]} {year}: "
-                            f"{actual} Geschaeftsfahrten bei nur {hours:.2f} h "
-                            f"Arbeitszeit — erwartet ca. {expected:.1f} Fahrten "
-                            f"(Jahresdurchschnitt {avg_rate:.2f}/h). "
-                            f"Urlaub/Krankheit eingerechnet?"
+                        message=t(
+                            "plausi.worktime_ratio",
+                            month=month_name(month),
+                            year=year,
+                            actual=actual,
+                            hours=f"{hours:.2f}",
+                            expected=f"{expected:.1f}",
+                            rate=f"{avg_rate:.2f}",
                         ),
                         trip_id=None,
                         trip_date=f"{year:04d}-{month:02d}-01",
@@ -874,10 +848,13 @@ def check_business_quota(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_WARNING,
                     category=CAT_BUSINESS_QUOTA_LOW,
-                    message=(
-                        f"Jahr {year}: nur {ratio * 100:.1f} % geschaeftlich "
-                        f"({biz} von {total} km). Finanzamt verlangt "
-                        f"mindestens {BUSINESS_QUOTA_MIN * 100:.0f} %."
+                    message=t(
+                        "plausi.business_quota",
+                        year=year,
+                        ratio=f"{ratio * 100:.1f}",
+                        business=biz,
+                        total=total,
+                        minimum=f"{BUSINESS_QUOTA_MIN * 100:.0f}",
                     ),
                     trip_id=None,
                     trip_date=f"{year:04d}-01-01",
@@ -914,9 +891,10 @@ def check_fuel_tank_capacity(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
                 category=CAT_FUEL_OVER_TANK,
-                message=(
-                    f"Tankfuellung {trip.fuel_liters:.2f} l ueberschreitet "
-                    f"Tankkapazitaet {vehicle.tank_capacity_l:.0f} l"
+                message=t(
+                    "plausi.fuel_over_capacity",
+                    liters=f"{trip.fuel_liters:.2f}",
+                    capacity=f"{vehicle.tank_capacity_l:.0f}",
                 ),
                 trip_id=trip.id,
                 trip_date=trip.date,
@@ -944,14 +922,7 @@ def check_fuel_missing_liters(database: Database) -> list[PlausibilityIssue]:
         if trip.fuel_liters > 0:
             continue
         d = _parse_trip_date(trip)
-        if trip.fuel_full_tank:
-            msg = (
-                "Volltank ohne Literangabe: fuel_full_tank gesetzt, aber "
-                "fuel_liters = 0 — der Verbrauchs-Check ueberspringt diesen "
-                "Trip und meldet stattdessen den naechsten Volltank."
-            )
-        else:
-            msg = "Tank-Trip ohne Literangabe: fuel_liters = 0"
+        msg = t("plausi.fuel_full_tank_no_liters") if trip.fuel_full_tank else t("plausi.fuel_no_liters")
         issues.append(
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
@@ -1027,11 +998,15 @@ def check_fuel_consumption_range(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=severity,
                 category=CAT_FUEL_CONSUMPTION,
-                message=(
-                    f"Verbrauch {consumption:.1f} l/100km zwischen Volltank "
-                    f"{prev.date} und {curr.date} ({distance_km} km, "
-                    f"{total_liters:.2f} l) — erwartet "
-                    f"{target:.1f} l/100km +/- {int(tolerance * 100)} %"
+                message=t(
+                    "plausi.consumption_range",
+                    consumption=f"{consumption:.1f}",
+                    prev_date=prev.date,
+                    curr_date=curr.date,
+                    distance=distance_km,
+                    liters=f"{total_liters:.2f}",
+                    target=f"{target:.1f}",
+                    tolerance=int(tolerance * 100),
                 ),
                 trip_id=curr.id,
                 trip_date=curr.date,
@@ -1093,13 +1068,14 @@ def check_fuel_range_exceeded(database: Database) -> list[PlausibilityIssue]:
             PlausibilityIssue(
                 severity=SEVERITY_ERROR,
                 category=CAT_FUEL_RANGE_EXCEEDED,
-                message=(
-                    f"Zwischen Volltank {prev.date} und {curr.date} wurden "
-                    f"{distance_km} km gefahren — Tank "
-                    f"({vehicle.tank_capacity_l:.0f} l"
-                    + (f" + {mid_liters:.2f} l Teilbetankung" if mid_liters > 0 else "")
-                    + f") reicht maximal ca. {effective_max_km:.0f} km. "
-                    f"Eine Tankung fehlt oder ein Trip im Intervall ist ueberzaehlig."
+                message=t(
+                    "plausi.range_exceeded",
+                    prev_date=prev.date,
+                    curr_date=curr.date,
+                    distance=distance_km,
+                    capacity=f"{vehicle.tank_capacity_l:.0f}",
+                    partial=t("plausi.range_partial", liters=f"{mid_liters:.2f}") if mid_liters > 0 else "",
+                    max_km=f"{effective_max_km:.0f}",
                 ),
                 trip_id=curr.id,
                 trip_date=curr.date,
@@ -1169,11 +1145,12 @@ def check_ghost_business_trips(database: Database) -> list[PlausibilityIssue]:
                 PlausibilityIssue(
                     severity=SEVERITY_INFO,
                     category=CAT_GHOST_BUSINESS_TRIP,
-                    message=(
-                        f"Gleiche Strecke wie Trip am {prev_trip.date} "
-                        f"({curr_trip.km_business} km, {dest_short}) — "
-                        f"{delta_days} Tage Abstand. Bitte pruefen ob wirklich "
-                        f"gefahren."
+                    message=t(
+                        "plausi.ghost_trip",
+                        prev_date=prev_trip.date,
+                        km=curr_trip.km_business,
+                        destination=dest_short,
+                        days=delta_days,
                     ),
                     trip_id=curr_trip.id,
                     trip_date=curr_trip.date,
@@ -1183,22 +1160,6 @@ def check_ghost_business_trips(database: Database) -> list[PlausibilityIssue]:
             )
 
     return issues
-
-
-_MONTH_NAMES_DE = [
-    "Januar",
-    "Februar",
-    "Maerz",
-    "April",
-    "Mai",
-    "Juni",
-    "Juli",
-    "August",
-    "September",
-    "Oktober",
-    "November",
-    "Dezember",
-]
 
 
 # ---------------------------------------------------------------------------
@@ -1239,18 +1200,3 @@ def run_all_checks(
     if CAT_GHOST_BUSINESS_TRIP not in skip:
         report.issues.extend(check_ghost_business_trips(database))
     return report
-
-
-_WEEKDAY_NAMES_DE = [
-    "Montag",
-    "Dienstag",
-    "Mittwoch",
-    "Donnerstag",
-    "Freitag",
-    "Samstag",
-    "Sonntag",
-]
-
-
-def _weekday_de(d: date) -> str:
-    return _WEEKDAY_NAMES_DE[d.weekday()]

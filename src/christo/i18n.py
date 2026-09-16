@@ -140,3 +140,14 @@ def weekday_short(weekday: int, lang: str | None = None) -> str:
     de = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
     en = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     return (de if lang == "de" else en)[weekday]
+
+
+def weekday_long(weekday: int, lang: str | None = None) -> str:
+    """Sprachabhaengiger ausgeschriebener Wochentag (0=Montag .. 6=Sonntag)."""
+    if weekday < 0 or weekday > 6:
+        return ""
+    if lang is None:
+        lang = _current_lang
+    de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+    en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    return (de if lang == "de" else en)[weekday]
