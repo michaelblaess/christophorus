@@ -4,6 +4,7 @@
 !docs/christophorus.png
 !docs/social-preview.png
 !docs/favicon.png
+!docs/screenshots/**/*.png
 __pycache__/
 *.pyc
 *.egg-info/
@@ -22,4 +23,5 @@ __pycache__/
 /Kundenrechnungen*.md
 /Blacklist*.md
 /PLAN*.md
+/docs/PLAN*.md
 /import_trips.py
