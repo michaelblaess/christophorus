@@ -18,6 +18,8 @@ the logbook as Excel, JSON or Markdown.
 
 The user interface is available in German and English.
 
+Project page: [michaelblaess.github.io/christophorus](https://michaelblaess.github.io/christophorus/)
+
 The name comes from Saint Christopher, the patron saint of travellers and
 drivers. In the terminal it is shorter: `christo` starts the same program.
 Up to version 1.2.1 the project was called "Death Proof", before that

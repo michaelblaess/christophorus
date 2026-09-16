@@ -18,6 +18,8 @@ Markdown.
 
 Die Oberfläche gibt es auf Deutsch und Englisch.
 
+Projektseite: [michaelblaess.github.io/christophorus](https://michaelblaess.github.io/christophorus/de/)
+
 Der Name stammt vom heiligen Christophorus, dem Schutzpatron der Reisenden und
 Autofahrer. Im Terminal geht es kürzer: `christo` startet dasselbe Programm.
 Bis Version 1.2.1 hieß das Projekt "Death Proof", davor "fahrtenbuch". Beim
