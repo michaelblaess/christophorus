@@ -3,6 +3,7 @@
 *.png
 !docs/christophorus.png
 !docs/social-preview.png
+!docs/favicon.png
 __pycache__/
 *.pyc
 *.egg-info/

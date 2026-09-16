@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Christophorus - Fahrtenbuch im Terminal</title>
+  <meta name="description" content="Quelloffene Terminal-Anwendung für das Fahrtenbuch: Fahrten, Kilometerkette, Plausibilitätsprüfung und Excel-Export, für geleaste und gekaufte Fahrzeuge.">
+  <link rel="canonical" href="https://michaelblaess.github.io/christophorus/de/">
+  <link rel="alternate" hreflang="en" href="https://michaelblaess.github.io/christophorus/">
+  <link rel="alternate" hreflang="de" href="https://michaelblaess.github.io/christophorus/de/">
+  <link rel="alternate" hreflang="x-default" href="https://michaelblaess.github.io/christophorus/">
+  <meta property="og:title" content="Christophorus - Fahrtenbuch im Terminal">
+  <meta property="og:description" content="Quelloffene Terminal-Anwendung für das Fahrtenbuch: Fahrten, Kilometerkette, Plausibilitätsprüfung und Excel-Export, für geleaste und gekaufte Fahrzeuge.">
+  <meta property="og:image" content="https://michaelblaess.github.io/christophorus/social-preview.png">
+  <meta property="og:url" content="https://michaelblaess.github.io/christophorus/de/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/christophorus/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/christophorus/favicon.png">
+  <link rel="stylesheet" href="/christophorus/css/precision.css">
+  <link rel="stylesheet" href="/christophorus/css/christophorus.css">
+  <script src="/christophorus/js/theme.js"></script>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-left">
+      <a href="/christophorus/de/index.html" class="header-home">
+        <img src="/christophorus/christophorus.png" alt="" class="header-logo">
+        <span class="header-repo">christophorus</span>
+      </a>
+    </div>
+    <div class="header-right">
+      <a href="/christophorus/de/index.html#features" class="header-link">Funktionen</a>
+      <a href="/christophorus/de/index.html#download" class="header-link">Download</a>
+      <a href="https://github.com/michaelblaess/christophorus" class="header-link">GitHub</a>
+      <a href="/christophorus/index.html" class="header-link" hreflang="en">English</a>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Hell oder dunkel">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <img src="/christophorus/christophorus.png" alt="Christophorus" class="hero-logo" width="200" height="200">
+    <div class="hero-badge"><span class="dot"></span> Open Source · Apache 2.0</div>
+    <h1>Christo<span class="accent">phorus</span></h1>
+    <p class="hero-description">Eine Terminal-Anwendung für das Fahrtenbuch, für geleaste wie für gekaufte Fahrzeuge. Sie erfasst jede Fahrt, hält die Kilometerkette stimmig, prüft die Einträge auf Plausibilität und exportiert das Fahrtenbuch als Excel, JSON oder Markdown.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/michaelblaess/christophorus" class="btn btn-primary">GitHub-Repository</a>
+      <a href="https://github.com/michaelblaess/christophorus/releases" class="btn btn-secondary">Download</a>
+    </div>
+  </section>
+
+  <section class="terminal-section">
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="terminal-dot r"></div>
+        <div class="terminal-dot y"></div>
+        <div class="terminal-dot g"></div>
+        <div class="terminal-title">christophorus</div>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">$</span> <span class="cmd">christophorus</span></div>
+        <div><span class="prompt">$</span> <span class="cmd">christophorus</span> <span class="flag">--year</span> <span class="url">2024</span></div>
+        <div><span class="prompt">$</span> <span class="cmd">christophorus</span> <span class="flag">--lang</span> <span class="url">en</span></div>
+        <div><span class="prompt">$</span> <span class="cmd">christo</span> <span class="flag">--version</span></div>
+        <div><span class="ok">christophorus 1.3.0</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
+  <section class="section" id="features">
+    <div class="section-label">Funktionen</div>
+    <h2 class="section-title">Was es kann</h2>
+    <p class="section-description">Gebaut für alle, die ein Fahrtenbuch fürs Finanzamt führen müssen und das mit der Tastatur erledigen wollen.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🚗</div>
+        <h3>Fahrten</h3>
+        <p>Datum, Fahrzeit, Ziel, Reisezweck, Kilometerstand am Anfang und Ende, geschäftliche und private Kilometer, Hin- und Rückfahrt, Tanken.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>Kilometerkette</h3>
+        <p>Anfangs- und Endstände schließen lückenlos aneinander an. Die Reparatur setzt die Kette neu, ohne eine Strecke zu verändern.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>Plausicheck</h3>
+        <p>Lücken, Rückwärtssprünge, Geschäftsfahrten am Wochenende und an Feiertagen, Verbrauch, verdächtige Doppeleinträge.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📅</div>
+        <h3>Ansichten</h3>
+        <p>Liste je Monat und Jahr, Kalender, Jahresübersicht, gesperrte Tage, Belege und Arbeitszeit.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📤</div>
+        <h3>Export</h3>
+        <p>Excel mit Live-Formeln, JSON mit allen Feldern, Markdown-Tabelle, gewählt im Speichern-Dialog.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🕶️</div>
+        <h3>Anonymisieren</h3>
+        <p>Ersetzt Ziele, Zwecke, Fahrzeug und Ordner in der Anzeige, für Screenshots. Die Datenbank bleibt unberührt.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
+  <section class="section" id="download">
+    <div class="section-label">Download</div>
+    <h2 class="section-title">Loslegen</h2>
+    <p class="section-description">Fertige Pakete für Windows, Linux und macOS liegen auf der Releases-Seite. Oder du startest es aus dem Quellcode mit Python 3.12 und uv.</p>
+    <div class="install-grid">
+      <div class="install-card">
+        <h4>Fertige Programmpakete</h4>
+        <div class="install-cmd">github.com/michaelblaess/christophorus/releases</div>
+      </div>
+      <div class="install-card">
+        <h4>Aus dem Quellcode</h4>
+        <div class="install-cmd">git clone ... &amp;&amp; ./bootstrap.sh &amp;&amp; ./run.sh</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
+  <section class="section" id="hinweis">
+    <div class="section-label">Wichtiger Hinweis</div>
+    <h2 class="section-title">Keine Steuerberatung</h2>
+    <p class="section-description notice">Ob ein Fahrtenbuch steuerlich anerkannt wird, entscheidet allein das Finanzamt. Christophorus hilft beim Führen und prüft die Einträge auf Plausibilität, sichert die Anerkennung aber nicht zu und ersetzt keine steuerliche Beratung. Die Software steht unter der Apache License 2.0 und wird ohne jede Gewährleistung bereitgestellt. Beim ersten Start musst du diesen Hinweis bestätigen.</p>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
+  <footer class="footer">
+    <div class="footer-left">
+      <span>&copy; 2026 Michael Blaess · Apache License 2.0</span>
+    </div>
+    <div class="footer-links">
+      <a href="/christophorus/legal.html" hreflang="en">Legal notice</a>
+      <a href="/christophorus/privacy.html" hreflang="en">Privacy</a>
+      <a href="/christophorus/de/impressum.html" hreflang="de">Impressum</a>
+      <a href="/christophorus/de/datenschutz.html" hreflang="de">Datenschutz</a>
+      <a href="https://github.com/michaelblaess/christophorus">GitHub</a>
+    </div>
+  </footer>
+
+</body>
+</html>

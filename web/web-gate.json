@@ -1,0 +1,11 @@
+{
+  "dist": "../docs",
+  "sprachen": { "en": "", "de": "de" },
+  "rechtsseiten": {
+    "en": ["legal", "privacy"],
+    "de": ["de/impressum", "de/datenschutz"]
+  },
+  "copyright": "© 2026 Michael Blaess",
+  "zaehlung": false,
+  "themeToggleKennung": "theme-toggle"
+}
