@@ -7,6 +7,10 @@
 
 ---
 
+<p align="center">
+  <img src="docs/christophorus.png" width="200" alt="Christophorus logo">
+</p>
+
 A terminal application for keeping a vehicle logbook (German: *Fahrtenbuch*),
 built for leased company cars. Christophorus records every trip, keeps the
 odometer chain consistent, checks the entries for plausibility and exports

@@ -7,6 +7,10 @@
 
 ---
 
+<p align="center">
+  <img src="docs/christophorus.png" width="200" alt="Christophorus-Logo">
+</p>
+
 Eine Terminal-Anwendung für das Fahrtenbuch, gebaut für Leasing-Dienstwagen.
 Christophorus erfasst jede Fahrt, hält die Kilometerkette stimmig, prüft die
 Einträge auf Plausibilität und exportiert das Fahrtenbuch als Excel, JSON oder
