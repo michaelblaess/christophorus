@@ -61,3 +61,47 @@
 .footer-links {
   flex-wrap: wrap;
 }
+
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.shot {
+  margin: 0;
+}
+
+.shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.shot figcaption {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.install-cmd {
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.manual {
+  margin-top: 24px;
+}
+
+.manual a {
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .shot-grid {
+    grid-template-columns: 1fr;
+  }
+}

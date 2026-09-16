@@ -57,9 +57,42 @@ alten Namen von selbst.
   Dialoge mit echten Daten sind solange gesperrt.
 - **Themes** aus [textual-themes](https://github.com/michaelblaess/textual-themes).
 
+## Screenshots
+
+Alle Screenshots zeigen erfundene Daten.
+
+| Monatsliste | Kalender |
+|---|---|
+| ![Monatsliste](docs/screenshots/de/01-month-list.png) | ![Kalender](docs/screenshots/de/02-calendar.png) |
+| **Jahresübersicht** | **Plausicheck** |
+| ![Jahresübersicht](docs/screenshots/de/03-year-overview.png) | ![Plausicheck](docs/screenshots/de/04-plausicheck.png) |
+| **Neue Fahrt** | |
+| ![Neue Fahrt](docs/screenshots/de/05-new-trip.png) | |
+
 ## Installation
 
-### Fertige Programmpakete
+### Installation mit einem Befehl
+
+Der Installer lädt das fertige Paket des neuesten Releases. Python und git
+brauchst du dafür nicht. Ein zweiter Aufruf aktualisiert das Programm, deine
+Einstellungen und Fahrtenbücher bleiben unberührt.
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.ps1 | iex
+```
+
+**Linux (x86_64) und macOS (Apple Silicon):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.sh | bash
+```
+
+Danach startest du `christophorus` oder kurz `christo`. Unter Windows vorher ein
+neues Terminal öffnen, damit der erweiterte PATH greift.
+
+### Manuell herunterladen
 
 Jedes Release auf der [Releases-Seite](https://github.com/michaelblaess/christophorus/releases)
 enthält eigenständige Builds für Windows (x64), Linux (x86_64) und macOS (Apple Silicon).

@@ -31,6 +31,7 @@
     </div>
     <div class="header-right">
       <a href="/christophorus/de/index.html#features" class="header-link">Funktionen</a>
+      <a href="/christophorus/de/index.html#screenshots" class="header-link">Screenshots</a>
       <a href="/christophorus/de/index.html#download" class="header-link">Download</a>
       <a href="https://github.com/michaelblaess/christophorus" class="header-link">GitHub</a>
       <a href="/christophorus/index.html" class="header-link" hreflang="en">English</a>
@@ -112,20 +113,51 @@
 
   <div class="divider"><div class="divider-line"></div></div>
 
+  <section class="section" id="screenshots">
+    <div class="section-label">Screenshots</div>
+    <h2 class="section-title">So sieht es aus</h2>
+    <p class="section-description">Alle Screenshots zeigen erfundene Daten.</p>
+    <div class="shot-grid">
+      <figure class="shot">
+        <a href="/christophorus/screenshots/de/01-month-list.png"><img src="/christophorus/screenshots/de/01-month-list.png" alt="Monatsliste" loading="lazy" width="1620" height="928"></a>
+        <figcaption>Monatsliste</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="/christophorus/screenshots/de/02-calendar.png"><img src="/christophorus/screenshots/de/02-calendar.png" alt="Kalender" loading="lazy" width="1620" height="928"></a>
+        <figcaption>Kalender</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="/christophorus/screenshots/de/03-year-overview.png"><img src="/christophorus/screenshots/de/03-year-overview.png" alt="Jahresübersicht" loading="lazy" width="1620" height="928"></a>
+        <figcaption>Jahresübersicht</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="/christophorus/screenshots/de/04-plausicheck.png"><img src="/christophorus/screenshots/de/04-plausicheck.png" alt="Plausicheck" loading="lazy" width="1620" height="928"></a>
+        <figcaption>Plausicheck</figcaption>
+      </figure>
+      <figure class="shot">
+        <a href="/christophorus/screenshots/de/05-new-trip.png"><img src="/christophorus/screenshots/de/05-new-trip.png" alt="Neue Fahrt" loading="lazy" width="1620" height="928"></a>
+        <figcaption>Neue Fahrt</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
   <section class="section" id="download">
     <div class="section-label">Download</div>
     <h2 class="section-title">Loslegen</h2>
-    <p class="section-description">Fertige Pakete für Windows, Linux und macOS liegen auf der Releases-Seite. Oder du startest es aus dem Quellcode mit Python 3.12 und uv.</p>
+    <p class="section-description">Ein Befehl installiert das fertige Paket des neuesten Releases. Python und git brauchst du dafür nicht. Ein zweiter Aufruf aktualisiert das Programm, deine Einstellungen und Fahrtenbücher bleiben unberührt.</p>
     <div class="install-grid">
       <div class="install-card">
-        <h4>Fertige Programmpakete</h4>
-        <div class="install-cmd">github.com/michaelblaess/christophorus/releases</div>
+        <h4>Windows (PowerShell)</h4>
+        <div class="install-cmd">irm https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.ps1 | iex</div>
       </div>
       <div class="install-card">
-        <h4>Aus dem Quellcode</h4>
-        <div class="install-cmd">git clone ... &amp;&amp; ./bootstrap.sh &amp;&amp; ./run.sh</div>
+        <h4>Linux x86_64 / macOS Apple Silicon</h4>
+        <div class="install-cmd">curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.sh | bash</div>
       </div>
     </div>
+    <p class="section-description manual">Lieber selbst herunterladen? Jedes Release enthält eigenständige Builds für Windows, Linux und macOS: <a href="https://github.com/michaelblaess/christophorus/releases">Releases auf GitHub</a></p>
   </section>
 
   <div class="divider"><div class="divider-line"></div></div>

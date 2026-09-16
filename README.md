@@ -55,9 +55,42 @@ stored under the old names on its own.
   dialogs showing real data are locked while it is on.
 - **Themes** from [textual-themes](https://github.com/michaelblaess/textual-themes).
 
+## Screenshots
+
+All screenshots show made-up data.
+
+| Month list | Calendar |
+|---|---|
+| ![Month list](docs/screenshots/en/01-month-list.png) | ![Calendar](docs/screenshots/en/02-calendar.png) |
+| **Year overview** | **Plausibility check** |
+| ![Year overview](docs/screenshots/en/03-year-overview.png) | ![Plausibility check](docs/screenshots/en/04-plausicheck.png) |
+| **New trip** | |
+| ![New trip](docs/screenshots/en/05-new-trip.png) | |
+
 ## Installation
 
-### Prebuilt binaries
+### One-click install
+
+The installer downloads the prebuilt package of the latest release. No Python
+and no git required. Running it again updates the program, your settings and
+logbooks stay untouched.
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.ps1 | iex
+```
+
+**Linux (x86_64) and macOS (Apple Silicon):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.sh | bash
+```
+
+Afterwards start `christophorus` or the short form `christo`. On Windows open a
+new terminal first so the updated PATH takes effect.
+
+### Download manually
 
 Every release on the [Releases page](https://github.com/michaelblaess/christophorus/releases)
 contains standalone builds for Windows (x64), Linux (x86_64) and macOS (Apple Silicon).

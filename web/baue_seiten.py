@@ -106,6 +106,7 @@ def rahmen(sprache: str, seite: str, titel: str, beschreibung: str, inhalt: str)
     </div>
     <div class="header-right">
       <a href="{pfad(sprache, "start")}#features" class="header-link">{t["nav_features"]}</a>
+      <a href="{pfad(sprache, "start")}#screenshots" class="header-link">Screenshots</a>
       <a href="{pfad(sprache, "start")}#download" class="header-link">{t["nav_download"]}</a>
       <a href="{REPO}" class="header-link">GitHub</a>
       <a href="{pfad(andere, seite)}" class="header-link" hreflang="{andere}">{t["andere_sprache"]}</a>
@@ -185,10 +186,28 @@ START = {
         ],
         "download_label": "Download",
         "download_titel": "Get started",
-        "download_text": "Prebuilt packages for Windows, Linux and macOS are on the releases page. Or run it from source with Python 3.12 and uv.",
+        "download_text": "One command installs the prebuilt package of the latest release. No Python and no git required. Running it again updates the program, your settings and logbooks stay untouched.",
         "download_karten": [
-            ("Prebuilt binaries", "github.com/michaelblaess/christophorus/releases"),
-            ("From source", "git clone ... && ./bootstrap.sh && ./run.sh"),
+            (
+                "Windows (PowerShell)",
+                "irm https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.ps1 | iex",
+            ),
+            (
+                "Linux x86_64 / macOS Apple Silicon",
+                "curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.sh | bash",
+            ),
+        ],
+        "download_manuell": "Prefer to download it yourself? Every release contains standalone builds for Windows, Linux and macOS:",
+        "download_releases": "Releases on GitHub",
+        "shots_label": "Screenshots",
+        "shots_titel": "How it looks",
+        "shots_text": "All screenshots show made-up data.",
+        "shots": [
+            ("01-month-list", "Month list"),
+            ("02-calendar", "Calendar"),
+            ("03-year-overview", "Year overview"),
+            ("04-plausicheck", "Plausibility check"),
+            ("05-new-trip", "New trip"),
         ],
         "hinweis_label": "Please note",
         "hinweis_titel": "No tax advice",
@@ -238,10 +257,28 @@ START = {
         ],
         "download_label": "Download",
         "download_titel": "Loslegen",
-        "download_text": "Fertige Pakete für Windows, Linux und macOS liegen auf der Releases-Seite. Oder du startest es aus dem Quellcode mit Python 3.12 und uv.",
+        "download_text": "Ein Befehl installiert das fertige Paket des neuesten Releases. Python und git brauchst du dafür nicht. Ein zweiter Aufruf aktualisiert das Programm, deine Einstellungen und Fahrtenbücher bleiben unberührt.",
         "download_karten": [
-            ("Fertige Programmpakete", "github.com/michaelblaess/christophorus/releases"),
-            ("Aus dem Quellcode", "git clone ... && ./bootstrap.sh && ./run.sh"),
+            (
+                "Windows (PowerShell)",
+                "irm https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.ps1 | iex",
+            ),
+            (
+                "Linux x86_64 / macOS Apple Silicon",
+                "curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/install.sh | bash",
+            ),
+        ],
+        "download_manuell": "Lieber selbst herunterladen? Jedes Release enthält eigenständige Builds für Windows, Linux und macOS:",
+        "download_releases": "Releases auf GitHub",
+        "shots_label": "Screenshots",
+        "shots_titel": "So sieht es aus",
+        "shots_text": "Alle Screenshots zeigen erfundene Daten.",
+        "shots": [
+            ("01-month-list", "Monatsliste"),
+            ("02-calendar", "Kalender"),
+            ("03-year-overview", "Jahresübersicht"),
+            ("04-plausicheck", "Plausicheck"),
+            ("05-new-trip", "Neue Fahrt"),
         ],
         "hinweis_label": "Wichtiger Hinweis",
         "hinweis_titel": "Keine Steuerberatung",
@@ -266,6 +303,13 @@ def startseite(sprache: str) -> str:
         <div class="install-cmd">{html.escape(cmd)}</div>
       </div>"""
         for kopf, cmd in s["download_karten"]
+    )
+    bilder = "\n".join(
+        f"""      <figure class="shot">
+        <a href="{PFAD}/screenshots/{sprache}/{datei}.png"><img src="{PFAD}/screenshots/{sprache}/{datei}.png" alt="{html.escape(text)}" loading="lazy" width="1620" height="928"></a>
+        <figcaption>{html.escape(text)}</figcaption>
+      </figure>"""
+        for datei, text in s["shots"]
     )
     inhalt = f"""  <section class="hero">
     <img src="{PFAD}/christophorus.png" alt="Christophorus" class="hero-logo" width="200" height="200">
@@ -309,6 +353,17 @@ def startseite(sprache: str) -> str:
 
   <div class="divider"><div class="divider-line"></div></div>
 
+  <section class="section" id="screenshots">
+    <div class="section-label">{s["shots_label"]}</div>
+    <h2 class="section-title">{s["shots_titel"]}</h2>
+    <p class="section-description">{html.escape(s["shots_text"])}</p>
+    <div class="shot-grid">
+{bilder}
+    </div>
+  </section>
+
+  <div class="divider"><div class="divider-line"></div></div>
+
   <section class="section" id="download">
     <div class="section-label">{s["download_label"]}</div>
     <h2 class="section-title">{s["download_titel"]}</h2>
@@ -316,6 +371,7 @@ def startseite(sprache: str) -> str:
     <div class="install-grid">
 {download}
     </div>
+    <p class="section-description manual">{html.escape(s["download_manuell"])} <a href="{REPO}/releases">{s["download_releases"]}</a></p>
   </section>
 
   <div class="divider"><div class="divider-line"></div></div>
