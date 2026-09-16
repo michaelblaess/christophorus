@@ -90,15 +90,15 @@ Buchstaben erhalten, nur das Log zieht von `L` auf `F4`.
 |---|---|---|
 | Info | `I` | `F1` |
 | Einstellungen | `S` | `F2` |
+| Fahrtenbücher verwalten | `V` | `F3` |
 | Log ein/aus | `L` | `F4` / `Alt+L` |
 | Aktualisieren | `F5` | `F5` |
+| Kilometerkette reparieren | `R` | `F6` |
 | Neue Fahrt | `N` | `F7` |
-| Plausibilitätsprüfung | `P` | `F8` |
+| Plausicheck | `P` | `F8` |
 | Blacklist ein/aus | `B` | `F9` |
 | Export | `E` | `F10` |
 | Fahrt löschen | `DEL` | `DEL` |
-| Fahrtenbücher verwalten | `V` | `V` |
-| Kilometerkette reparieren | `R` | `R` |
 | Nächstes Theme | `T` | `T` |
 | Vorheriger / nächster Monat | `<` / `>` | `<` / `>` |
 | Tastenübersicht | `?` | `?` |

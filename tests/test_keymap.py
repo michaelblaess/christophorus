@@ -86,6 +86,8 @@ def test_f_tasten_treten_neben_die_buchstaben() -> None:
     assert bindings["show_settings"].keys == ("f2", "s", "S")
     assert bindings["toggle_log"].keys == ("f4", "alt+l")
     assert bindings["refresh"].keys == ("f5",)
+    assert bindings["open_fahrtenbuch"].keys == ("f3", "v", "V")
+    assert bindings["rebuild_km"].keys == ("f6", "r", "R")
     assert bindings["new_trip"].keys == ("f7", "n", "N")
     assert bindings["check_plausibility"].keys == ("f8", "p", "P")
     assert bindings["toggle_blacklist"].keys == ("f9", "b", "B")
@@ -104,10 +106,10 @@ def test_nur_das_log_verliert_seinen_buchstaben() -> None:
 
 
 def test_f_reihe_hat_genau_die_geplanten_tasten() -> None:
-    # F3 (Filter) und F6 (Details) gibt es in Christophorus nicht.
+    # F3 und F6 tragen Verwalten und km reparieren statt Filter und Details.
     bindings = keymap.resolve(_config(keymap_style="function_keys")).bindings
     nummern = sorted(n for b in bindings.values() if (n := function_key_number(b)) is not None)
-    assert nummern == [1, 2, 4, 5, 7, 8, 9, 10]
+    assert nummern == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
 def test_f11_und_f12_bleiben_frei() -> None:
@@ -119,8 +121,8 @@ def test_f11_und_f12_bleiben_frei() -> None:
 def test_footer_beginnt_mit_den_f_tasten_in_der_richtigen_reihenfolge() -> None:
     bindings = keymap.resolve(_config(keymap_style="function_keys")).bindings
     sichtbar = [keymap.key_display(b.keys[0]) for b in bindings.values() if b.show]
-    assert sichtbar[:8] == ["F1", "F2", "F4", "F5", "F7", "F8", "F9", "F10"]
-    assert all(not e.startswith("F") for e in sichtbar[8:])
+    assert sichtbar[:10] == ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"]
+    assert all(not e.startswith("F") for e in sichtbar[10:])
 
 
 def test_klassischer_stil_behaelt_seine_reihenfolge() -> None:

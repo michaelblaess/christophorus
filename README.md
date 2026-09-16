@@ -88,15 +88,15 @@ stay available, only the log moves from `L` to `F4`.
 |---|---|---|
 | Info | `I` | `F1` |
 | Settings | `S` | `F2` |
+| Manage logbooks | `V` | `F3` |
 | Log on/off | `L` | `F4` / `Alt+L` |
 | Refresh | `F5` | `F5` |
+| Repair odometer chain | `R` | `F6` |
 | New trip | `N` | `F7` |
 | Plausibility check | `P` | `F8` |
 | Blacklist on/off | `B` | `F9` |
 | Export | `E` | `F10` |
 | Delete trip | `DEL` | `DEL` |
-| Manage logbooks | `V` | `V` |
-| Repair odometer chain | `R` | `R` |
 | Next theme | `T` | `T` |
 | Previous / next month | `<` / `>` | `<` / `>` |
 | Key overview | `?` | `?` |

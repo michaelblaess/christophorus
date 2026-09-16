@@ -161,6 +161,8 @@ def style_from_settings(config: Any) -> KeymapStyle:
 
 
 APP_FUNCTION_KEYS: dict[str, KeyBinding] = {
+    "open_fahrtenbuch": KeyBinding(("f3", "v", "V")),
+    "rebuild_km": KeyBinding(("f6", "r", "R")),
     "new_trip": KeyBinding(("f7", "n", "N")),
     "check_plausibility": KeyBinding(("f8", "p", "P")),
     "toggle_blacklist": KeyBinding(("f9", "b", "B")),
@@ -169,8 +171,10 @@ APP_FUNCTION_KEYS: dict[str, KeyBinding] = {
 """Die F-Tasten, die diese Anwendung selbst vergibt.
 
 `f1` bis `f6` kommen aus der gemeinsamen Konvention. Davon nutzt Christophorus
-F1 (Info), F2 (Einstellungen), F4 (Log) und F5 (Aktualisieren) - einen Filter
-(F3) und eine Detailansicht (F6) gibt es hier nicht, die Plaetze bleiben leer.
+F1 (Info), F2 (Einstellungen), F4 (Log) und F5 (Aktualisieren). Einen Filter
+(F3) und eine Detailansicht (F6) gibt es hier nicht - die beiden Plaetze
+bekommen `open_fahrtenbuch` (F3) und `rebuild_km` (F6), damit jede Aktion im
+Footer eine F-Taste hat (Michael, 16.09.2026). `v` und `r` bleiben daneben.
 
 Ab `f7` in der Reihenfolge der Arbeit: erfassen, pruefen, Sperrtage
 markieren, ausgeben.
@@ -179,7 +183,7 @@ Ohne F-Taste bleiben bewusst:
 
 - `q` Beenden und `DEL` Loeschen - eindeutig, Loeschen soll nicht auf einer
   Taste liegen, die man im Vorbeigehen trifft.
-- `v` Verwalten, `r` km-Kette reparieren und `t` Theme - selten gebraucht.
+- `t` Theme - selten gebraucht.
 - `f11` und `f12`: viele Terminals belegen sie selbst mit Vollbild.
 """
 
