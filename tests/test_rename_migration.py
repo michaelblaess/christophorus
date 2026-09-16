@@ -100,5 +100,23 @@ class TestDatabaseMigration:
         assert _read_marker(tmp_path / Database.DB_FILENAME) == "neu"
         assert (tmp_path / "death-proof.db").exists()
 
+    def test_locked_old_db_is_opened_under_old_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Nachgestellt: eine noch laufende alte Instanz haelt death-proof.db offen,
+        # Windows meldet beim Umbenennen WinError 32.
+        _write_marker_db(tmp_path / "death-proof.db", "alt")
+
+        def locked(self: Path, target: Path) -> Path:
+            raise PermissionError(32, "Datei wird von einem anderen Prozess verwendet")
+
+        monkeypatch.setattr(Path, "rename", locked)
+
+        database = Database(tmp_path)
+        database.open()
+        database.close()
+
+        assert database.db_file == tmp_path / "death-proof.db"
+        assert not (tmp_path / Database.DB_FILENAME).exists()
+        assert _read_marker(tmp_path / "death-proof.db") == "alt"
+
     def test_empty_dir_is_no_logbook(self, tmp_path: Path) -> None:
         assert not Database.has_logbook(tmp_path)

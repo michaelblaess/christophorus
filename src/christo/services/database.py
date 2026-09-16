@@ -85,9 +85,16 @@ class Database:
             return
         for name in self.LEGACY_DB_FILENAMES:
             legacy = self._path / name
-            if legacy.exists():
+            if not legacy.exists():
+                continue
+            try:
                 legacy.rename(self._db_file)
-                return
+            except OSError:
+                # Gesperrt, z.B. von einer noch laufenden alten Instanz oder
+                # vom Dropbox-Client: unter altem Namen oeffnen statt den
+                # Zugriff zu verweigern. Der naechste Start versucht es erneut.
+                self._db_file = legacy
+            return
 
     @property
     def path(self) -> Path:
@@ -1523,12 +1530,13 @@ class Database:
 
         # Quelle kurz oeffnen, damit Migrationen laufen (inkl. Legacy-DB-
         # Umbenennung). Danach ist das Schema garantiert identisch zum Ziel,
-        # sodass SELECT * sicher ist und die Datei unter DB_FILENAME liegt.
+        # sodass SELECT * sicher ist. Die Datei kann noch unter altem Namen
+        # liegen, wenn die Umbenennung gesperrt war - daher db_file nehmen.
         src_fb = Database(source_path)
         src_fb.open()
         src_fb.close()
 
-        source_db_file = source_path / self.DB_FILENAME
+        source_db_file = src_fb.db_file
 
         # ATTACH erlaubt keinen ?-Parameter fuer den Pfad, daher SQL-Literal
         # mit doppeltem Einzel-Quote als Escape.
