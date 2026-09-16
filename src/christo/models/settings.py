@@ -33,9 +33,9 @@ LEGACY_CONFIG_DIRS: tuple[str, ...] = (".death-proof", ".fahrtenbuch")
 def migrate_legacy_dir(home: Path) -> Path | None:
     """Benennt den ersten vorhandenen alten Settings-Ordner unter home um.
 
-    Liefert den uebernommenen alten Pfad oder None. Existiert der neue Ordner
-    schon, bleibt alles unangetastet - sonst koennte ein alter Stand neuere
-    Einstellungen ueberschreiben.
+    Liefert den übernommenen alten Pfad oder None. Existiert der neue Ordner
+    schon, bleibt alles unangetastet - sonst könnte ein alter Stand neuere
+    Einstellungen überschreiben.
     """
     new = home / CONFIG_DIR_NAME
     if new.exists():
@@ -159,13 +159,13 @@ class GlobalConfig:
     def _migrate_legacy_dir() -> None:
         """Benennt einen alten Settings-Ordner einmalig auf ~/.christo um.
 
-        Gesucht wird in LEGACY_CONFIG_DIRS, der juengste Name zuerst. Migriert
-        nur, wenn der neue Ordner noch nicht existiert. Schlaegt die
+        Gesucht wird in LEGACY_CONFIG_DIRS, der jüngste Name zuerst. Migriert
+        nur, wenn der neue Ordner noch nicht existiert. Schlägt die
         Umbenennung fehl (z.B. Rechte), wird der Fehler verschluckt — die App
         startet dann mit Default-Settings.
 
         Bei umgebogenem Verzeichnis (Tests) wird nichts migriert - sonst
-        wuerde ein Testlauf den echten Heimatordner anfassen.
+        würde ein Testlauf den echten Heimatordner anfassen.
         """
         if os.environ.get(HOME_ENV_VAR, "").strip():
             return

@@ -12,7 +12,7 @@
 </p>
 
 A terminal application for keeping a vehicle logbook (German: *Fahrtenbuch*),
-built for leased company cars. Christophorus records every trip, keeps the
+for leased and owned vehicles alike. Christophorus records every trip, keeps the
 odometer chain consistent, checks the entries for plausibility and exports
 the logbook as Excel, JSON or Markdown.
 

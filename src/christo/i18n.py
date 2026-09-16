@@ -143,7 +143,7 @@ def weekday_short(weekday: int, lang: str | None = None) -> str:
 
 
 def weekday_long(weekday: int, lang: str | None = None) -> str:
-    """Sprachabhaengiger ausgeschriebener Wochentag (0=Montag .. 6=Sonntag)."""
+    """Sprachabhängiger ausgeschriebener Wochentag (0=Montag .. 6=Sonntag)."""
     if weekday < 0 or weekday > 6:
         return ""
     if lang is None:

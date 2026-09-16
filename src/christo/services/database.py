@@ -67,16 +67,16 @@ class Database:
 
     @staticmethod
     def has_logbook(path: Path) -> bool:
-        """Prueft ob im Verzeichnis ein Fahrtenbuch liegt.
+        """Prüft ob im Verzeichnis ein Fahrtenbuch liegt.
 
-        Erkennt die aktuelle christo.db und alle frueheren Dateinamen, damit
-        bestehende Fahrtenbuecher vor der Migration als gueltig erkannt werden.
+        Erkennt die aktuelle christo.db und alle früheren Dateinamen, damit
+        bestehende Fahrtenbücher vor der Migration als gültig erkannt werden.
         """
         names = (Database.DB_FILENAME, *Database.LEGACY_DB_FILENAMES)
         return any((path / name).exists() for name in names)
 
     def _migrate_legacy_db(self) -> None:
-        """Benennt die juengste alte Datenbank einmalig auf christo.db um.
+        """Benennt die jüngste alte Datenbank einmalig auf christo.db um.
 
         Migriert nur, wenn noch keine christo.db existiert. Vorhandene
         Backup-Dateien (*.db.backup_*) bleiben unangetastet.

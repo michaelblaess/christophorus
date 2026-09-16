@@ -1,4 +1,4 @@
-"""Tests fuer die Uebernahme alter Namen (fahrtenbuch -> death-proof -> christo).
+"""Tests für die Übernahme alter Namen (fahrtenbuch -> death-proof -> christo).
 
 Wer das Programm nach der Umbenennung startet, darf weder seine Einstellungen
 noch sein Fahrtenbuch verlieren.

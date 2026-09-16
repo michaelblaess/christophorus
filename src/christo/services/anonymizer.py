@@ -1,11 +1,11 @@
-"""Verfremdet Fahrtenbuch-Daten fuer Screenshots und Vorfuehrungen.
+"""Verfremdet Fahrtenbuch-Daten für Screenshots und Vorführungen.
 
-Nur fuer die Anzeige: Die Datenbank und die Exporte bleiben unberuehrt. Jeder
-echte Wert bekommt einen stabilen Ersatz - derselbe Kunde heisst in jeder
+Nur für die Anzeige: Die Datenbank und die Exporte bleiben unberührt. Jeder
+echte Wert bekommt einen stabilen Ersatz - derselbe Kunde heißt in jeder
 Ansicht und nach jedem Neuladen gleich, damit ein Screenshot in sich stimmig ist.
 
-Zusaetzlich merkt sich der Anonymizer jedes ersetzte Paar. `censor()` ersetzt
-damit freie Texte wie Log-Zeilen oder Pruefmeldungen, in denen die echten Werte
+Zusätzlich merkt sich der Anonymizer jedes ersetzte Paar. `censor()` ersetzt
+damit freie Texte wie Log-Zeilen oder Prüfmeldungen, in denen die echten Werte
 eingebettet vorkommen.
 """
 
@@ -66,12 +66,12 @@ _MIN_CENSOR_LENGTH = 4
 
 
 def _pick(pool: tuple[str, ...], original: str) -> str:
-    """Waehlt stabil einen Ersatz: gleicher Text, gleiche Auswahl, ueber Laeufe hinweg."""
+    """Wählt stabil einen Ersatz: gleicher Text, gleiche Auswahl, über Läufe hinweg."""
     return pool[zlib.crc32(original.encode("utf-8")) % len(pool)]
 
 
 class Anonymizer:
-    """Liefert verfremdete Kopien und merkt sich die Paare fuer censor()."""
+    """Liefert verfremdete Kopien und merkt sich die Paare für censor()."""
 
     def __init__(self) -> None:
         self._pairs: dict[str, str] = {}
@@ -85,7 +85,7 @@ class Anonymizer:
     # --- Einzelwerte ------------------------------------------------------------
 
     def destination(self, value: str) -> str:
-        """Ersatz fuer ein Ziel. Leer bleibt leer, mehrzeilige Adressen zaehlen als Ganzes."""
+        """Ersatz für ein Ziel. Leer bleibt leer, mehrzeilige Adressen zählen als Ganzes."""
         if not value.strip():
             return value
         fake = _pick(_DESTINATIONS, value)
@@ -94,7 +94,7 @@ class Anonymizer:
         return self._remember(value, fake)
 
     def purpose(self, value: str) -> str:
-        """Ersatz fuer einen Reisezweck. Das Wort Geschaeftsessen bleibt erhalten."""
+        """Ersatz für einen Reisezweck. Das Wort Geschaeftsessen bleibt erhalten."""
         if not value.strip():
             return value
         lower = value.lower()
@@ -105,13 +105,13 @@ class Anonymizer:
         return self._remember(value, fake)
 
     def reason(self, value: str) -> str:
-        """Ersatz fuer den Grund eines gesperrten Tages."""
+        """Ersatz für den Grund eines gesperrten Tages."""
         if not value.strip():
             return value
         return self._remember(value, _pick(_REASONS, value))
 
     def document_path(self, value: str) -> str:
-        """Ersatz fuer einen Belegpfad: fester Name, die Dateiendung bleibt."""
+        """Ersatz für einen Belegpfad: fester Name, die Dateiendung bleibt."""
         if not value.strip():
             return value
         original = PurePath(value)
@@ -121,7 +121,7 @@ class Anonymizer:
         return self._remember(value, fake)
 
     def path(self, value: str) -> str:
-        """Ersatz fuer den Ordner des Fahrtenbuchs."""
+        """Ersatz für den Ordner des Fahrtenbuchs."""
         if not value.strip():
             return value
         self._remember(PurePath(value).name, PurePath(FAKE_PATH).name)
@@ -174,7 +174,7 @@ class Anonymizer:
     def censor(self, text: str) -> str:
         """Ersetzt alle bisher gesehenen echten Werte in einem freien Text.
 
-        Laengere Werte zuerst - sonst frisst der Ort "Musterstadt" die Adresse
+        Längere Werte zuerst - sonst frisst der Ort "Musterstadt" die Adresse
         "Musterfirma, Musterstadt", bevor sie als Ganzes ersetzt werden kann.
         """
         for original in sorted(self._pairs, key=len, reverse=True):

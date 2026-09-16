@@ -45,7 +45,7 @@ from christo.widgets.year_view import YearView
 
 
 class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
-    """Fahrtenbuch TUI fuer Leasing-Fahrzeuge."""
+    """Fahrtenbuch als Terminal-Anwendung für geleaste und gekaufte Fahrzeuge."""
 
     CSS_PATH = "app.tcss"
     TITLE = f"Christophorus v{__version__} ({__year__})"
@@ -1333,10 +1333,10 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         tabs.active = "tab-year"
 
     def action_toggle_anon(self) -> None:
-        """Schaltet die Anonymisierung fuer Screenshots ein oder aus.
+        """Schaltet die Anonymisierung für Screenshots ein oder aus.
 
-        Beim Einschalten wird das Log geleert, weil aeltere Zeilen echte Namen
-        tragen. Datenbank und Exporte bleiben unberuehrt.
+        Beim Einschalten wird das Log geleert, weil ältere Zeilen echte Namen
+        tragen. Datenbank und Exporte bleiben unberührt.
         """
         if self._anonymizer is None:
             anonymizer = Anonymizer()
@@ -1355,10 +1355,10 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         self._refresh_all_views()
 
     def _prime_anonymizer(self, anonymizer: Anonymizer) -> None:
-        """Laesst den Anonymizer alle echten Werte einmal sehen.
+        """Lässt den Anonymizer alle echten Werte einmal sehen.
 
         Erst danach kann censor() sie in freien Texten ersetzen - auch solche aus
-        Monaten, die gerade nicht angezeigt werden (Pruefmeldungen, Log).
+        Monaten, die gerade nicht angezeigt werden (Prüfmeldungen, Log).
         """
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             return
@@ -1377,14 +1377,14 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         return self._anonymizer.vehicle(vehicle), self._anonymizer.path(path)
 
     def _blocked_while_anonymized(self) -> bool:
-        """Sperrt Dialoge, die echte Daten zeigen oder verfremdete speichern wuerden."""
+        """Sperrt Dialoge, die echte Daten zeigen oder verfremdete speichern würden."""
         if self._anonymizer is None:
             return False
         self.notify(t("notify.anonymized_blocked"), severity="warning")
         return True
 
     def _refresh_all_views(self) -> None:
-        """Laedt alle Ansichten neu, die Daten oder Fahrzeug zeigen."""
+        """Lädt alle Ansichten neu, die Daten oder Fahrzeug zeigen."""
         if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
             return
         config_panel = self.query_one("#config-panel", ConfigPanel)

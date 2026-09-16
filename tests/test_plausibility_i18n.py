@@ -1,7 +1,7 @@
-"""Die Meldungen der Plausibilitaetspruefung gibt es auf Deutsch und Englisch.
+"""Die Meldungen der Plausibilitätsprüfung gibt es auf Deutsch und Englisch.
 
-Bis 16.09.2026 standen sie fest auf Deutsch im Code - bei englischer Oberflaeche
-war die Pruefung der einzige deutsche Rest.
+Bis 16.09.2026 standen sie fest auf Deutsch im Code - bei englischer Oberfläche
+war die Prüfung der einzige deutsche Rest.
 """
 
 from __future__ import annotations

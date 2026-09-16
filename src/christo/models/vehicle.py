@@ -6,7 +6,7 @@ from typing import Any
 
 @dataclass
 class Vehicle:
-    """Leasing-Fahrzeug mit Vertragsdaten."""
+    """Fahrzeug, geleast oder gekauft. Die Vertragsfelder bleiben bei einem Kauf leer."""
 
     name: str = ""
     plate: str = ""

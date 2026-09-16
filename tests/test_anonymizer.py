@@ -1,8 +1,8 @@
-"""Anonymisierung fuer Screenshots: Kern und laufende App.
+"""Anonymisierung für Screenshots: Kern und laufende App.
 
-Die echten Werte in diesen Tests sind absichtlich so gewaehlt, dass sie in
-keiner Ersatzliste des Anonymizers vorkommen. Sonst koennte ein Test gruen
-sein, weil der Ersatz zufaellig dem Original gleicht.
+Die echten Werte in diesen Tests sind absichtlich so gewählt, dass sie in
+keiner Ersatzliste des Anonymizers vorkommen. Sonst könnte ein Test grün
+sein, weil der Ersatz zufällig dem Original gleicht.
 """
 
 from __future__ import annotations
