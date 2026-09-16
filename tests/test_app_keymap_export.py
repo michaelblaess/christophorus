@@ -16,12 +16,12 @@ from typing import Any
 import pytest
 from textual.widgets import Checkbox, Input, Select
 
-from death_proof.app import FahrtenbuchApp
-from death_proof.models.fahrtenbuch import Fahrtenbuch
-from death_proof.models.settings import GlobalConfig
-from death_proof.models.vehicle import Vehicle
-from death_proof.screens.export_save_screen import ExportSaveScreen
-from death_proof.screens.keymap_screen import KeymapScreen
+from christo.app import FahrtenbuchApp
+from christo.models.fahrtenbuch import Fahrtenbuch
+from christo.models.settings import GlobalConfig
+from christo.models.vehicle import Vehicle
+from christo.screens.export_save_screen import ExportSaveScreen
+from christo.screens.keymap_screen import KeymapScreen
 from tests.conftest import make_trip
 
 

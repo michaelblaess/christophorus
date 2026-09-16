@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "death-proof"
+name = "christophorus"
 version = "1.2.1"
-description = "Death Proof - Fahrtenbuch als Terminal-Anwendung mit Plausibilitätsprüfung"
+description = "Christophorus - Fahrtenbuch als Terminal-Anwendung mit Plausibilitätsprüfung"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
@@ -35,13 +35,14 @@ dev = [
 ]
 
 [project.scripts]
-death-proof = "death_proof.__main__:main"
+christophorus = "christo.__main__:main"
+christo = "christo.__main__:main"
 
 [tool.poe.tasks]
-run = { cmd = "python -m death_proof", help = "Startet Death Proof" }
+run = { cmd = "python -m christo", help = "Startet Christophorus" }
 test = { cmd = "pytest", help = "Tests sequentiell (schnell bei Unit-Tests)" }
 test-parallel = { cmd = "pytest -n auto", help = "Tests parallel (fuer langsame Test-Suiten)" }
-cov = { cmd = "pytest --cov=death_proof --cov-report=term-missing", help = "Tests + Coverage" }
+cov = { cmd = "pytest --cov=christo --cov-report=term-missing", help = "Tests + Coverage" }
 typecheck = { cmd = "mypy src", help = "mypy strict ueber src/" }
 lint = { cmd = "ruff check .", help = "Ruff Linting" }
 fmt = { cmd = "ruff format .", help = "Ruff Formatting" }
@@ -49,7 +50,7 @@ fix = { cmd = "ruff check --fix .", help = "Ruff Auto-Fix" }
 layers = { cmd = "lint-imports", help = "Prueft die Schichtgrenzen (import-linter)" }
 
 [tool.importlinter]
-root_package = "death_proof"
+root_package = "christo"
 # Fuer die Regel "der Kern zieht kein Textual" muss der Linter auch Pakete
 # ausserhalb des Projekts sehen.
 include_external_packages = true
@@ -58,30 +59,30 @@ include_external_packages = true
 name = "Schichten von oben nach unten"
 type = "layers"
 layers = [
-    "death_proof.app",
-    "death_proof.screens",
-    "death_proof.widgets",
-    "death_proof.services",
-    "death_proof.models",
+    "christo.app",
+    "christo.screens",
+    "christo.widgets",
+    "christo.services",
+    "christo.models",
 ]
 # Bekannte Altlast (Stand 14.09.2026): das Fahrtenbuch-Modell haelt die
 # Database selbst. Sauber waere, Fahrtenbuch nach services/ zu ziehen - bis
 # dahin ist genau diese eine Kante erlaubt, jede weitere bricht den Vertrag.
 ignore_imports = [
-    "death_proof.models.fahrtenbuch -> death_proof.services.database",
+    "christo.models.fahrtenbuch -> christo.services.database",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Der Kern kennt keine Oberflaeche"
 type = "forbidden"
 source_modules = [
-    "death_proof.services",
-    "death_proof.models",
+    "christo.services",
+    "christo.models",
 ]
 forbidden_modules = [
-    "death_proof.app",
-    "death_proof.screens",
-    "death_proof.widgets",
+    "christo.app",
+    "christo.screens",
+    "christo.widgets",
     "textual",
     "textual_widgets",
 ]
@@ -90,7 +91,7 @@ forbidden_modules = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-death_proof = ["locale/*.json"]
+christo = ["locale/*.json"]
 
 [tool.mypy]
 python_version = "3.12"

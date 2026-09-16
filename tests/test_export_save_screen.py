@@ -18,8 +18,8 @@ from textual.app import App, ComposeResult
 from textual.pilot import Pilot
 from textual.widgets import Input, Select
 
-from death_proof.models.export_format import DEFAULT_FORMAT, format_for_key, format_for_path
-from death_proof.screens.export_save_screen import ExportSaveScreen
+from christo.models.export_format import DEFAULT_FORMAT, format_for_key, format_for_path
+from christo.screens.export_save_screen import ExportSaveScreen
 
 _START_NAME = "Fahrtenbuch 2024-05 (Testwagen - B-TT 1) 20260914-101530.xlsx"
 

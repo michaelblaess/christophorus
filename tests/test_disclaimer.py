@@ -17,7 +17,7 @@ import pytest
 from textual.widgets import Button, Checkbox
 from textual_widgets import DISCLAIMER_VERSION, DisclaimerScreen
 
-from death_proof.app import FahrtenbuchApp
+from christo.app import FahrtenbuchApp
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Sets up the death-proof development environment.
+    Sets up the christophorus development environment.
 
 .DESCRIPTION
     Creates the .venv via uv, installs runtime + dev dependencies and the
@@ -11,7 +11,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "=== death-proof - dev environment ===" -ForegroundColor Cyan
+Write-Host "=== christophorus - dev environment ===" -ForegroundColor Cyan
 
 Write-Host "[1/2] venv + dependencies (uv sync)..."
 uv sync --extra dev

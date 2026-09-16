@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh - sets up the death-proof development environment.
+# bootstrap.sh - sets up the christophorus development environment.
 #
 # Creates the .venv via uv, installs runtime + dev dependencies and the
 # Nuitka build tool (for compile-linux.sh / compile-macos.sh). Run once
@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "=== death-proof - dev environment ==="
+echo "=== christophorus - dev environment ==="
 
 echo "[1/2] venv + dependencies (uv sync)..."
 uv sync --extra dev

@@ -1,4 +1,4 @@
-# Death Proof
+# Christophorus
 
 <p align="center">
   <img src="docs/flags/gb.svg" height="13" alt=""> <b>English</b> ·
@@ -8,14 +8,20 @@
 ---
 
 A terminal application for keeping a vehicle logbook (German: *Fahrtenbuch*),
-built for leased company cars. Death Proof records every trip, keeps the
+built for leased company cars. Christophorus records every trip, keeps the
 odometer chain consistent, checks the entries for plausibility and exports
 the logbook as Excel, JSON or Markdown.
 
 The user interface is available in German and English.
 
+The name comes from Saint Christopher, the patron saint of travellers and
+drivers. In the terminal it is shorter: `christo` starts the same program.
+Up to version 1.2.1 the project was called "Death Proof", before that
+"fahrtenbuch". On the first start Christophorus picks up settings and logbooks
+stored under the old names on its own.
+
 > **Note:** Whether a logbook is accepted for tax purposes is decided solely by
-> the tax office. Death Proof does not guarantee that acceptance and does not
+> the tax office. Christophorus does not guarantee that acceptance and does not
 > replace tax advice. On first start the program asks you to confirm this notice.
 
 ## Features
@@ -44,9 +50,9 @@ The user interface is available in German and English.
 
 ### Prebuilt binaries
 
-Every release on the [Releases page](https://github.com/michaelblaess/death-proof/releases)
+Every release on the [Releases page](https://github.com/michaelblaess/christophorus/releases)
 contains standalone builds for Windows (x64), Linux (x86_64) and macOS (Apple Silicon).
-Unpack the archive and start `death-proof`.
+Unpack the archive and start `christophorus`.
 
 ### From source
 
@@ -67,10 +73,10 @@ Requires Python 3.12 or newer and [uv](https://docs.astral.sh/uv/).
 ## Usage
 
 ```bash
-death-proof                 # opens the last logbook, otherwise the start screen
-death-proof --year 2024     # start in a specific year
-death-proof --lang en       # switch the language (saved for the next start)
-death-proof --version
+christophorus                 # opens the last logbook, otherwise the start screen
+christophorus --year 2024     # start in a specific year
+christophorus --lang en       # switch the language (saved for the next start)
+christophorus --version
 ```
 
 ## Key bindings
@@ -103,9 +109,9 @@ Custom bindings go into `config.json` under `keymap_custom`, for example
 
 | What | Where |
 |---|---|
-| Application settings | `~/.death-proof/config.json` |
-| Acceptance of the notice | `~/.death-proof/disclaimer.json` |
-| Logbook | a folder of your choice with `death-proof.db` and a `belege/` folder for receipts |
+| Application settings | `~/.christo/config.json` |
+| Acceptance of the notice | `~/.christo/disclaimer.json` |
+| Logbook | a folder of your choice with `christo.db` and a `belege/` folder for receipts |
 
 ## Development
 

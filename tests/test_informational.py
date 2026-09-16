@@ -9,9 +9,9 @@ Deckt drei Schichten ab:
 
 from __future__ import annotations
 
-from death_proof.models.trip import Trip, get_informational_categories
-from death_proof.services.database import Database
-from death_proof.services.plausibility import (
+from christo.models.trip import Trip, get_informational_categories
+from christo.services.database import Database
+from christo.services.plausibility import (
     check_chain_ascending,
     check_distance_matches_columns,
     check_empty_trips,

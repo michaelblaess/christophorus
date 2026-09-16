@@ -16,12 +16,12 @@ import pytest
 from textual.app import App, ComposeResult
 from textual_widgets.keymap import KeymapStyle, find_collisions, function_key_number
 
-from death_proof import keymap
-from death_proof.models.settings import HOME_ENV_VAR, GlobalConfig
-from death_proof.screens.keymap_screen import ist_grossschreibung
-from death_proof.widgets.navigable_data_table import NavigableDataTable
+from christo import keymap
+from christo.models.settings import HOME_ENV_VAR, GlobalConfig
+from christo.screens.keymap_screen import ist_grossschreibung
+from christo.widgets.navigable_data_table import NavigableDataTable
 
-_LOCALE = Path(__file__).resolve().parent.parent / "src" / "death_proof" / "locale"
+_LOCALE = Path(__file__).resolve().parent.parent / "src" / "christo" / "locale"
 
 
 def _config(**werte: Any) -> GlobalConfig:
@@ -56,7 +56,7 @@ def test_jeder_schluessel_steht_im_sprachpaket(sprache: str) -> None:
 
 
 def test_jede_aktion_gibt_es_in_der_app() -> None:
-    from death_proof.app import FahrtenbuchApp
+    from christo.app import FahrtenbuchApp
 
     fehlend = [a for a in keymap.CLASSIC if not hasattr(FahrtenbuchApp, f"action_{a}")]
     assert fehlend == []
@@ -104,7 +104,7 @@ def test_nur_das_log_verliert_seinen_buchstaben() -> None:
 
 
 def test_f_reihe_hat_genau_die_geplanten_tasten() -> None:
-    # F3 (Filter) und F6 (Details) gibt es in Death Proof nicht.
+    # F3 (Filter) und F6 (Details) gibt es in Christophorus nicht.
     bindings = keymap.resolve(_config(keymap_style="function_keys")).bindings
     nummern = sorted(n for b in bindings.values() if (n := function_key_number(b)) is not None)
     assert nummern == [1, 2, 4, 5, 7, 8, 9, 10]
@@ -282,7 +282,7 @@ def test_keine_meldung_nennt_eine_taste_woertlich(sprache: str) -> None:
 
 
 async def test_tastenhinweis_folgt_dem_stil() -> None:
-    from death_proof.app import FahrtenbuchApp
+    from christo.app import FahrtenbuchApp
 
     for stil, erwartet in (("classic", ("S", "N")), ("function_keys", ("F2", "F7"))):
         config = GlobalConfig.load()

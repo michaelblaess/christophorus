@@ -55,8 +55,8 @@ jobs:
           retention-days: 1
           name: dist-${{ matrix.os }}
           path: |
-            dist/death-proof-v*.zip
-            dist/death-proof-v*.tar.gz
+            dist/christophorus-v*.zip
+            dist/christophorus-v*.tar.gz
 
   release:
     needs: build

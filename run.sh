@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh - starts death-proof from source.
+# run.sh - starts christophorus from source.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -8,4 +8,4 @@ if [ ! -d ".venv" ]; then
     exit 1
 fi
 
-.venv/bin/python -m death_proof "$@"
+.venv/bin/python -m christo "$@"

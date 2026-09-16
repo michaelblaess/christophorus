@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# compile-linux.sh - compiles death-proof into a standalone Linux binary with Nuitka.
+# compile-linux.sh - compiles christophorus into a standalone Linux binary with Nuitka.
 #
 # Produces a self-contained --standalone build (no Python install needed on the
-# target machine). Output: dist/death-proof/death-proof plus its shared libraries,
-# and dist/death-proof-vX.Y.Z-linux-x86_64.tar.gz ready to hand out.
+# target machine). Output: dist/christophorus/christophorus plus its shared libraries,
+# and dist/christophorus-vX.Y.Z-linux-x86_64.tar.gz ready to hand out.
 #
 # Build-Maschine braucht: gcc, patchelf und die Python-Header.
 #   Debian/Ubuntu:  sudo apt install gcc patchelf python3-dev
@@ -12,10 +12,10 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-entry="$root/src/death_proof/__main__.py"
-init_py="$root/src/death_proof/__init__.py"
+entry="$root/src/christo/__main__.py"
+init_py="$root/src/christo/__init__.py"
 out_dir="$root/dist"
-dist_dir="$out_dir/death-proof"
+dist_dir="$out_dir/christophorus"
 
 # venv-Python bevorzugen, sonst System-Python
 if [ -x "$root/.venv/bin/python" ]; then
@@ -50,7 +50,7 @@ if [ -z "$version" ]; then
     exit 1
 fi
 
-echo "Compiling death-proof v$version with Nuitka..."
+echo "Compiling christophorus v$version with Nuitka..."
 
 # Alten Build verwerfen - das Ergebnis soll reproduzierbar sein
 rm -rf "$dist_dir"
@@ -59,7 +59,7 @@ started=$(date +%s)
 
 # --standalone        : self-contained, kein Python auf dem Zielrechner noetig
 # --remove-output     : C-/Objekt-Zwischendateien nach dem Build aufraeumen
-# --include-package-data=death_proof : eingebettete Datendateien (tcss etc.) mitnehmen
+# --include-package-data=christo : eingebettete Datendateien (tcss etc.) mitnehmen
 # Nuitka als Build-Tool sicherstellen (kein Dev-Dep, wird ad-hoc installiert).
 # 'uv sync' ohne --inexact entfernt es wieder, daher: nach jedem Sync pruefen.
 if ! "$python" -m nuitka --version >/dev/null 2>&1; then
@@ -71,10 +71,10 @@ fi
     --standalone \
     --assume-yes-for-downloads \
     --remove-output \
-    --include-package=death_proof \
-    --include-package-data=death_proof \
+    --include-package=christo \
+    --include-package-data=christo \
     --output-dir="$out_dir" \
-    --output-filename=death-proof \
+    --output-filename=christophorus \
     "$entry"
 
 # Nuitka benennt den dist-Ordner nach dem Hauptmodul (__main__.dist) - umbenennen
@@ -83,14 +83,14 @@ if [ -d "$out_dir/__main__.dist" ]; then
 fi
 
 elapsed=$(( $(date +%s) - started ))
-exe="$dist_dir/death-proof"
+exe="$dist_dir/christophorus"
 size_mb=$(du -sm "$dist_dir" | cut -f1)
 
 # Verteilbares Archiv: tar.gz statt zip - tar bewahrt das Ausfuehrungs-Flag
 # der Binary, ein zip wuerde es verlieren.
-tarball="$out_dir/death-proof-v$version-linux-x86_64.tar.gz"
+tarball="$out_dir/christophorus-v$version-linux-x86_64.tar.gz"
 rm -f "$tarball"
-tar -czf "$tarball" -C "$out_dir" death-proof
+tar -czf "$tarball" -C "$out_dir" christophorus
 tar_mb=$(du -sm "$tarball" | cut -f1)
 
 echo ""

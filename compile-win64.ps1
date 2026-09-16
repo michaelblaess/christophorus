@@ -1,22 +1,22 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Compiles death-proof into a standalone Windows binary with Nuitka.
+    Compiles christophorus into a standalone Windows binary with Nuitka.
 
 .DESCRIPTION
     Produces a self-contained --standalone build (no Python install needed on
-    the target machine). Output: dist\death-proof\death-proof.exe plus its DLLs,
-    and a zipped dist\death-proof-vX.Y.Z-win64.zip ready to hand out.
+    the target machine). Output: dist\christophorus\christophorus.exe plus its DLLs,
+    and a zipped dist\christophorus-vX.Y.Z-win64.zip ready to hand out.
 #>
 
 $ErrorActionPreference = "Stop"
 
 # Pfade - alles relativ zum Skriptverzeichnis, damit der Aufruf ortsunabhaengig ist
 $root    = $PSScriptRoot
-$entry   = Join-Path $root "src\death_proof\__main__.py"
-$initPy  = Join-Path $root "src\death_proof\__init__.py"
+$entry   = Join-Path $root "src\christo\__main__.py"
+$initPy  = Join-Path $root "src\christo\__init__.py"
 $outDir  = Join-Path $root "dist"
-$distDir = Join-Path $outDir "death-proof"
+$distDir = Join-Path $outDir "christophorus"
 
 # venv-Python bevorzugen, sonst System-Python
 $venvPython = Join-Path $root ".venv\Scripts\python.exe"
@@ -37,7 +37,7 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
 $version = ([regex]'__version__\s*=\s*"([^"]+)"').Match((Get-Content -Raw $initPy)).Groups[1].Value
 if (-not $version) { throw "Konnte __version__ nicht aus $initPy lesen" }
 
-Write-Host "Compiling death-proof v$version with Nuitka..." -ForegroundColor Cyan
+Write-Host "Compiling christophorus v$version with Nuitka..." -ForegroundColor Cyan
 
 # Alten Build verwerfen - das Ergebnis soll reproduzierbar sein
 if (Test-Path $distDir) { Remove-Item -Recurse -Force $distDir }
@@ -46,7 +46,7 @@ $started = Get-Date
 
 # --standalone        : self-contained, kein Python auf dem Zielrechner noetig
 # --remove-output     : C-/Objekt-Zwischendateien nach dem Build aufraeumen
-# --include-package-data=death_proof : eingebettete Datendateien (tcss etc.) mitnehmen
+# --include-package-data=christo : eingebettete Datendateien (tcss etc.) mitnehmen
 # (kein --windows-console-mode: Default behaelt die Konsole - noetig fuer das TUI)
 # Nuitka als Build-Tool sicherstellen (kein Dev-Dep, wird ad-hoc installiert).
 # 'uv sync' ohne --inexact entfernt es wieder, daher: nach jedem Sync pruefen.
@@ -61,12 +61,12 @@ if ($LASTEXITCODE -ne 0) {
     --standalone `
     --assume-yes-for-downloads `
     --remove-output `
-    --include-package=death_proof `
-    --include-package-data=death_proof `
+    --include-package=christo `
+    --include-package-data=christo `
     --output-dir=$outDir `
-    --output-filename=death-proof.exe `
+    --output-filename=christophorus.exe `
     --company-name="Michael Blaess" `
-    --product-name="death-proof" `
+    --product-name="christophorus" `
     --file-version=$version `
     --product-version=$version `
     $entry
@@ -75,15 +75,15 @@ if ($LASTEXITCODE -ne 0) { throw "Nuitka-Build fehlgeschlagen (Exit $LASTEXITCOD
 
 # Nuitka benennt den dist-Ordner nach dem Hauptmodul (__main__.dist) - umbenennen
 $nuitkaDist = Join-Path $outDir "__main__.dist"
-if (Test-Path $nuitkaDist) { Rename-Item -Path $nuitkaDist -NewName "death-proof" }
+if (Test-Path $nuitkaDist) { Rename-Item -Path $nuitkaDist -NewName "christophorus" }
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
-$exe     = Join-Path $distDir "death-proof.exe"
+$exe     = Join-Path $distDir "christophorus.exe"
 $sizeMB  = [math]::Round(((Get-ChildItem -Recurse $distDir | Measure-Object Length -Sum).Sum) / 1MB, 1)
 
 # Verteilbares ZIP erzeugen - der Top-Level-Ordner bleibt im Archiv erhalten,
-# der Empfaenger entpackt also direkt einen sauberen death-proof-Ordner
-$zip = Join-Path $outDir "death-proof-v$version-win64.zip"
+# der Empfaenger entpackt also direkt einen sauberen christophorus-Ordner
+$zip = Join-Path $outDir "christophorus-v$version-win64.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $distDir -DestinationPath $zip
 $zipMB = [math]::Round((Get-Item $zip).Length / 1MB, 1)

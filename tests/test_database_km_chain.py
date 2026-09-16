@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from death_proof.models.trip import Trip
-from death_proof.models.vehicle import Vehicle
-from death_proof.services.database import Database
+from christo.models.trip import Trip
+from christo.models.vehicle import Vehicle
+from christo.services.database import Database
 from tests.conftest import make_trip
 
 

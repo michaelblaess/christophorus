@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# run.ps1 - starts death-proof from source.
+# run.ps1 - starts christophorus from source.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -8,4 +8,4 @@ if (-not (Test-Path ".venv")) {
     exit 1
 }
 
-& ".venv\Scripts\python.exe" -m death_proof @args
+& ".venv\Scripts\python.exe" -m christo @args

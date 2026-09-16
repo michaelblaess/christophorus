@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
-from death_proof.models.export_format import (
+from christo.models.export_format import (
     EXCEL,
     EXPORT_FORMATS,
     JSON,
@@ -22,17 +22,17 @@ from death_proof.models.export_format import (
     suggested_name,
     swap_suffix,
 )
-from death_proof.models.export_job import ExportJob
-from death_proof.models.trip import (
+from christo.models.export_job import ExportJob
+from christo.models.trip import (
     Trip,
     get_business_categories,
     get_informational_categories,
     set_business_categories,
     set_informational_categories,
 )
-from death_proof.services.exporters import write_export
-from death_proof.services.json_export import SCHEMA, build_json
-from death_proof.services.markdown_export import render_markdown
+from christo.services.exporters import write_export
+from christo.services.json_export import SCHEMA, build_json
+from christo.services.markdown_export import render_markdown
 
 
 @pytest.fixture(autouse=True)
@@ -210,7 +210,7 @@ def test_excel_ueber_die_weiche(tmp_path: Path) -> None:
 
 
 def test_unbekanntes_format_wird_abgelehnt(tmp_path: Path) -> None:
-    from death_proof.models.export_format import ExportFormat
+    from christo.models.export_format import ExportFormat
 
     with pytest.raises(ValueError, match="pdf"):
         write_export(ExportFormat("pdf", ".pdf", "x", "y"), beispiel_monat(), tmp_path / "f.pdf")

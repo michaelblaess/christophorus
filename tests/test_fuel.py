@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from death_proof.models.trip import Trip
-from death_proof.models.vehicle import Vehicle
-from death_proof.services.database import Database
-from death_proof.services.plausibility import (
+from christo.models.trip import Trip
+from christo.models.vehicle import Vehicle
+from christo.services.database import Database
+from christo.services.plausibility import (
     CAT_FUEL_CONSUMPTION,
     CAT_FUEL_OVER_TANK,
     FUEL_MIN_INTERVAL_KM,

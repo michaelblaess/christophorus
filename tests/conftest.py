@@ -13,21 +13,21 @@ from pathlib import Path
 import pytest
 from textual_widgets import DisclaimerStore
 
-from death_proof.i18n import load_locale
-from death_proof.models.settings import HOME_ENV_VAR
-from death_proof.models.trip import Trip
-from death_proof.models.vehicle import Vehicle
-from death_proof.services.database import Database
+from christo.i18n import load_locale
+from christo.models.settings import HOME_ENV_VAR
+from christo.models.trip import Trip
+from christo.models.vehicle import Vehicle
+from christo.services.database import Database
 
 
 @pytest.fixture(autouse=True)
 def _isolated_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Verlegt ~/.death-proof in ein Wegwerf-Verzeichnis.
+    """Verlegt ~/.christo in ein Wegwerf-Verzeichnis.
 
     Ohne das liest jeder Test, der die App baut, die echte config.json - und
     oeffnet das zuletzt benutzte echte Fahrtenbuch.
     """
-    home = tmp_path / "death-proof-home"
+    home = tmp_path / "christophorus-home"
     home.mkdir()
     monkeypatch.setenv(HOME_ENV_VAR, str(home))
     # Die Zustimmung zum Haftungshinweis gilt in Tests als erteilt - sonst laege

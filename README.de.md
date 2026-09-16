@@ -1,4 +1,4 @@
-# Death Proof
+# Christophorus
 
 <p align="center">
   <img src="docs/flags/gb.svg" height="13" alt=""> <a href="README.md">English</a> ·
@@ -8,14 +8,20 @@
 ---
 
 Eine Terminal-Anwendung für das Fahrtenbuch, gebaut für Leasing-Dienstwagen.
-Death Proof erfasst jede Fahrt, hält die Kilometerkette stimmig, prüft die
+Christophorus erfasst jede Fahrt, hält die Kilometerkette stimmig, prüft die
 Einträge auf Plausibilität und exportiert das Fahrtenbuch als Excel, JSON oder
 Markdown.
 
 Die Oberfläche gibt es auf Deutsch und Englisch.
 
+Der Name stammt vom heiligen Christophorus, dem Schutzpatron der Reisenden und
+Autofahrer. Im Terminal geht es kürzer: `christo` startet dasselbe Programm.
+Bis Version 1.2.1 hieß das Projekt "Death Proof", davor "fahrtenbuch". Beim
+ersten Start übernimmt Christophorus Einstellungen und Fahrtenbücher unter den
+alten Namen von selbst.
+
 > **Hinweis:** Ob ein Fahrtenbuch steuerlich anerkannt wird, entscheidet allein
-> das Finanzamt. Death Proof sichert diese Anerkennung nicht zu und ersetzt keine
+> das Finanzamt. Christophorus sichert diese Anerkennung nicht zu und ersetzt keine
 > steuerliche Beratung. Beim ersten Start musst du diesen Hinweis bestätigen.
 
 ## Funktionen
@@ -46,9 +52,9 @@ Die Oberfläche gibt es auf Deutsch und Englisch.
 
 ### Fertige Programmpakete
 
-Jedes Release auf der [Releases-Seite](https://github.com/michaelblaess/death-proof/releases)
+Jedes Release auf der [Releases-Seite](https://github.com/michaelblaess/christophorus/releases)
 enthält eigenständige Builds für Windows (x64), Linux (x86_64) und macOS (Apple Silicon).
-Archiv entpacken und `death-proof` starten.
+Archiv entpacken und `christophorus` starten.
 
 ### Aus dem Quellcode
 
@@ -69,10 +75,10 @@ Du brauchst Python 3.12 oder neuer und [uv](https://docs.astral.sh/uv/).
 ## Benutzung
 
 ```bash
-death-proof                 # öffnet das zuletzt benutzte Fahrtenbuch, sonst den Startbildschirm
-death-proof --year 2024     # in einem bestimmten Jahr starten
-death-proof --lang en       # Sprache wechseln (wird für den nächsten Start gemerkt)
-death-proof --version
+christophorus                 # öffnet das zuletzt benutzte Fahrtenbuch, sonst den Startbildschirm
+christophorus --year 2024     # in einem bestimmten Jahr starten
+christophorus --lang en       # Sprache wechseln (wird für den nächsten Start gemerkt)
+christophorus --version
 ```
 
 ## Tastenbelegung
@@ -105,9 +111,9 @@ Beispiel `{"toggle_log": ["alt+l"]}`.
 
 | Was | Wo |
 |---|---|
-| Programmeinstellungen | `~/.death-proof/config.json` |
-| Zustimmung zum Hinweis | `~/.death-proof/disclaimer.json` |
-| Fahrtenbuch | ein Ordner deiner Wahl mit `death-proof.db` und einem Ordner `belege/` für Belege |
+| Programmeinstellungen | `~/.christo/config.json` |
+| Zustimmung zum Hinweis | `~/.christo/disclaimer.json` |
+| Fahrtenbuch | ein Ordner deiner Wahl mit `christo.db` und einem Ordner `belege/` für Belege |
 
 ## Entwicklung
 

@@ -45,6 +45,54 @@ wheels = [
 ]
 
 [[package]]
+name = "christophorus"
+version = "1.2.1"
+source = { editable = "." }
+dependencies = [
+    { name = "holidays" },
+    { name = "openpyxl" },
+    { name = "rich" },
+    { name = "textual" },
+    { name = "textual-fspicker" },
+    { name = "textual-themes" },
+    { name = "textual-widgets" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "import-linter" },
+    { name = "mypy" },
+    { name = "poethepoet" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+    { name = "types-openpyxl" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "holidays", specifier = ">=0.40" },
+    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
+    { name = "openpyxl", specifier = ">=3.1" },
+    { name = "poethepoet", marker = "extra == 'dev'", specifier = ">=0.29" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5" },
+    { name = "rich", specifier = ">=13.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3" },
+    { name = "textual", specifier = ">=0.40" },
+    { name = "textual-fspicker", specifier = ">=0.4.0" },
+    { name = "textual-themes", git = "https://github.com/michaelblaess/textual-themes.git" },
+    { name = "textual-widgets", git = "https://github.com/michaelblaess/textual-widgets.git" },
+    { name = "types-openpyxl", marker = "extra == 'dev'", specifier = ">=3.1.5.20260518" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "click"
 version = "8.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -145,54 +193,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/93/3d/6ab5d2dd8325d838737c6f8d83d62eb6230e0d70b87b51b57bbfd08fa767/coverage-7.14.0-cp314-cp314t-win_arm64.whl", hash = "sha256:742a73ea621953b012f2c4c2219b512180dd84489acf5b1596b0aafc55b9100b", size = 222703, upload-time = "2026-05-10T18:02:27.822Z" },
     { url = "https://files.pythonhosted.org/packages/61/e8/cb8e80d6f9f55b99588625062822bf946cf03ed06315df4bd8397f5632a1/coverage-7.14.0-py3-none-any.whl", hash = "sha256:8de5b61163aee3d05c8a2beab6f47913df7981dad1baf82c414d99158c286ab1", size = 211764, upload-time = "2026-05-10T18:02:29.538Z" },
 ]
-
-[[package]]
-name = "death-proof"
-version = "1.2.1"
-source = { editable = "." }
-dependencies = [
-    { name = "holidays" },
-    { name = "openpyxl" },
-    { name = "rich" },
-    { name = "textual" },
-    { name = "textual-fspicker" },
-    { name = "textual-themes" },
-    { name = "textual-widgets" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "import-linter" },
-    { name = "mypy" },
-    { name = "poethepoet" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "types-openpyxl" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "holidays", specifier = ">=0.40" },
-    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
-    { name = "openpyxl", specifier = ">=3.1" },
-    { name = "poethepoet", marker = "extra == 'dev'", specifier = ">=0.29" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.5" },
-    { name = "rich", specifier = ">=13.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3" },
-    { name = "textual", specifier = ">=0.40" },
-    { name = "textual-fspicker", specifier = ">=0.4.0" },
-    { name = "textual-themes", git = "https://github.com/michaelblaess/textual-themes.git" },
-    { name = "textual-widgets", git = "https://github.com/michaelblaess/textual-widgets.git" },
-    { name = "types-openpyxl", marker = "extra == 'dev'", specifier = ">=3.1.5.20260518" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "et-xmlfile"
