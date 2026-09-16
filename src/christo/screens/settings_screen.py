@@ -26,7 +26,7 @@ from textual_widgets.keymap import KeymapStyle
 from christo.i18n import t
 from christo.models.settings import AddressEntry, GlobalConfig
 from christo.models.vehicle import Vehicle
-from christo.services.database import Database
+from christo.services.database import Database, category_label, display_name_to_store
 from christo.services.formatting import format_km, parse_km
 
 
@@ -456,7 +456,7 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
                     yield Input(value=name, id=f"cat-name-{i}")
                 with Horizontal(classes="settings-row"):
                     yield Label(t("settings.label.category_display"))
-                    yield Input(value=display_name, id=f"cat-display-{i}")
+                    yield Input(value=category_label(name, display_name), id=f"cat-display-{i}")
                 with Horizontal(classes="settings-row"):
                     yield Label(t("settings.label.category_color"))
                     yield Select(options=_color_options(), value=color, id=f"cat-color-{i}")
@@ -676,7 +676,9 @@ class SettingsScreen(BaseSettingsScreen):  # type: ignore[misc]
         for i, cat in enumerate(self._categories):
             cat_id = int(cat.get("id", 0))
             name = self._get_input(f"cat-name-{i}")
-            display_name = self._get_input(f"cat-display-{i}")
+            display_name = display_name_to_store(
+                str(cat.get("name", "")), str(cat.get("display_name", "")), self._get_input(f"cat-display-{i}")
+            )
 
             color_select = self._query_select(f"cat-color-{i}")
             color = color_select if color_select else "green"

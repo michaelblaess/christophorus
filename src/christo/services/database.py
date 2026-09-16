@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from christo.i18n import t
 from christo.models.trip import MonthData, Trip
 from christo.models.vehicle import Vehicle
 
@@ -46,6 +47,57 @@ def _audit_user() -> str:
         return getpass.getuser()
     except Exception:
         return ""
+
+
+# Standardkategorien: Schluessel -> alle Anzeigenamen, die das Programm selbst je
+# gespeichert hat (alte Ersatzschreibung, Umlaute, englisch). Steht einer davon in
+# der Datenbank, hat niemand die Kategorie umbenannt - dann kommt der Name aus dem
+# Sprachpaket statt aus der Datenbank.
+DEFAULT_CATEGORY_NAMES: dict[str, frozenset[str]] = {
+    "business": frozenset({"Geschaeftlich", "Geschäftlich", "Business"}),
+    "private": frozenset({"Privat", "Private"}),
+    "fuel": frozenset({"Tanken", "Refuelling"}),
+    "fuel_private": frozenset({"Tanken nach Privatfahrt", "Refuelling after private trip"}),
+    "service": frozenset(
+        {"Service (TUeV, Reifen, ...)", "Service (TÜV, Reifen, ...)", "Service (inspection, tyres, ...)"}
+    ),
+    "delivery": frozenset({"Anlieferung", "Delivery"}),
+    "return": frozenset({"Rueckgabe / Abholung", "Rückgabe / Abholung", "Return / pickup"}),
+}
+
+
+def category_label(name: str, stored: str) -> str:
+    """Anzeigename einer Kategorie in der aktuellen Sprache.
+
+    Args:
+        name: Der feste Schlüssel der Kategorie, z.B. "business".
+        stored: Der in der Datenbank gespeicherte Anzeigename.
+
+    Returns:
+        Bei einer unveränderten Standardkategorie der Name aus dem Sprachpaket,
+        sonst der gespeicherte Name.
+    """
+    if stored in DEFAULT_CATEGORY_NAMES.get(name, frozenset()):
+        return t(f"trip.cat.{name}")
+    return stored
+
+
+def display_name_to_store(name: str, stored: str, edited: str) -> str:
+    """Welcher Anzeigename nach dem Bearbeiten gespeichert wird.
+
+    Args:
+        name: Der Schlüssel der Kategorie.
+        stored: Der bisher gespeicherte Anzeigename.
+        edited: Der Wert aus dem Eingabefeld.
+
+    Returns:
+        Der bisherige Wert, wenn das Feld nur die Übersetzung zeigte und nicht
+        verändert wurde. Sonst die Eingabe. So bleibt eine Standardkategorie auch
+        nach dem Speichern sprachneutral.
+    """
+    if edited == category_label(name, stored):
+        return stored
+    return edited
 
 
 class Database:
@@ -386,11 +438,11 @@ class Database:
             return
 
         defaults = [
-            ("business", "Geschaeftlich", 1, "green"),
+            ("business", "Geschäftlich", 1, "green"),
             ("private", "Privat", 0, "blue"),
             ("fuel", "Tanken", 1, "yellow"),
             ("fuel_private", "Tanken nach Privatfahrt", 0, "cyan"),
-            ("service", "Service (TUeV, Reifen, ...)", 1, "magenta"),
+            ("service", "Service (TÜV, Reifen, ...)", 1, "magenta"),
         ]
         conn.executemany(
             """
@@ -475,7 +527,7 @@ class Database:
         }
         to_insert = [
             ("delivery", "Anlieferung", 0, "white", 1),
-            ("return", "Rueckgabe / Abholung", 0, "white", 1),
+            ("return", "Rückgabe / Abholung", 0, "white", 1),
         ]
         for row in to_insert:
             if row[0] in existing:
@@ -534,7 +586,7 @@ class Database:
         """Gibt Kategorien als (display_name, name)-Tupel fuer Select-Widgets zurueck."""
         conn = self._get_conn()
         rows = conn.execute("SELECT name, display_name FROM categories ORDER BY id").fetchall()
-        return [(row["display_name"], row["name"]) for row in rows]
+        return [(category_label(row["name"], row["display_name"]), row["name"]) for row in rows]
 
     def add_category(
         self,
