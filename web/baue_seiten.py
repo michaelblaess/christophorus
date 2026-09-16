@@ -335,7 +335,7 @@ def startseite(sprache: str) -> str:
         <div><span class="prompt">$</span> <span class="cmd">christophorus</span> <span class="flag">--year</span> <span class="url">2024</span></div>
         <div><span class="prompt">$</span> <span class="cmd">christophorus</span> <span class="flag">--lang</span> <span class="url">en</span></div>
         <div><span class="prompt">$</span> <span class="cmd">christo</span> <span class="flag">--version</span></div>
-        <div><span class="ok">christophorus 1.3.0</span></div>
+        <div><span class="ok">christophorus 1.3.1</span></div>
       </div>
     </div>
   </section>
