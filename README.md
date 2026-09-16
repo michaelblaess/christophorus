@@ -48,6 +48,9 @@ stored under the old names on its own.
   public holidays, SQLite journal mode (safe for Dropbox and OneDrive).
 - **Keyboard:** classic letters or function keys F1 to F10, optional Vim
   navigation in tables, overview on `?`.
+- **Anonymize** for screenshots: destinations, purposes, vehicle, number plate
+  and folder are replaced in the display. Database and export stay untouched,
+  dialogs showing real data are locked while it is on.
 - **Themes** from [textual-themes](https://github.com/michaelblaess/textual-themes).
 
 ## Installation
@@ -102,6 +105,7 @@ stay available, only the log moves from `L` to `F4`.
 | Export | `E` | `F10` |
 | Delete trip | `DEL` | `DEL` |
 | Next theme | `T` | `T` |
+| Anonymize display | `A` | `A` |
 | Previous / next month | `<` / `>` | `<` / `>` |
 | Key overview | `?` | `?` |
 | Quit | `Q` | `Q` |

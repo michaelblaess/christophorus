@@ -52,6 +52,8 @@ CLASSIC: dict[str, KeyBinding] = {
     "copy_log": KeyBinding(("c", "C"), show=False),
     "clear_log": KeyBinding(("ctrl+l",), show=False),
     "cycle_theme": KeyBinding(("t", "T")),
+    # Anonymisierung fuer Screenshots. F1 bis F10 sind vergeben, deshalb nur der Buchstabe.
+    "toggle_anon": KeyBinding(("a", "A")),
     "show_about": KeyBinding(("i", "I")),
     # Uebersicht der Belegung. "?" ist frei und in Terminals die gelaeufige
     # Taste dafuer - im Footer waere sie nur Ballast.
@@ -78,6 +80,7 @@ LABEL_KEYS: dict[str, str] = {
     "copy_log": "binding.log_copy",
     "clear_log": "binding.log_clear",
     "cycle_theme": "binding.theme",
+    "toggle_anon": "binding.anonymize",
     "show_about": "binding.info",
     "keymap_overview": "binding.keymap_overview",
 }
@@ -102,6 +105,7 @@ TOOLTIP_KEYS: dict[str, str] = {
     "copy_log": "tooltip.log_copy",
     "clear_log": "tooltip.log_clear",
     "cycle_theme": "tooltip.theme",
+    "toggle_anon": "tooltip.anonymize",
     "show_about": "tooltip.info",
     "keymap_overview": "tooltip.keymap_overview",
 }
@@ -184,6 +188,7 @@ Ohne F-Taste bleiben bewusst:
 - `q` Beenden und `DEL` Loeschen - eindeutig, Loeschen soll nicht auf einer
   Taste liegen, die man im Vorbeigehen trifft.
 - `t` Theme - selten gebraucht.
+- `a` Anonymisieren - F1 bis F10 sind voll, und gebraucht wird es nur vor Screenshots.
 - `f11` und `f12`: viele Terminals belegen sie selbst mit Vollbild.
 """
 

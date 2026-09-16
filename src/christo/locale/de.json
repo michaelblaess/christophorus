@@ -20,6 +20,7 @@
   "binding.log_clear": "Log leeren",
   "binding.info": "Info",
   "binding.theme": "Theme",
+  "binding.anonymize": "Anonym",
   "binding.cancel": "Abbrechen",
   "binding.save": "Speichern",
   "binding.confirm": "Bestätigen",
@@ -53,6 +54,7 @@
   "tooltip.log_clear": "Leert das Log-Fenster",
   "tooltip.info": "Zeigt Programminformationen",
   "tooltip.theme": "Schaltet zum nächsten Theme (alphabetisch)",
+  "tooltip.anonymize": "Verfremdet Ziele, Zwecke, Fahrzeug und Ordner in der Anzeige, z.B. für Screenshots. Datenbank und Export bleiben echt",
   "config.label.vehicle": "  Fahrzeug:   ",
   "config.label.leasing": "  Leasing:    ",
   "config.label.km_state": "  km-Stand:   ",
@@ -504,5 +506,11 @@
   "save_dialog.filter_excel": "Excel-Datei (*.xlsx)",
   "save_dialog.filter_json": "JSON-Datei (*.json)",
   "save_dialog.filter_markdown": "Markdown-Datei (*.md)",
-  "save_dialog.filter_all": "Alle Dateien"
+  "save_dialog.filter_all": "Alle Dateien",
+  "subtitle.anonymized": "ANONYMISIERT",
+  "notify.anonymized_on": "Anonymisierung an: Die Anzeige zeigt Fantasiewerte",
+  "notify.anonymized_off": "Anonymisierung aus: echte Daten",
+  "notify.anonymized_blocked": "Im anonymen Modus gesperrt. Mit A zurück zu den echten Daten",
+  "log.anonymized_on": "Anonymisierung an - Log geleert, weil ältere Zeilen echte Namen enthielten",
+  "log.anonymized_off": "Anonymisierung aus"
 }

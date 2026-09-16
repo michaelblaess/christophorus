@@ -30,6 +30,7 @@ from christo.models.trip import (
 )
 from christo.models.vehicle import Vehicle
 from christo.screens.keymap_screen import KeymapScreen
+from christo.services.anonymizer import Anonymizer
 from christo.services.database import Database
 from christo.services.formatting import format_km
 from christo.services.holiday_service import HolidayService
@@ -95,6 +96,9 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         # Auftrag, der auf den Speichern-Dialog wartet. Zusammengestellt wird
         # er beim Oeffnen, damit der Dialog nur mit echten Fahrten aufgeht.
         self._pending_export: ExportJob | None = None
+        # Anonymisierung fuer Screenshots. None heisst aus. Nur die Anzeige wird
+        # verfremdet, Datenbank und Exporte bleiben echt.
+        self._anonymizer: Anonymizer | None = None
 
         # Beanstandungen aus der Tastenbelegung. Sie gehoeren ins Log, nicht in
         # einen Dialog - sie betreffen die Konfigurationsdatei, nicht den
@@ -393,7 +397,7 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         # UI aktualisieren
         vehicle = self._fahrtenbuch.vehicle
         config_panel = self.query_one("#config-panel", ConfigPanel)
-        config_panel.update_vehicle(vehicle, path_str)
+        config_panel.update_vehicle(*self._display_vehicle(vehicle, path_str))
         config_panel.update_month(self._year, self._month)
 
         if vehicle and vehicle.name:
@@ -439,6 +443,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
         db = self._fahrtenbuch.database
         month_data = db.get_month_data(self._year, self._month)
+        if self._anonymizer is not None:
+            month_data = self._anonymizer.month_data(month_data)
         lease_km = 1500
         vehicle = self._fahrtenbuch.vehicle
         if vehicle:
@@ -450,6 +456,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
         # Blacklist laden (fuer Kalenderansicht und Blacklist-Tab)
         blacklist_entries = db.get_blacklist()
+        if self._anonymizer is not None:
+            blacklist_entries = self._anonymizer.blacklist_entries(blacklist_entries)
         blacklist_map: dict[date, str] = {}
         for entry in blacklist_entries:
             try:
@@ -528,6 +536,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
     def _write_log(self, message: str, level: str = "info") -> None:
         """Schreibt eine Nachricht ins LogPanel."""
+        if self._anonymizer is not None:
+            message = self._anonymizer.censor(message)
         with contextlib.suppress(Exception):
             self.query_one("#log-panel", LogPanel).write_log(message, level=level)
 
@@ -636,6 +646,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
     def on_trip_table_trip_selected(self, event: TripTable.TripSelected) -> None:
         """Reagiert auf Auswahl einer Fahrt — oeffnet den Editor."""
+        if self._blocked_while_anonymized():
+            return
         if event.trip is None or self._fahrtenbuch is None:
             return
         self._selected_trip_index = event.index
@@ -657,6 +669,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         WICHTIG: _selected_trip_id wird gesetzt, damit ein anschliessendes
         'd' die Kalender-Fahrt loescht und nicht eine stale Tabellen-Auswahl.
         """
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None:
             return
         self._selected_trip_id = event.trip.id
@@ -673,6 +687,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
     def on_calendar_view_new_trip_requested(self, event: CalendarView.NewTripRequested) -> None:
         """Oeffnet den TripScreen fuer eine neue Fahrt am angeklickten Tag."""
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None:
             return
         from christo.screens.trip_screen import TripScreen
@@ -729,6 +745,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
     def _show_blacklist_detail(self, entry_id: int, date_str: str, reason: str) -> None:
         """Oeffnet den Blacklist-Detail-Screen."""
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None:
             return
         from christo.screens.blacklist_detail_screen import BlacklistDetailScreen
@@ -763,6 +781,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         liches Loeschen nach stale Selektionen (z.B. Kalender -> Edit -> d)
         zu verhindern.
         """
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None or self._selected_trip_id <= 0:
             self.notify(t("notify.no_trip_selected"), severity="warning")
             return
@@ -931,6 +951,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             return
         db = self._fahrtenbuch.database
         year_data = db.get_year_data(self._year)
+        if self._anonymizer is not None:
+            year_data = self._anonymizer.month_data(year_data)
 
         # Feiertage fuers ganze Jahr sammeln
         holidays_map: dict[date, str] = {}
@@ -940,6 +962,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         category_colors = db.get_category_colors()
 
         blacklist_entries = db.get_blacklist()
+        if self._anonymizer is not None:
+            blacklist_entries = self._anonymizer.blacklist_entries(blacklist_entries)
         blacklist_map: dict[date, str] = {}
         for entry in blacklist_entries:
             try:
@@ -974,6 +998,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             return
         db = self._fahrtenbuch.database
         docs = db.get_all_documents()
+        if self._anonymizer is not None:
+            docs = self._anonymizer.documents(docs)
         docs_view = self.query_one("#documents-view", DocumentsView)
         docs_view.load_data(docs, Path(db.path))
 
@@ -1030,6 +1056,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         Kontextabhaengig: auf dem Blacklist-Tab wird statt des Trip-Dialogs
         der Blacklist-Detail-Screen im Neu-Modus geoeffnet.
         """
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None:
             self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
@@ -1099,6 +1127,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
         Datenbank - das Verzeichnis des Fahrtenbuchs ist deshalb weiterhin der
         Startpunkt, solange noch kein Export woanders hin ging.
         """
+        if self._blocked_while_anonymized():
+            return
         from christo.models.export_format import DEFAULT_FORMAT, suggested_name
         from christo.screens.export_save_screen import ExportSaveScreen
 
@@ -1243,6 +1273,8 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
 
     def action_show_settings(self) -> None:
         """Oeffnet die Einstellungen."""
+        if self._blocked_while_anonymized():
+            return
         if self._fahrtenbuch is None:
             self.notify(t("notify.no_fahrtenbuch"), severity="warning")
             return
@@ -1285,18 +1317,86 @@ class FahrtenbuchApp(CrashGuard, LogRouter, App[None]):  # type: ignore[misc]
             self._write_log(t("log.vehicle_info", name=vehicle.name, plate=vehicle.plate))
 
         config_panel = self.query_one("#config-panel", ConfigPanel)
-        config_panel.update_vehicle(vehicle, str(self._fahrtenbuch.path))
+        config_panel.update_vehicle(*self._display_vehicle(vehicle, str(self._fahrtenbuch.path)))
         self._apply_show_id_setting()
         self._refresh_data()
 
     def action_open_fahrtenbuch(self) -> None:
         """Oeffnet den Start-Screen zum Wechseln des Fahrtenbuchs."""
+        if self._blocked_while_anonymized():
+            return
         self._show_start_screen()
 
     def action_show_year(self) -> None:
         """Wechselt direkt zur Jahresuebersicht."""
         tabs = self.query_one("#view-tabs", Tabs)
         tabs.active = "tab-year"
+
+    def action_toggle_anon(self) -> None:
+        """Schaltet die Anonymisierung fuer Screenshots ein oder aus.
+
+        Beim Einschalten wird das Log geleert, weil aeltere Zeilen echte Namen
+        tragen. Datenbank und Exporte bleiben unberuehrt.
+        """
+        if self._anonymizer is None:
+            anonymizer = Anonymizer()
+            self._prime_anonymizer(anonymizer)
+            self._anonymizer = anonymizer
+            with contextlib.suppress(Exception):
+                self.query_one("#log-panel", LogPanel).clear_log()
+            self.sub_title = t("subtitle.anonymized")
+            self._write_log(t("log.anonymized_on"), level="warning")
+            self.notify(t("notify.anonymized_on"))
+        else:
+            self._anonymizer = None
+            self.sub_title = ""
+            self._write_log(t("log.anonymized_off"))
+            self.notify(t("notify.anonymized_off"))
+        self._refresh_all_views()
+
+    def _prime_anonymizer(self, anonymizer: Anonymizer) -> None:
+        """Laesst den Anonymizer alle echten Werte einmal sehen.
+
+        Erst danach kann censor() sie in freien Texten ersetzen - auch solche aus
+        Monaten, die gerade nicht angezeigt werden (Pruefmeldungen, Log).
+        """
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        db = self._fahrtenbuch.database
+        anonymizer.vehicle(self._fahrtenbuch.vehicle)
+        anonymizer.path(str(self._fahrtenbuch.path))
+        for trip in db.get_all_trips_ordered():
+            anonymizer.trip(trip)
+        anonymizer.blacklist_entries(db.get_blacklist())
+        anonymizer.documents(db.get_all_documents())
+
+    def _display_vehicle(self, vehicle: Vehicle | None, path: str) -> tuple[Vehicle | None, str]:
+        """Fahrzeug und Ordner so, wie sie angezeigt werden - im anonymen Modus verfremdet."""
+        if self._anonymizer is None:
+            return vehicle, path
+        return self._anonymizer.vehicle(vehicle), self._anonymizer.path(path)
+
+    def _blocked_while_anonymized(self) -> bool:
+        """Sperrt Dialoge, die echte Daten zeigen oder verfremdete speichern wuerden."""
+        if self._anonymizer is None:
+            return False
+        self.notify(t("notify.anonymized_blocked"), severity="warning")
+        return True
+
+    def _refresh_all_views(self) -> None:
+        """Laedt alle Ansichten neu, die Daten oder Fahrzeug zeigen."""
+        if self._fahrtenbuch is None or not self._fahrtenbuch.is_open:
+            return
+        config_panel = self.query_one("#config-panel", ConfigPanel)
+        config_panel.update_vehicle(*self._display_vehicle(self._fahrtenbuch.vehicle, str(self._fahrtenbuch.path)))
+        self._refresh_data()
+        self._refresh_year_trip_table()
+        self._refresh_year_view()
+        self._refresh_documents_view()
+        self._refresh_worktimes_view()
+        if self._current_view != "tab-list-year":
+            # Die Jahresliste setzt das SummaryPanel auf Jahreswerte - zurueck auf den Monat.
+            self._refresh_data()
 
     def action_refresh(self) -> None:
         """Aktualisiert die aktuelle Ansicht (F5)."""

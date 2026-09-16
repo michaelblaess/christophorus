@@ -20,6 +20,7 @@
   "binding.log_clear": "Clear log",
   "binding.info": "Info",
   "binding.theme": "Theme",
+  "binding.anonymize": "Anonymize",
   "binding.cancel": "Cancel",
   "binding.save": "Save",
   "binding.confirm": "Confirm",
@@ -53,6 +54,7 @@
   "tooltip.log_clear": "Clears the log panel",
   "tooltip.info": "Shows program information",
   "tooltip.theme": "Cycles to the next theme (alphabetical)",
+  "tooltip.anonymize": "Replaces destinations, purposes, vehicle and folder in the display, e.g. for screenshots. Database and export stay real",
   "config.label.vehicle": "  Vehicle:    ",
   "config.label.leasing": "  Lease:      ",
   "config.label.km_state": "  Odometer:   ",
@@ -504,5 +506,11 @@
   "save_dialog.filter_excel": "Excel file (*.xlsx)",
   "save_dialog.filter_json": "JSON file (*.json)",
   "save_dialog.filter_markdown": "Markdown file (*.md)",
-  "save_dialog.filter_all": "All files"
+  "save_dialog.filter_all": "All files",
+  "subtitle.anonymized": "ANONYMIZED",
+  "notify.anonymized_on": "Anonymization on: the display shows made-up values",
+  "notify.anonymized_off": "Anonymization off: real data",
+  "notify.anonymized_blocked": "Not available while anonymized. Press A to return to the real data",
+  "log.anonymized_on": "Anonymization on - log cleared because older lines contained real names",
+  "log.anonymized_off": "Anonymization off"
 }

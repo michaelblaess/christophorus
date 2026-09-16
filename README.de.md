@@ -50,6 +50,9 @@ alten Namen von selbst.
   für die Feiertage, SQLite-Journal-Modus (sicher für Dropbox und OneDrive).
 - **Tastatur:** klassisch mit Buchstaben oder mit den F-Tasten F1 bis F10,
   wahlweise Vim-Navigation in Tabellen, Übersicht auf `?`.
+- **Anonymisieren** für Screenshots: Ziele, Zwecke, Fahrzeug, Kennzeichen und
+  Ordner werden in der Anzeige ersetzt. Datenbank und Export bleiben unberührt,
+  Dialoge mit echten Daten sind solange gesperrt.
 - **Themes** aus [textual-themes](https://github.com/michaelblaess/textual-themes).
 
 ## Installation
@@ -104,6 +107,7 @@ Buchstaben erhalten, nur das Log zieht von `L` auf `F4`.
 | Export | `E` | `F10` |
 | Fahrt löschen | `DEL` | `DEL` |
 | Nächstes Theme | `T` | `T` |
+| Anzeige anonymisieren | `A` | `A` |
 | Vorheriger / nächster Monat | `<` / `>` | `<` / `>` |
 | Tastenübersicht | `?` | `?` |
 | Beenden | `Q` | `Q` |
