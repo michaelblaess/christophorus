@@ -158,8 +158,10 @@ Custom bindings go into `config.json` under `keymap_custom`, for example
 
 ## Web interface (preview)
 
-Besides the TUI there is a web interface. It is a playground and not complete yet: you can view
-a month, search it and edit a trip.
+Besides the TUI there is a web interface, built to try out Tabler, Tabulator and FastHTML. It
+covers the same ground as the TUI: the trips of a month or a year, a calendar, the year at a
+glance, blocked days, receipts, working hours, settings and the export to Excel, JSON or
+Markdown.
 
 ```bash
 uv sync --extra web
@@ -172,6 +174,8 @@ uv run python -m christo.web <folder>   # a specific logbook
 - Runs on `127.0.0.1:5056` only, without login, and loads nothing from the internet.
 - Colors come from [web-themes](https://github.com/michaelblaess/web-themes), the same themes as
   in the TUI.
+- What carried over from building it is written down in [docs/WEB-MUSTER.md](docs/WEB-MUSTER.md)
+  (German).
 
 ## Development
 

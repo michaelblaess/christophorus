@@ -160,8 +160,10 @@ Beispiel `{"toggle_log": ["alt+l"]}`.
 
 ## Web-Oberfläche (Vorschau)
 
-Neben der TUI gibt es eine Weboberfläche. Sie ist eine Spielwiese und noch nicht vollständig:
-Der Monat lässt sich ansehen, durchsuchen und eine Fahrt bearbeiten.
+Neben der TUI gibt es eine Weboberfläche, gebaut zum Ausprobieren von Tabler, Tabulator und
+FastHTML. Sie deckt dasselbe ab wie die TUI: die Fahrten eines Monats oder Jahres, Kalender,
+Jahresübersicht, Sperrtage, Belege, Arbeitszeit, Einstellungen und den Export nach Excel, JSON
+oder Markdown.
 
 ```bash
 uv sync --extra web
@@ -174,6 +176,8 @@ uv run python -m christo.web <ordner>   # bestimmtes Fahrtenbuch
 - Läuft nur auf `127.0.0.1:5056`, ohne Anmeldung, und lädt nichts aus dem Netz.
 - Die Farben kommen aus [web-themes](https://github.com/michaelblaess/web-themes), dieselben
   Themes wie in der TUI.
+- Was beim Bauen an übertragbaren Mustern herauskam, steht in
+  [docs/WEB-MUSTER.md](docs/WEB-MUSTER.md).
 
 ## Entwicklung
 

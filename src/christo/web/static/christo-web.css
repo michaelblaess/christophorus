@@ -35,6 +35,9 @@ body {
 .titel span { color: var(--wt-text-secondary); font-weight: 500; }
 .themenwahl { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: .88rem; }
 .themenwahl select { min-width: 200px; }
+.werkzeug { display: inline-flex; color: var(--wt-text-secondary); padding: 4px; border-radius: 3px; }
+.werkzeug:hover { color: var(--wt-accent-text); background: var(--wt-bg-tertiary); }
+.werkzeug svg { width: 20px; height: 20px; stroke: currentColor; }
 
 /* Panels */
 .panel {
@@ -55,7 +58,8 @@ body {
 .reiter-liste { display: flex; flex-wrap: wrap; gap: 2px; }
 .reiter { padding: 6px 14px; color: var(--wt-text-secondary); text-decoration: none; font-weight: 700; border-radius: 3px 3px 0 0; }
 .reiter.aktiv { background: var(--wt-accent-fill); color: var(--wt-on-accent); }
-.reiter.gesperrt { color: var(--wt-text-tertiary); cursor: default; }
+.reiter:hover { color: var(--wt-accent-text); }
+.reiter.aktiv:hover { color: var(--wt-on-accent); }
 .aktionen { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 6px; }
 .suche { position: relative; display: flex; align-items: center; }
 .suche svg { position: absolute; left: 9px; width: 15px; height: 15px; stroke: var(--wt-text-secondary); pointer-events: none; }
@@ -110,3 +114,96 @@ mark { background: var(--wt-accent-subtle); color: inherit; padding: 0; border-b
   .suche input { width: 100%; max-width: none; }
   .zeitraum { margin-left: 0; }
 }
+
+/* Knoepfe und Leisten */
+.btn-loeschen { background: var(--wt-red); color: var(--wt-on-red); border-color: var(--wt-red); }
+.btn-loeschen:hover { background: var(--wt-red); color: var(--wt-on-red); filter: brightness(1.1); }
+.fuellung { flex: 1; }
+.exportgruppe { display: flex; gap: 4px; }
+.exportgruppe select { width: auto; }
+.dialog-schmal { width: min(460px, 100%); }
+
+/* Jahresuebersicht */
+.kachelpanel { padding-top: 20px; }
+.kachelraster { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kachel {
+  display: block; min-height: 118px; padding: 10px 12px; border: 1px solid var(--wt-border); border-radius: 3px;
+  background: var(--wt-bg-tertiary); color: var(--wt-text-primary); text-decoration: none;
+}
+.kachel:hover { border-color: var(--wt-accent-text); color: var(--wt-text-primary); }
+.kachel-kopf { display: flex; align-items: baseline; gap: 8px; }
+.kachel-monat { font-weight: 800; }
+.kachel-befunde { color: var(--wt-warn); font-weight: 700; font-size: .82rem; }
+.kachel-prozent { margin-left: auto; font-weight: 700; font-family: "JetBrains Mono", monospace; }
+.kachel-zeile { display: flex; gap: 8px; font-size: .85rem; font-family: "JetBrains Mono", monospace; margin-top: 2px; }
+.kachel-zeile .gedaempft:last-child { margin-left: auto; }
+.kachel-km { font-weight: 700; }
+.balken { height: 6px; background: var(--wt-bg-primary); border-radius: 3px; margin: 8px 0 6px; overflow: hidden; }
+.balken-fuellung { height: 100%; }
+.stufe-gut { color: var(--wt-green); }
+.balken-fuellung.stufe-gut { background: var(--wt-green); }
+.stufe-warnung { color: var(--wt-warn); }
+.balken-fuellung.stufe-warnung { background: var(--wt-warn); }
+.stufe-schlecht { color: var(--wt-red); }
+.balken-fuellung.stufe-schlecht { background: var(--wt-red); }
+
+/* Kalender */
+.kalenderpanel { flex: 1; padding-top: 20px; }
+.kalenderraster { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.kalender-kopf { font-weight: 700; color: var(--wt-text-secondary); font-size: .82rem; padding: 0 4px 2px; }
+.kalendertag {
+  min-height: 92px; padding: 4px 6px; border: 1px solid var(--wt-border); border-radius: 3px;
+  background: var(--wt-bg-tertiary); font-size: .82rem;
+}
+.kalendertag.ausserhalb { background: transparent; border-color: transparent; color: var(--wt-text-tertiary); }
+.kalendertag.frei { background: var(--wt-bg-primary); }
+.kalendertag.gesperrt { border-color: var(--wt-red); }
+.kalendertag.auffaellig { border-color: var(--wt-warn); }
+.kalendertag-kopf { display: flex; align-items: baseline; gap: 5px; }
+.kalendertag-nummer { font-weight: 800; }
+.kalendertag-wochentag { color: var(--wt-text-tertiary); font-size: .76rem; }
+.kalendertag-km { margin-left: auto; font-family: "JetBrains Mono", monospace; font-weight: 700; }
+.kalendertag-neu {
+  background: none; border: 0; color: var(--wt-text-tertiary); cursor: pointer; padding: 0 3px;
+  font-size: 1rem; line-height: 1; opacity: 0;
+}
+.kalendertag:hover .kalendertag-neu, .kalendertag-neu:focus-visible { opacity: 1; }
+.kalendertag-neu:hover { color: var(--wt-accent-text); }
+.kalendertag-hinweis { font-size: .76rem; line-height: 1.25; }
+.kalendertag-fahrt {
+  margin-top: 2px; padding: 1px 4px; border-radius: 2px; background: var(--wt-bg-secondary);
+  color: var(--wt-green); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kalendertag-fahrt.privat { color: var(--wt-text-secondary); }
+.kalendertag-fahrt:hover { background: var(--wt-accent-subtle); }
+
+/* Arbeitszeit */
+.arbeitszeitpanel { padding-top: 20px; }
+.wz-zeile { display: flex; align-items: center; gap: 12px; padding: 2px 0; }
+.wz-kopf { color: var(--wt-text-secondary); font-size: .82rem; border-bottom: 1px solid var(--wt-border); padding-bottom: 4px; }
+.wz-fuss { border-top: 1px solid var(--wt-border); margin-top: 4px; padding-top: 6px; font-weight: 700; }
+.wz-monat { width: 130px; }
+.wz-eingabe { width: 120px; text-align: right; }
+.wz-summe { font-family: "JetBrains Mono", monospace; }
+.wz-zahl { width: 130px; text-align: right; font-family: "JetBrains Mono", monospace; }
+
+/* Einstellungen */
+.einstellungen { display: flex; flex-direction: column; gap: 16px; }
+.einstellungen .panel { padding-top: 20px; }
+.kat-zeile { display: flex; align-items: center; gap: 12px; padding: 3px 0; }
+.kat-name { width: 140px; font-family: "JetBrains Mono", monospace; font-size: .85rem; }
+.kat-zeile .form-control { max-width: 260px; }
+.kat-zeile .form-control-color { max-width: 54px; padding: 2px; }
+.kat-schalter { margin: 0; width: 140px; }
+
+@media (max-width: 1100px) {
+  .kachelraster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .kachelraster { grid-template-columns: 1fr; }
+  .kalenderraster { grid-template-columns: 1fr; }
+  .kalender-kopf { display: none; }
+  .kalendertag.ausserhalb { display: none; }
+  .wz-zeile { flex-wrap: wrap; gap: 6px; }
+}
+.zusatz-titel::marker { color: var(--wt-text-tertiary); }

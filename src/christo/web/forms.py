@@ -1,7 +1,8 @@
-"""Das Bearbeitungsformular einer Fahrt: Eingaben lesen, pruefen, in eine Fahrt uebersetzen.
+"""Die Formulare der Weboberflaeche: Eingaben lesen, pruefen, in Fachobjekte uebersetzen.
 
-Ohne FastHTML, damit es sich ohne Server testen laesst. Die Speicherregeln selbst kommen aus
-dem Kern (`services/trip_rules.py`), hier wird nur die Eingabe geprueft.
+Fahrt, Sperrtag, Fahrzeug und Arbeitszeit. Alles ohne FastHTML, damit es sich ohne Server
+testen laesst. Die Speicherregeln selbst kommen aus dem Kern (`services/trip_rules.py`),
+hier wird nur die Eingabe geprueft.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from christo.models.trip import Trip, get_informational_categories
+from christo.models.vehicle import Vehicle
 from christo.services.formatting import (
     de_to_iso,
     format_km,
@@ -55,6 +57,20 @@ class TripForm:
         return not self.errors
 
 
+def pruefe_datum(text: str, pflicht: bool = True) -> str:
+    """Prueft ein deutsches Datum und gibt den Fehlertext zurueck, oder leer wenn es passt."""
+    text = text.strip()
+    if not text:
+        return "Bitte ein Datum eintragen." if pflicht else ""
+    if not _DATUM.match(text):
+        return "Datum bitte als TT.MM.JJJJ eintragen, zum Beispiel 16.05.2026."
+    try:
+        date.fromisoformat(de_to_iso(text))
+    except ValueError:
+        return "Dieses Datum gibt es nicht."
+    return ""
+
+
 def form_from_trip(trip: Trip) -> TripForm:
     """Vorbelegung des Formulars aus einer gespeicherten Fahrt."""
     return TripForm(
@@ -89,15 +105,9 @@ def read_form(data: Mapping[str, str], categories: set[str]) -> TripForm:
     werte = {name: str(data.get(name, "")).strip() for name in FELDER}
     fehler: dict[str, str] = {}
 
-    if not werte["datum"]:
-        fehler["datum"] = "Bitte ein Datum eintragen."
-    elif not _DATUM.match(werte["datum"]):
-        fehler["datum"] = "Datum bitte als TT.MM.JJJJ eintragen, zum Beispiel 16.05.2026."
-    else:
-        try:
-            date.fromisoformat(de_to_iso(werte["datum"]))
-        except ValueError:
-            fehler["datum"] = "Dieses Datum gibt es nicht."
+    datumsfehler = pruefe_datum(werte["datum"])
+    if datumsfehler:
+        fehler["datum"] = datumsfehler
 
     for feld, name in (("abfahrt", "Abfahrt"), ("ankunft", "Ankunft")):
         if werte[feld] and not _UHRZEIT.match(werte[feld]):
@@ -163,3 +173,130 @@ def trip_from_form(form: TripForm, trip_id: int) -> Trip:
             fuel_full_tank=bool(w["volltank"]) and tanken,
         )
     )
+
+
+# --- Sperrtag (Blacklist) ----------------------------------------------------------------
+
+
+@dataclass
+class BlacklistForm:
+    """Ein Sperrtag im Formular."""
+
+    datum: str
+    grund: str
+    errors: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def valid(self) -> bool:
+        return not self.errors
+
+    @property
+    def datum_iso(self) -> str:
+        return de_to_iso(self.datum)
+
+
+def read_blacklist_form(data: Mapping[str, str]) -> BlacklistForm:
+    """Liest und prueft einen Sperrtag."""
+    datum = str(data.get("datum", "")).strip()
+    grund = str(data.get("grund", "")).strip()
+    fehler: dict[str, str] = {}
+    datumsfehler = pruefe_datum(datum)
+    if datumsfehler:
+        fehler["datum"] = datumsfehler
+    if not grund:
+        fehler["grund"] = "Bitte einen Grund eintragen, zum Beispiel Urlaub."
+    return BlacklistForm(datum=datum, grund=grund, errors=fehler)
+
+
+# --- Fahrzeug ----------------------------------------------------------------------------
+
+
+@dataclass
+class VehicleForm:
+    """Die Fahrzeugstammdaten im Formular."""
+
+    vehicle: Vehicle
+    errors: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def valid(self) -> bool:
+        return not self.errors
+
+
+def _ganzzahl(roh: str, feld: str, fehler: dict[str, str], standard: int = 0) -> int:
+    roh = roh.strip()
+    if not roh:
+        return standard
+    if not _ZAHL.match(roh):
+        fehler[feld] = "Bitte nur Ziffern eintragen."
+        return standard
+    return parse_km(roh, standard)
+
+
+def _kommazahl(roh: str, feld: str, fehler: dict[str, str]) -> float:
+    roh = roh.strip()
+    if not roh:
+        return 0.0
+    wert = parse_liters(roh)
+    if wert <= 0:
+        fehler[feld] = "Bitte eine Zahl eintragen, zum Beispiel 42,5."
+    return wert
+
+
+def read_vehicle_form(data: Mapping[str, str]) -> VehicleForm:
+    """Liest und prueft die Fahrzeugstammdaten."""
+    fehler: dict[str, str] = {}
+    werte = {name: str(wert).strip() for name, wert in data.items()}
+
+    name = werte.get("name", "")
+    if not name:
+        fehler["name"] = "Bitte eine Bezeichnung eintragen."
+
+    daten_iso: dict[str, str] = {}
+    for feld in ("start_date", "end_date"):
+        roh = werte.get(feld, "")
+        datumsfehler = pruefe_datum(roh, pflicht=False)
+        if datumsfehler:
+            fehler[feld] = datumsfehler
+        daten_iso[feld] = de_to_iso(roh) if roh and not datumsfehler else ""
+
+    if not fehler.get("start_date") and not fehler.get("end_date"):
+        von, bis = daten_iso["start_date"], daten_iso["end_date"]
+        if von and bis and bis < von:
+            fehler["end_date"] = "Das Vertragsende liegt vor dem Beginn."
+
+    start_km = _ganzzahl(werte.get("start_km", ""), "start_km", fehler)
+    end_km = _ganzzahl(werte.get("end_km", ""), "end_km", fehler)
+    if not fehler.get("start_km") and not fehler.get("end_km") and end_km and end_km < start_km:
+        fehler["end_km"] = "Der aktuelle Stand liegt unter dem bei der Übernahme."
+
+    fahrzeug = Vehicle(
+        name=name,
+        plate=werte.get("plate", ""),
+        contract_number=werte.get("contract_number", ""),
+        lease_km_per_month=_ganzzahl(werte.get("lease_km_per_month", ""), "lease_km_per_month", fehler, 1500),
+        start_km=start_km,
+        end_km=end_km,
+        start_date=daten_iso["start_date"],
+        end_date=daten_iso["end_date"],
+        lease_months=_ganzzahl(werte.get("lease_months", ""), "lease_months", fehler, 12),
+        tank_capacity_l=_kommazahl(werte.get("tank_capacity_l", ""), "tank_capacity_l", fehler),
+        consumption_l_100km=_kommazahl(werte.get("consumption_l_100km", ""), "consumption_l_100km", fehler),
+    )
+    return VehicleForm(vehicle=fahrzeug, errors=fehler)
+
+
+# --- Arbeitszeit -------------------------------------------------------------------------
+
+
+def read_worktimes(data: Mapping[str, str]) -> dict[int, float]:
+    """Liest die zwoelf Stundenfelder.
+
+    Returns:
+        Monat auf Stunden. Ein leeres oder unlesbares Feld ergibt 0.0 und loescht den Monat.
+    """
+    stunden: dict[int, float] = {}
+    for monat in range(1, 13):
+        roh = str(data.get(f"monat_{monat}", "")).strip()
+        stunden[monat] = parse_liters(roh) if roh else 0.0
+    return stunden
