@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from christo.app import FahrtenbuchApp
-from christo.models.fahrtenbuch import Fahrtenbuch
 from christo.models.settings import GlobalConfig
 from christo.models.trip import MonthData
 from christo.models.vehicle import Vehicle
 from christo.services.anonymizer import FAKE_PATH, FAKE_PLATE, Anonymizer
+from christo.services.fahrtenbuch import Fahrtenbuch
 from tests.conftest import make_trip
 
 ECHTES_ZIEL = "Zebrawerke Quastenhausen"

@@ -17,11 +17,11 @@ import pytest
 from textual.widgets import Checkbox, Input, Select
 
 from christo.app import FahrtenbuchApp
-from christo.models.fahrtenbuch import Fahrtenbuch
 from christo.models.settings import GlobalConfig
 from christo.models.vehicle import Vehicle
 from christo.screens.export_save_screen import ExportSaveScreen
 from christo.screens.keymap_screen import KeymapScreen
+from christo.services.fahrtenbuch import Fahrtenbuch
 from tests.conftest import make_trip
 
 

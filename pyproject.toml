@@ -65,12 +65,6 @@ layers = [
     "christo.services",
     "christo.models",
 ]
-# Bekannte Altlast (Stand 14.09.2026): das Fahrtenbuch-Modell haelt die
-# Database selbst. Sauber waere, Fahrtenbuch nach services/ zu ziehen - bis
-# dahin ist genau diese eine Kante erlaubt, jede weitere bricht den Vertrag.
-ignore_imports = [
-    "christo.models.fahrtenbuch -> christo.services.database",
-]
 
 [[tool.importlinter.contracts]]
 name = "Der Kern kennt keine Oberflaeche"

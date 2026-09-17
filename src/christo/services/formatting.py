@@ -47,3 +47,45 @@ def parse_km(raw: str | None, default: int = 0) -> int:
         return int(round(float(cleaned)))
     except ValueError:
         return default
+
+
+def iso_to_de(iso: str) -> str:
+    """Konvertiert ISO-Datum (YYYY-MM-DD) zu deutschem Format (DD.MM.YYYY).
+
+    Unbekannte Formate kommen unveraendert zurueck.
+    """
+    parts = iso.split("-")
+    if len(parts) == 3 and len(parts[2]) > 0:
+        return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    return iso
+
+
+def de_to_iso(de: str) -> str:
+    """Konvertiert deutsches Datum (DD.MM.YYYY) zu ISO-Format (YYYY-MM-DD).
+
+    Unbekannte Formate kommen unveraendert zurueck.
+    """
+    parts = de.split(".")
+    if len(parts) == 3:
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    return de
+
+
+def format_liters(value: float | None) -> str:
+    """Formatiert Liter mit deutschem Komma. 0 / leer -> ''."""
+    if value is None or value <= 0:
+        return ""
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def parse_liters(raw: str | None) -> float:
+    """Parst Liter aus einer Eingabe mit deutschem Komma. Fehler -> 0.0."""
+    s = (raw or "").strip().replace(",", ".")
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0

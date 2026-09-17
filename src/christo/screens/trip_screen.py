@@ -26,49 +26,22 @@ from christo.models.trip import (
     get_informational_categories,
 )
 from christo.services.database import Database
-from christo.services.formatting import format_km, parse_km
+from christo.services.formatting import (
+    de_to_iso,
+    format_km,
+    format_liters,
+    iso_to_de,
+    parse_km,
+    parse_liters,
+)
+from christo.services.trip_rules import normalize_trip
 
-
-def _iso_to_de(iso: str) -> str:
-    """Konvertiert ISO-Datum (YYYY-MM-DD) zu deutschem Format (DD.MM.YYYY)."""
-    try:
-        parts = iso.split("-")
-        if len(parts) == 3 and len(parts[2]) > 0:
-            return f"{parts[2]}.{parts[1]}.{parts[0]}"
-    except (ValueError, IndexError):
-        pass
-    return iso
-
-
-def _de_to_iso(de: str) -> str:
-    """Konvertiert deutsches Datum (DD.MM.YYYY) zu ISO-Format (YYYY-MM-DD)."""
-    try:
-        parts = de.split(".")
-        if len(parts) == 3:
-            return f"{parts[2]}-{parts[1]}-{parts[0]}"
-    except (ValueError, IndexError):
-        pass
-    return de
-
-
-def _format_liters(value: float) -> str:
-    """Formatiert Liter mit deutschem Komma. 0 / leer → '' ."""
-    if value is None or value <= 0:
-        return ""
-    if float(value).is_integer():
-        return str(int(value))
-    return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
-
-
-def _parse_liters(raw: str) -> float:
-    """Parst Liter aus UI-Eingabe (deutsches Komma). Fehler → 0.0."""
-    s = (raw or "").strip().replace(",", ".")
-    if not s:
-        return 0.0
-    try:
-        return float(s)
-    except ValueError:
-        return 0.0
+# Frueher hier definiert, seit der Web-Version im Kern (services/formatting.py).
+# Die alten Namen bleiben, weil andere Masken sie importieren.
+_iso_to_de = iso_to_de
+_de_to_iso = de_to_iso
+_format_liters = format_liters
+_parse_liters = parse_liters
 
 
 DELETE_REQUESTED = object()  # Sentinel: vom Dialog an den Caller, 'Loeschen'
@@ -919,59 +892,39 @@ class TripScreen(ModalScreen[Trip | None]):
         km_business = parse_km(self.query_one("#input-km-business", Input).value)
         km_private = parse_km(self.query_one("#input-km-private", Input).value)
 
+        # Nur die Nicht-Info-Kategorien haben sichtbare Ziel-, Zweck- und Streckenfelder.
         is_informational = category in get_informational_categories()
+        destination_value = "" if is_informational else self.query_one("#input-destination", TextArea).text
+        purpose_value = "" if is_informational else self.query_one("#input-purpose", Input).value
+        round_trip = False if is_informational else self._is_round_trip()
 
-        if is_informational:
-            # Informationelle Trips (Anlieferung, Rueckgabe) haben keine km,
-            # kein Ziel, keinen Zweck. Die DB-Schicht forciert 0/0 auch noch
-            # einmal — hier schon sauber setzen, damit die Werte konsistent
-            # im Trip-Objekt landen.
-            km_start = 0
-            km_end = 0
-            km_business = 0
-            km_private = 0
-            destination_value = ""
-            purpose_value = ""
-            round_trip = False
-        else:
-            # Wenn der User die km manuell in genau eine Spalte geschrieben hat,
-            # die nicht zur Kategorie passt, gleicht sich die Kategorie an — nicht
-            # umgekehrt. Frueher hat ein Safety-Net hier die User-Eingaben
-            # ueberschrieben, sodass "km auf privat umbuchen" nie gespeichert wurde.
-            if km_private > 0 and km_business == 0 and category in get_business_categories():
-                category = "fuel_private" if category == "fuel" else "private"
-            elif km_business > 0 and km_private == 0 and category not in get_business_categories():
-                category = "fuel" if category == "fuel_private" else "business"
-
-            destination_value = self.query_one("#input-destination", TextArea).text.strip()
-            purpose_value = self.query_one("#input-purpose", Input).value.strip()
-            round_trip = self._is_round_trip()
-
-        # Tankfelder nur bei fuel/fuel_private beruecksichtigen
         fuel_liters = 0.0
         fuel_full_tank = False
-        if category in ("fuel", "fuel_private"):
-            try:
-                fuel_liters = _parse_liters(self.query_one("#input-fuel-liters", Input).value)
-                fuel_full_tank = bool(self.query_one("#check-fuel-full-tank", Checkbox).value)
-            except Exception:
-                pass
+        try:
+            fuel_liters = _parse_liters(self.query_one("#input-fuel-liters", Input).value)
+            fuel_full_tank = bool(self.query_one("#check-fuel-full-tank", Checkbox).value)
+        except Exception:
+            pass
 
-        trip = Trip(
-            id=self._trip.id if self._is_edit and self._trip else 0,
-            date=trip_date,
-            time_from=self.query_one("#input-time-from", Input).value.strip(),
-            time_to=self.query_one("#input-time-to", Input).value.strip(),
-            destination=destination_value,
-            purpose=purpose_value,
-            km_start=km_start,
-            km_end=km_end,
-            km_business=km_business,
-            km_private=km_private,
-            category=category,
-            round_trip=round_trip,
-            fuel_liters=fuel_liters,
-            fuel_full_tank=fuel_full_tank,
+        # Nullen fuer Info-Fahrten, Kategorie an die km-Spalte angleichen, Tankfelder nur bei
+        # Tankfahrten: gemeinsame Regeln mit der Web-Version (services/trip_rules.py).
+        trip = normalize_trip(
+            Trip(
+                id=self._trip.id if self._is_edit and self._trip else 0,
+                date=trip_date,
+                time_from=self.query_one("#input-time-from", Input).value.strip(),
+                time_to=self.query_one("#input-time-to", Input).value.strip(),
+                destination=destination_value,
+                purpose=purpose_value,
+                km_start=km_start,
+                km_end=km_end,
+                km_business=km_business,
+                km_private=km_private,
+                category=category,
+                round_trip=round_trip,
+                fuel_liters=fuel_liters,
+                fuel_full_tank=fuel_full_tank,
+            )
         )
         self.dismiss(trip)
 

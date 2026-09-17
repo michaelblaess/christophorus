@@ -21,7 +21,6 @@ from textual_widgets import (
 from christo import __author__, __version__, __year__, keymap
 from christo.i18n import current_language, month_name, t
 from christo.models.export_job import ExportJob
-from christo.models.fahrtenbuch import Fahrtenbuch
 from christo.models.settings import GlobalConfig, config_dir
 from christo.models.trip import (
     Trip,
@@ -32,6 +31,7 @@ from christo.models.vehicle import Vehicle
 from christo.screens.keymap_screen import KeymapScreen
 from christo.services.anonymizer import Anonymizer
 from christo.services.database import Database
+from christo.services.fahrtenbuch import Fahrtenbuch
 from christo.services.formatting import format_km
 from christo.services.holiday_service import HolidayService
 from christo.widgets.blacklist_view import BlacklistView
