@@ -1,0 +1,49 @@
+/* web-themes - erzeugt von `python -m web_themes build`, nicht von Hand aendern */
+[data-web-theme] .tabulator {
+  --bs-body-bg: var(--tblr-body-bg);
+  --bs-body-color: var(--tblr-body-color);
+  --bs-border-color: var(--tblr-border-color);
+  --bs-emphasis-color: var(--tblr-emphasis-color);
+  --bs-primary-border-subtle: var(--tblr-primary-border-subtle);
+  --bs-secondary-bg: var(--tblr-secondary-bg);
+  --bs-secondary-color: var(--tblr-secondary-color);
+  --bs-tertiary-bg: var(--tblr-tertiary-bg);
+  --bs-tertiary-color: var(--tblr-tertiary-color);
+  background-color: var(--wt-bg-tertiary);
+  border-color: var(--wt-border);
+  color: var(--wt-text-primary);
+}
+[data-web-theme] .tabulator .tabulator-header,
+[data-web-theme] .tabulator .tabulator-header .tabulator-col {
+  background-color: var(--wt-bg-tertiary);
+  color: var(--wt-accent-text);
+  border-color: var(--wt-border);
+}
+[data-web-theme] .tabulator .tabulator-tableholder,
+[data-web-theme] .tabulator .tabulator-tableholder .tabulator-table {
+  background-color: var(--wt-bg-tertiary);
+  color: var(--wt-text-primary);
+}
+[data-web-theme] .tabulator .tabulator-cell { border-color: var(--wt-border); }
+[data-web-theme] .tabulator .tabulator-footer {
+  background-color: var(--wt-bg-secondary);
+  color: var(--wt-text-primary);
+  border-color: var(--wt-border);
+}
+[data-web-theme] .tabulator .tabulator-group { background-color: var(--wt-bg-elevated); color: var(--wt-text-primary); }
+[data-web-theme] .tabulator .tabulator-row,
+html[data-bs-theme] [data-web-theme] .tabulator .tabulator-row,
+html[data-bs-theme][data-web-theme] .tabulator .tabulator-row { background-color: var(--wt-bg-tertiary); }
+[data-web-theme] .tabulator .tabulator-row .tabulator-cell { background-color: inherit; }
+[data-web-theme] .tabulator .tabulator-row:hover,
+html[data-bs-theme] [data-web-theme] .tabulator .tabulator-row:hover,
+html[data-bs-theme][data-web-theme] .tabulator .tabulator-row:hover {
+  background-color: var(--wt-accent-subtle) !important;
+}
+[data-web-theme] .tabulator .tabulator-row.tabulator-selected,
+[data-web-theme] .tabulator .tabulator-row.wt-selected {
+  background-color: var(--wt-accent-fill) !important;
+  color: var(--wt-on-accent);
+}
+[data-web-theme] .tabulator .tabulator-row.wt-warn .tabulator-cell { color: var(--wt-warn); font-weight: 700; }
+[data-web-theme] .tabulator .tabulator-placeholder span { color: var(--wt-text-secondary); }

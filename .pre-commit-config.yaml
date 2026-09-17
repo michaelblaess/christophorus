@@ -7,12 +7,18 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^src/christo/web/static/vendor/
       - id: end-of-file-fixer
+        # Fremdbibliotheken bleiben unveraendert, sie kommen ueber tools/sync_web_assets.py
+        exclude: ^src/christo/web/static/vendor/
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=500]
+        # Die mitgelieferten Fremdbibliotheken der Web-Oberflaeche (tabler.min.css ist
+        # groesser als 500 KB). Sie kommen ueber tools/sync_web_assets.py, nicht von Hand.
+        exclude: ^src/christo/web/static/vendor/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.20

@@ -158,6 +158,23 @@ Beispiel `{"toggle_log": ["alt+l"]}`.
 | Zustimmung zum Hinweis | `~/.christo/disclaimer.json` |
 | Fahrtenbuch | ein Ordner deiner Wahl mit `christo.db` und einem Ordner `belege/` für Belege |
 
+## Web-Oberfläche (Vorschau)
+
+Neben der TUI gibt es eine Weboberfläche. Sie ist eine Spielwiese und noch nicht vollständig:
+Der Monat lässt sich ansehen, durchsuchen und eine Fahrt bearbeiten.
+
+```bash
+uv sync --extra web
+uv run python -m christo.web            # zuletzt geöffnetes Fahrtenbuch
+uv run python -m christo.web <ordner>   # bestimmtes Fahrtenbuch
+```
+
+- **Sie arbeitet immer auf einer Kopie** unter `~/.christo/web/<name>/`. Die Datei, die die TUI
+  benutzt, wird nie verändert. `--neu-kopieren` holt den aktuellen Stand und verwirft die Kopie.
+- Läuft nur auf `127.0.0.1:5056`, ohne Anmeldung, und lädt nichts aus dem Netz.
+- Die Farben kommen aus [web-themes](https://github.com/michaelblaess/web-themes), dieselben
+  Themes wie in der TUI.
+
 ## Entwicklung
 
 ```bash

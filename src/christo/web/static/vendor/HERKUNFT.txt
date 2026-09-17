@@ -1,0 +1,7 @@
+Herkunft der Dateien in diesem Ordner, geschrieben von tools/sync_web_assets.py
+
+Stand:      17.09.2026
+web-themes: Commit b76bb5d (dist/ sowie tabler, tabulator, fonts aus dem Katalog)
+htmx:       2.0.10 (npm htmx.org, Lizenz 0BSD)
+
+Nicht von Hand aendern. Neue Staende immer ueber das Werkzeug holen.

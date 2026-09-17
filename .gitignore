@@ -25,3 +25,6 @@ __pycache__/
 /PLAN*.md
 /docs/PLAN*.md
 /import_trips.py
+
+# FastHTML legt beim Start einen Sitzungsschluessel an
+.sesskey

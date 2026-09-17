@@ -1,0 +1,112 @@
+/* Christophorus Web. Farben ausschliesslich aus web-themes (--wt-*). */
+
+@font-face { font-family: "Manrope"; font-weight: 500; font-display: swap; src: url("vendor/fonts/manrope-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Manrope"; font-weight: 700; font-display: swap; src: url("vendor/fonts/manrope-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Manrope"; font-weight: 800; font-display: swap; src: url("vendor/fonts/manrope-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url("vendor/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap; src: url("vendor/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  --tblr-font-sans-serif: "Manrope", system-ui, sans-serif;
+  --tblr-body-font-family: "Manrope", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--wt-bg-primary);
+  color: var(--wt-text-primary);
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 15px;
+}
+
+.app { min-height: 100vh; display: flex; flex-direction: column; gap: 12px; padding: 14px 18px 16px; }
+.gedaempft { color: var(--wt-text-secondary); }
+.gruen { color: var(--wt-green); }
+.trenner { color: var(--wt-border); }
+
+/* Kopf */
+.kopfzeile { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.marke { display: flex; align-items: center; gap: 16px; }
+.marke::before {
+  content: ""; width: 76px; height: 76px; flex: none;
+  background: url("christophorus.png") center/contain no-repeat;
+}
+.titel h1 { margin: 0; font-weight: 800; font-size: 1.7rem; line-height: 1.05; }
+.titel span { color: var(--wt-text-secondary); font-weight: 500; }
+.themenwahl { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: .88rem; }
+.themenwahl select { min-width: 200px; }
+
+/* Panels */
+.panel {
+  position: relative; border: 1px solid var(--wt-border); border-radius: 3px;
+  background: var(--wt-bg-secondary); padding: 16px 16px 12px;
+}
+.legende {
+  position: absolute; top: -10px; left: 12px; padding: 0 8px; background: var(--wt-bg-primary);
+  color: var(--wt-accent-text); font-weight: 700; font-size: .82rem;
+}
+.fahrzeug { display: flex; flex-wrap: wrap; gap: 6px 36px; font-family: "JetBrains Mono", monospace; font-size: .92rem; }
+.zeitraum { margin-left: auto; font-family: "Manrope"; font-weight: 800; font-size: 1.2rem; display: flex; align-items: center; gap: 12px; }
+.zeitraum a { color: var(--wt-text-secondary); text-decoration: none; padding: 0 4px; }
+.zeitraum a:hover { color: var(--wt-accent-text); }
+
+/* Reiter und Werkzeuge */
+.reiterzeile { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--wt-border); }
+.reiter-liste { display: flex; flex-wrap: wrap; gap: 2px; }
+.reiter { padding: 6px 14px; color: var(--wt-text-secondary); text-decoration: none; font-weight: 700; border-radius: 3px 3px 0 0; }
+.reiter.aktiv { background: var(--wt-accent-fill); color: var(--wt-on-accent); }
+.reiter.gesperrt { color: var(--wt-text-tertiary); cursor: default; }
+.aktionen { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-bottom: 6px; }
+.suche { position: relative; display: flex; align-items: center; }
+.suche svg { position: absolute; left: 9px; width: 15px; height: 15px; stroke: var(--wt-text-secondary); pointer-events: none; }
+.suche input {
+  width: 300px; max-width: 46vw; background: var(--wt-bg-tertiary); color: var(--wt-text-primary);
+  border: 1px solid var(--wt-border); border-radius: 3px; padding: 5px 10px 5px 31px; font: inherit;
+}
+.suche input::placeholder { color: var(--wt-text-tertiary); }
+.suche input:focus { outline: 2px solid var(--wt-accent-text); outline-offset: 1px; border-color: transparent; }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--wt-accent-text); outline-offset: 2px; }
+
+/* Tabelle */
+.tabellenpanel { flex: 1; min-height: 320px; padding: 0; overflow: hidden; background: var(--wt-bg-tertiary); }
+.tabulator { background: transparent; border: 0; font-family: "JetBrains Mono", monospace; font-size: .88rem; }
+.tabulator .tabulator-row { cursor: pointer; }
+.tabulator .tabulator-row .tabulator-cell { padding: 3px 10px; }
+.tabulator .tabulator-row.privatfahrt .tabulator-cell { color: var(--wt-text-primary); }
+.tabulator .tabulator-tableholder .tabulator-table { color: var(--wt-green); }
+mark { background: var(--wt-accent-subtle); color: inherit; padding: 0; border-bottom: 2px solid var(--wt-accent-text); }
+
+/* Summe und Protokoll */
+.summe { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 16px; font-family: "JetBrains Mono", monospace; font-size: .92rem; }
+.protokoll { margin-top: 6px; font-family: "JetBrains Mono", monospace; font-size: .84rem; line-height: 1.7; padding-top: 16px; }
+.protokoll .zeit { color: var(--wt-text-tertiary); margin: 0 8px; }
+.schwere-error { color: var(--wt-red); font-weight: 700; }
+.schwere-warning { color: var(--wt-warn); font-weight: 700; }
+.schwere-info { color: var(--wt-purple); font-weight: 700; }
+
+/* Dialog */
+.dialog-hintergrund {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center;
+  padding: 5vh 16px; background: rgba(0, 0, 0, .55); overflow: auto;
+}
+.dialog-rahmen { width: min(680px, 100%); }
+.dialog-inhalt { background: var(--wt-bg-secondary); }
+.raster-drei { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; }
+.dialog-inhalt .form-label { color: var(--wt-text-secondary); font-size: .85rem; margin-bottom: 2px; }
+.dialog-inhalt .form-control, .dialog-inhalt .form-select {
+  background: var(--wt-bg-tertiary); color: var(--wt-text-primary); border-color: var(--wt-border);
+}
+.dialog-inhalt .invalid-feedback { display: block; color: var(--wt-red); font-size: .8rem; }
+.dialog-inhalt .is-invalid { border-color: var(--wt-red); }
+.speicherfehler { color: var(--wt-red); font-weight: 700; margin: 6px 0; }
+.dialog-fuss { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.zusatz { margin: 6px 0 2px; }
+.zusatz-titel { color: var(--wt-text-secondary); font-size: .85rem; cursor: pointer; }
+.zusatz .form-check { margin-top: 26px; }
+
+@media (max-width: 720px) {
+  .raster-drei { grid-template-columns: 1fr; }
+  .aktionen { margin-left: 0; width: 100%; }
+  .suche input { width: 100%; max-width: none; }
+  .zeitraum { margin-left: 0; }
+}

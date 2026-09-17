@@ -156,6 +156,23 @@ Custom bindings go into `config.json` under `keymap_custom`, for example
 | Acceptance of the notice | `~/.christo/disclaimer.json` |
 | Logbook | a folder of your choice with `christo.db` and a `belege/` folder for receipts |
 
+## Web interface (preview)
+
+Besides the TUI there is a web interface. It is a playground and not complete yet: you can view
+a month, search it and edit a trip.
+
+```bash
+uv sync --extra web
+uv run python -m christo.web            # last logbook opened in the TUI
+uv run python -m christo.web <folder>   # a specific logbook
+```
+
+- **It always works on a copy** under `~/.christo/web/<name>/`. The file the TUI uses is never
+  changed. `--neu-kopieren` fetches the current state and discards the copy.
+- Runs on `127.0.0.1:5056` only, without login, and loads nothing from the internet.
+- Colors come from [web-themes](https://github.com/michaelblaess/web-themes), the same themes as
+  in the TUI.
+
 ## Development
 
 ```bash
