@@ -44,10 +44,10 @@ from textual.widgets import Tabs  # noqa: E402
 from textual_widgets import DisclaimerStore  # noqa: E402
 
 from christo.i18n import load_locale  # noqa: E402
-from christo.models.fahrtenbuch import Fahrtenbuch  # noqa: E402
 from christo.models.settings import GlobalConfig  # noqa: E402
 from christo.models.trip import Trip  # noqa: E402
 from christo.models.vehicle import Vehicle  # noqa: E402
+from christo.services.fahrtenbuch import Fahrtenbuch  # noqa: E402
 from christo.services.holiday_service import HolidayService  # noqa: E402
 from christo.widgets.config_panel import ConfigPanel  # noqa: E402
 
