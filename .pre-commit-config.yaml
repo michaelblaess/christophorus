@@ -47,3 +47,15 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+  # Deutsche Commit-Nachrichten sind Lesertext und brauchen echte Umlaute.
+  # Einrichten je Klon:  pre-commit install --hook-type commit-msg
+  - repo: local
+    hooks:
+      - id: commit-nachricht
+        name: Commit-Nachricht auf Ersatzschreibung pruefen
+        # "sh" davor, nicht language: script - pre-commit fuehrt das Skript sonst
+        # direkt aus, und unter Windows gibt es die Shebang-Zeile /bin/sh nicht.
+        entry: sh tools/pruefe_commit_nachricht.sh
+        language: system
+        stages: [commit-msg]
