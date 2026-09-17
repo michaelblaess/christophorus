@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,3 +48,27 @@ def test_some_script_actually_imports_the_core() -> None:
 def test_script_imports_still_resolve(skript: Path) -> None:
     fehlend = [name for name in _christo_module(skript) if importlib.util.find_spec(name) is None]
     assert not fehlend, f"{skript.name} importiert nicht vorhandene Module: {', '.join(fehlend)}"
+
+
+def test_every_static_file_is_versioned() -> None:
+    """Liegt alles, was die Weboberflaeche ausliefert, auch im Repo?
+
+    Das Logo fehlte, weil die `.gitignore` `*.png` global ausschliesst. Lokal lief alles,
+    ein frischer Klon und die CI bekamen 404. Der Test laeuft nur in einem Arbeitsbaum mit
+    `.git`, in einem gebauten Paket wird er uebersprungen.
+    """
+    if not (WURZEL / ".git").exists():
+        pytest.skip("kein Git-Arbeitsbaum")
+
+    statisch = WURZEL / "src" / "christo" / "web" / "static"
+    vorhanden = {p.relative_to(WURZEL).as_posix() for p in statisch.rglob("*") if p.is_file()}
+    assert vorhanden, "unter web/static/ liegt keine einzige Datei"
+    ergebnis = subprocess.run(
+        ["git", "-C", str(WURZEL), "ls-files", "--", str(statisch.relative_to(WURZEL).as_posix())],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    versioniert = set(ergebnis.stdout.split())
+    fehlend = sorted(vorhanden - versioniert)
+    assert not fehlend, f"nicht im Repo, fehlt im Klon: {', '.join(fehlend)}"

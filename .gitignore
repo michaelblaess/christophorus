@@ -5,6 +5,9 @@
 !docs/social-preview.png
 !docs/favicon.png
 !docs/screenshots/**/*.png
+# Das Logo der Weboberflaeche gehoert ins Paket: ohne die Datei laeuft ein
+# frischer Klon ohne Symbol, und der Test auf lokale Verweise wird rot.
+!src/christo/web/static/christophorus.png
 __pycache__/
 *.pyc
 *.egg-info/
