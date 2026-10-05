@@ -90,6 +90,16 @@ curl -fsSL https://raw.githubusercontent.com/michaelblaess/christophorus/main/in
 Afterwards start `christophorus` or the short form `christo`. On Windows open a
 new terminal first so the updated PATH takes effect.
 
+### Run without installing (uv)
+
+With [uv](https://docs.astral.sh/uv/) installed (Python 3.12 or newer):
+
+```bash
+uvx christophorus
+```
+
+Or install it from [PyPI](https://pypi.org/project/christophorus/) with `pip install christophorus`.
+
 ### Download manually
 
 Every release on the [Releases page](https://github.com/michaelblaess/christophorus/releases)
