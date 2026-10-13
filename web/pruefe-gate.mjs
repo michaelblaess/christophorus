@@ -64,11 +64,9 @@ function htmlDateien(ordner) {
  * Vergleich gegen das Literal sonst falschen Alarm gibt.
  */
 function entschaerft(html) {
-  return html
-    .replace(/&copy;/gi, '©')
-    .replace(/&amp;/gi, '&')
-    .replace(/&#38;/g, '&')
-    .replace(/&nbsp;/gi, ' ');
+  // Ein Durchgang: nacheinander ersetzt wuerde aus &amp;nbsp; erst &nbsp; und dann ein Leerzeichen
+  const zeichen = { copy: '©', amp: '&', '#38': '&', nbsp: ' ' };
+  return html.replace(/&(copy|amp|#38|nbsp);/gi, (_, name) => zeichen[name.toLowerCase()]);
 }
 
 /** Zieht den Inhalt des ersten Treffers eines Musters, sonst null. */
